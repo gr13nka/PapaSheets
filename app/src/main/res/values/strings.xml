@@ -4,4 +4,73 @@
     <string name="journals_title">Журналы</string>
     <string name="journals_empty">Пока нет журналов</string>
     <string name="journals_add">Добавить журнал</string>
+
+    <string name="action_cancel">Отмена</string>
+    <string name="action_ok">ОК</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_back">Назад</string>
+    <string name="action_delete">Удалить</string>
+
+    <string name="month_picker_title">Выберите месяц</string>
+
+    <string name="day_list_add_record">+ Запись</string>
+    <string name="day_list_empty">Пока нет записей</string>
+
+    <string name="record_delete_confirm_title">Удалить запись?</string>
+    <string name="record_delete_confirm_message">Это действие нельзя отменить.</string>
+
+    <string name="record_title_create">Новая запись</string>
+    <string name="record_title_edit">Редактировать запись</string>
+    <string name="record_contractor_label">Подрядчик</string>
+    <string name="record_location_label">Локация</string>
+    <string name="record_work_label">Вид работ</string>
+    <string name="record_photo_placeholder">Фото (скоро)</string>
+    <string name="record_validation_required">Обязательное поле</string>
+
+    <string-array name="month_names_nominative">
+        <item>Январь</item>
+        <item>Февраль</item>
+        <item>Март</item>
+        <item>Апрель</item>
+        <item>Май</item>
+        <item>Июнь</item>
+        <item>Июль</item>
+        <item>Август</item>
+        <item>Сентябрь</item>
+        <item>Октябрь</item>
+        <item>Ноябрь</item>
+        <item>Декабрь</item>
+    </string-array>
+
+    <string-array name="month_names_genitive">
+        <item>января</item>
+        <item>февраля</item>
+        <item>марта</item>
+        <item>апреля</item>
+        <item>мая</item>
+        <item>июня</item>
+        <item>июля</item>
+        <item>августа</item>
+        <item>сентября</item>
+        <item>октября</item>
+        <item>ноября</item>
+        <item>декабря</item>
+    </string-array>
+
+    <string-array name="weekday_names_nominative">
+        <item>понедельник</item>
+        <item>вторник</item>
+        <item>среда</item>
+        <item>четверг</item>
+        <item>пятница</item>
+        <item>суббота</item>
+        <item>воскресенье</item>
+    </string-array>
+
+    <plurals name="journal_records_count">
+        <item quantity="one">%d запись</item>
+        <item quantity="few">%d записи</item>
+        <item quantity="many">%d записей</item>
+        <item quantity="other">%d записи</item>
+    </plurals>
 </resources>
