@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Журнал работ</string>
+    <string name="journals_title">Журналы</string>
+    <string name="journals_empty">Пока нет журналов</string>
+    <string name="journals_add">Добавить журнал</string>
+</resources>
