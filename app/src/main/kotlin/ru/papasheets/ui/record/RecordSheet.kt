@@ -77,6 +77,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                     journalId = (mode as? RecordSheetMode.Create)?.journalId,
                     recordId = (mode as? RecordSheetMode.Edit)?.recordId,
                     initialDate = (mode as? RecordSheetMode.Create)?.defaultDate ?: LocalDate.now(),
+                    initialContractorId = (mode as? RecordSheetMode.Create)?.contractorId,
                     recordRepository = graph.recordRepository,
                     contractorRepository = graph.contractorRepository,
                     locationSuggester = graph.locationSuggester,

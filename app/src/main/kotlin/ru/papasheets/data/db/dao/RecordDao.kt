@@ -24,6 +24,10 @@ interface RecordDao {
     @Insert
     suspend fun insert(record: RecordEntity)
 
+    /** Пакетная вставка одной транзакцией — путь генератора тестовых данных (debug). */
+    @Insert
+    suspend fun insertAll(records: List<RecordEntity>)
+
     @Update
     suspend fun update(record: RecordEntity)
 

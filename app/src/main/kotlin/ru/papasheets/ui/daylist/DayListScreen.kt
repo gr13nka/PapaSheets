@@ -34,7 +34,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,29 +58,11 @@ import ru.papasheets.ui.LocalAppGraph
 import ru.papasheets.ui.common.ContractorColors
 import ru.papasheets.ui.record.RecordSheet
 import ru.papasheets.ui.record.RecordSheetMode
-
-/** Переживает смерть процесса — иначе форма (и её ViewModel с temp-uri камеры) теряется вместе со свёрнутым приложением. */
-private val RecordSheetModeSaver = listSaver<RecordSheetMode?, Any>(
-    save = { mode ->
-        when (mode) {
-            null -> emptyList()
-            is RecordSheetMode.Create -> listOf("create", mode.journalId, mode.defaultDate.toEpochDay(), mode.sessionId)
-            is RecordSheetMode.Edit -> listOf("edit", mode.recordId)
-        }
-    },
-    restore = { saved ->
-        if (saved.isEmpty()) {
-            null
-        } else when (saved[0]) {
-            "create" -> RecordSheetMode.Create(saved[1] as String, LocalDate.ofEpochDay(saved[2] as Long), saved[3] as String)
-            "edit" -> RecordSheetMode.Edit(saved[1] as String)
-            else -> null
-        }
-    },
-)
+import ru.papasheets.ui.record.RecordSheetModeSaver
 
 /**
- * Временный экран журнала до матрицы (M3): плоский список записей по дням, но с полноценным CRUD.
+ * Плоский список записей по дням с полным CRUD. В M3 матрица заняла основной маршрут журнала —
+ * этот экран остался на debug-маршруте "journal/{id}/list" как запасной вид и полигон формы.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

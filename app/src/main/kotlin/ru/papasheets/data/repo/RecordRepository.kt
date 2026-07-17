@@ -55,4 +55,7 @@ class RecordRepository(private val dao: RecordDao) {
     }
 
     suspend fun delete(record: RecordEntity) = dao.delete(record)
+
+    /** Пакетная вставка готовых записей одной транзакцией — используется генератором тестовых данных. */
+    suspend fun insertAll(records: List<RecordEntity>) = dao.insertAll(records)
 }

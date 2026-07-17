@@ -1,5 +1,6 @@
 package ru.papasheets.matrixgrid
 
+import androidx.compose.runtime.State
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
@@ -9,11 +10,15 @@ import androidx.compose.ui.graphics.ImageBitmap
  * - [peek] — синхронно и без аллокаций в draw-проходе; null = «ещё не готово»,
  *   рендерер рисует плейсхолдер и не ждёт.
  * - [request] — неблокирующая заявка «понадобится ключ K примерно в размере px»;
- *   реализация грузит асинхронно и по готовности дёргает invalidate, переданный в [MatrixView].
+ *   реализация грузит асинхронно и по готовности инкрементит [version].
  *   Повторные заявки на тот же ключ — дёшевы (дедупликация на стороне реализации).
+ * - [version] — счётчик готовности превью. Рендерер читает [State.value] внутри draw-лямбды
+ *   и потому автоматически перерисовывается, когда очередной битмап декодирован. Реализация
+ *   обязана инкрементить его на главном потоке (иначе snapshot-подписка не сработает как redraw).
  * - На сильном отдалении (LOD2) рендерер вообще не вызывает request — битмапы не нужны.
  */
 interface ThumbnailSource {
+    val version: State<Int>
     fun peek(key: String): ImageBitmap?
     fun request(key: String, targetPx: Int)
 }

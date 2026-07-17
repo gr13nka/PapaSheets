@@ -9,10 +9,14 @@ import androidx.navigation.navArgument
 import ru.papasheets.ui.daylist.DayListScreen
 import ru.papasheets.ui.journals.JournalListScreen
 import ru.papasheets.ui.lightbox.LightboxScreen
+import ru.papasheets.ui.matrix.MatrixScreen
 
-private const val ROUTE_JOURNALS = "journals"
 private const val ARG_JOURNAL_ID = "journalId"
+private const val ROUTE_JOURNALS = "journals"
 private const val ROUTE_JOURNAL = "journal/{$ARG_JOURNAL_ID}"
+
+/** Debug-маршрут: плоский список записей того же журнала. Кнопки на него из UI нет — только по URL. */
+private const val ROUTE_JOURNAL_LIST = "journal/{$ARG_JOURNAL_ID}/list"
 private const val ARG_RECORD_ID = "recordId"
 private const val ROUTE_LIGHTBOX = "lightbox/{$ARG_RECORD_ID}"
 
@@ -27,6 +31,17 @@ fun AppNav() {
         }
         composable(
             route = ROUTE_JOURNAL,
+            arguments = listOf(navArgument(ARG_JOURNAL_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val journalId = backStackEntry.arguments?.getString(ARG_JOURNAL_ID) ?: return@composable
+            MatrixScreen(
+                journalId = journalId,
+                onBack = { navController.popBackStack() },
+                onOpenLightbox = { recordId -> navController.navigate("lightbox/$recordId") },
+            )
+        }
+        composable(
+            route = ROUTE_JOURNAL_LIST,
             arguments = listOf(navArgument(ARG_JOURNAL_ID) { type = NavType.StringType }),
         ) { backStackEntry ->
             val journalId = backStackEntry.arguments?.getString(ARG_JOURNAL_ID) ?: return@composable

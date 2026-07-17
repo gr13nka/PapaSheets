@@ -25,6 +25,11 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -58,4 +63,6 @@ dependencies {
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.core.ktx)
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit)
 }

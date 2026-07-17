@@ -46,6 +46,7 @@ class RecordEditViewModel(
     private val journalId: String?,
     private val recordId: String?,
     initialDate: LocalDate,
+    initialContractorId: String? = null,
     private val recordRepository: RecordRepository,
     contractorRepository: ContractorRepository,
     private val locationSuggester: LocationSuggester,
@@ -53,7 +54,14 @@ class RecordEditViewModel(
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(RecordEditUiState(date = initialDate, isLoaded = recordId == null))
+    private val _uiState = MutableStateFlow(
+        RecordEditUiState(
+            date = initialDate,
+            // Предзаполнение подрядчика имеет смысл только при создании из пустого слота матрицы.
+            selectedContractorId = if (recordId == null) initialContractorId else null,
+            isLoaded = recordId == null,
+        ),
+    )
     val uiState: StateFlow<RecordEditUiState> = _uiState.asStateFlow()
 
     /** Фото уже сохранённой записи (null для новой) — раньше этого момента "заменить"/"убрать" не удаляют файлы. */
