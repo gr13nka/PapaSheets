@@ -17,11 +17,12 @@ import androidx.compose.ui.text.rememberTextMeasurer
 
 /**
  * Единственный публичный вход движка матрицы: один Canvas-рендерер (не дерево composable'ов на ячейку).
- * Скрывает виртуализацию, стики-шапки, кэш текста, hit-тест и жесты. Рекомпозиция происходит только
- * при смене иммутабельной [model]; прокрутка/инерция живут в [state] и трогают лишь draw-слой.
+ * Скрывает виртуализацию, стики-шапки, кэш текста, hit-тест и жесты (pan, fling, пинч-зум, double-tap,
+ * тапы/лонг-прессы). Рекомпозиция происходит только при смене иммутабельной [model]; прокрутка, зум и
+ * инерция живут в [state] и трогают лишь draw-слой.
  *
  * @param model  готовая раскладка «дата × подрядчик» (строит app/GridModelBuilder).
- * @param state  состояние прокрутки; создаётся через [rememberMatrixState].
+ * @param state  состояние прокрутки/зума; создаётся через [rememberMatrixState].
  * @param thumbnails источник превью ячеек; его [ThumbnailSource.version] дёргает перерисовку.
  * @param callbacks доменные события тапов/лонг-прессов по ячейкам.
  */
@@ -36,7 +37,7 @@ fun MatrixView(
     val density = LocalDensity.current
     val dark = isSystemInDarkTheme()
     val measurer = rememberTextMeasurer()
-    val flingScope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
     val colors = remember(dark) { MatrixColors.of(dark) }
     val styles = remember { MatrixTextStyles() }
@@ -52,11 +53,16 @@ fun MatrixView(
         modifier = modifier
             .fillMaxSize()
             .clipToBounds()
-            .matrixPanGestures(state, flingScope)
+            .matrixTransformGestures(state, geometry, scope)
             .pointerInput(model, geometry) {
                 detectTapGestures(
-                    onTap = { offset -> dispatchHit(model, geometry, state, callbacks, offset, longPress = false) },
-                    onLongPress = { offset -> dispatchHit(model, geometry, state, callbacks, offset, longPress = true) },
+                    onTap = { offset ->
+                        dispatchHit(model, geometry, state, callbacks, offset, longPress = false, size.width.toFloat(), size.height.toFloat())
+                    },
+                    onLongPress = { offset ->
+                        dispatchHit(model, geometry, state, callbacks, offset, longPress = true, size.width.toFloat(), size.height.toFloat())
+                    },
+                    onDoubleTap = { offset -> state.toggleOverviewAt(scope, offset.x, offset.y) },
                 )
             }
             .drawBehind {
@@ -73,8 +79,13 @@ private fun dispatchHit(
     callbacks: MatrixCallbacks,
     offset: Offset,
     longPress: Boolean,
+    viewportW: Float,
+    viewportH: Float,
 ) {
-    val hit = geometry.hitTest(offset.x, offset.y, state.panX, state.panY)
+    val zoom = geometry.clampZoom(state.zoom, viewportW, viewportH)
+    val panX = geometry.clampPanX(state.panX, viewportW, zoom)
+    val panY = geometry.clampPanY(state.panY, viewportH, zoom)
+    val hit = geometry.hitTest(offset.x, offset.y, panX, panY, zoom)
     if (hit !is MatrixHit.Body) return
     val row = model.rows.getOrNull(hit.row) ?: return
     val contractor = model.contractors.getOrNull(hit.group) ?: return

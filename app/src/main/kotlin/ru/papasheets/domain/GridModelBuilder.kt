@@ -49,14 +49,24 @@ fun buildGridModel(
         perColumn.forEach { it?.sortBy(RecordEntity::createdAt) }
 
         val rowCount = maxOf(1, perColumn.maxOf { it?.size ?: 0 })
-        val label = dayLabel(day)
+        val date = LocalDate.ofEpochDay(day)
+        val label = "${date.dayOfMonth} ${SHORT_MONTHS[date.monthValue - 1]}"
+        val number = date.dayOfMonth.toString()
         for (rowInDay in 0 until rowCount) {
             val cells = ArrayList<GridCell?>(columns.size)
             for (column in columns.indices) {
                 val record = perColumn[column]?.getOrNull(rowInDay)
                 cells.add(record?.let { GridCell(it.id, it.photoId, it.locationCode, it.workText) })
             }
-            rows.add(GridRow(dateEpochDay = day, dayLabel = label, isFirstOfDay = rowInDay == 0, cells = cells))
+            rows.add(
+                GridRow(
+                    dateEpochDay = day,
+                    dayLabel = label,
+                    dayNumber = number,
+                    isFirstOfDay = rowInDay == 0,
+                    cells = cells,
+                ),
+            )
         }
     }
 
@@ -64,9 +74,4 @@ fun buildGridModel(
         contractors = columns.map { ContractorColumn(it.id, it.name, it.shortName, it.colorIndex) },
         rows = rows,
     )
-}
-
-private fun dayLabel(epochDay: Long): String {
-    val date = LocalDate.ofEpochDay(epochDay)
-    return "${date.dayOfMonth} ${SHORT_MONTHS[date.monthValue - 1]}"
 }

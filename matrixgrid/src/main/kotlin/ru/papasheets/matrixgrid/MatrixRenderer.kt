@@ -2,9 +2,13 @@ package ru.papasheets.matrixgrid
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.IntOffset
@@ -18,12 +22,20 @@ private const val LABEL_LOCATION = "Л"
 private const val LABEL_WORK = "ВИД РАБОТ"
 
 /**
- * Рисует кадр матрицы. Экземпляр держит неизменные за кадр зависимости (геометрия, цвета, типографика,
- * измеритель, кэш), поэтому методы отрисовки короткие. Пересоздаётся только при смене геометрии/темы.
+ * Рисует кадр матрицы на текущем зуме. Экземпляр держит неизменные за кадр зависимости (геометрия,
+ * цвета, типографика, измеритель, кэш); пересоздаётся только при смене геометрии/темы.
  *
- * Порядок отрисовки — 4 квадранта через clipRect: тело → закреплённая колонка дат (едет по panY) →
- * закреплённая шапка (едет по panX) → неподвижный угол. Тело рисует лишь видимый диапазон строк×групп.
- * В горячем пути нет аллокаций List (никаких map), а Offset/Size/IntOffset/IntSize — inline value-классы.
+ * Зум здесь не «слой поверх готовой картинки», а полноценный перерендер каждый кадр (см. отчёт M4):
+ * стики-шапки собраны из 4 квадрантов через clipRect и на живом пинче остаются закреплёнными и
+ * читаемыми — равномерный graphicsLayer-скейл этого бы не дал. Дорогое (layout текста) берётся из
+ * [cache] в базовом масштабе, а промежуточный зум добирается canvas-трансформом [scale] вокруг
+ * левого-верхнего угла ячейки/подписи — ни одного TextMeasurer.measure и ни одного decode в кадре
+ * пинча. [Lod] по зуму решает, что вообще рисовать: LOD2 — только сплошные блоки (без битмапов и
+ * текста), LOD1 — микро-превью и код локации, LOD0 — полная ячейка.
+ *
+ * pan/zoom читаются из [MatrixState] (snapshot-float) прямо здесь, в draw — их смена перезапускает
+ * draw, но не рекомпозицию. Границы pan и диапазон зума не хранятся в состоянии: их на месте считает
+ * [MatrixGeometry] (единый источник и для жестов).
  */
 internal class MatrixRenderer(
     private val geometry: MatrixGeometry,
@@ -38,26 +50,32 @@ internal class MatrixRenderer(
 
         val viewportW = size.width
         val viewportH = size.height
-        state.maxPanX = geometry.maxPanX(viewportW)
-        state.maxPanY = geometry.maxPanY(viewportH)
-        val panX = state.panX.coerceIn(0f, state.maxPanX)
-        val panY = state.panY.coerceIn(0f, state.maxPanY)
-        val bodyW = geometry.bodyWidth(viewportW)
-        val bodyH = geometry.bodyHeight(viewportH)
+        // Публикуем контекст клампинга кадра (обычные поля — без инвалидации draw). Чтение ниже
+        // всё равно клампит защитно: между записью жеста и этим кадром вьюпорт мог смениться (поворот).
+        state.updateViewport(geometry, viewportW, viewportH)
+        val zoom = geometry.clampZoom(state.zoom, viewportW, viewportH)
+        val panX = geometry.clampPanX(state.panX, viewportW, zoom)
+        val panY = geometry.clampPanY(state.panY, viewportH, zoom)
+        val lod = Lod.forZoom(zoom)
+
+        val dateColW = geometry.dateColW(zoom)
+        val headerH = geometry.headerH(zoom)
+        val bodyW = (viewportW - dateColW).coerceAtLeast(0f)
+        val bodyH = (viewportH - headerH).coerceAtLeast(0f)
 
         drawRect(colors.background)
 
-        clipRect(geometry.dateColW, geometry.headerH, viewportW, viewportH) {
-            drawBody(model, panX, panY, bodyW, bodyH, thumbnails)
+        clipRect(dateColW, headerH, viewportW, viewportH) {
+            drawBody(model, panX, panY, bodyW, bodyH, zoom, lod, thumbnails)
         }
-        clipRect(0f, geometry.headerH, geometry.dateColW, viewportH) {
-            drawDateColumn(model, panY, bodyH)
+        clipRect(0f, headerH, dateColW, viewportH) {
+            drawDateColumn(model, panY, bodyH, zoom, lod, dateColW, headerH)
         }
-        clipRect(geometry.dateColW, 0f, viewportW, geometry.headerH) {
-            drawHeader(model, panX, bodyW)
+        clipRect(dateColW, 0f, viewportW, headerH) {
+            drawHeader(model, panX, bodyW, zoom, lod, dateColW, headerH)
         }
-        clipRect(0f, 0f, geometry.dateColW, geometry.headerH) {
-            drawCorner()
+        clipRect(0f, 0f, dateColW, headerH) {
+            drawCorner(dateColW, headerH)
         }
     }
 
@@ -67,97 +85,134 @@ internal class MatrixRenderer(
         panY: Float,
         bodyW: Float,
         bodyH: Float,
+        zoom: Float,
+        lod: Lod,
         thumbnails: ThumbnailSource,
     ) {
         if (geometry.rowCount == 0 || geometry.groupCount == 0) return
-        val row0 = geometry.firstVisibleRow(panY)
-        val row1 = geometry.lastVisibleRow(panY, bodyH)
-        val g0 = geometry.firstVisibleGroup(panX)
-        val g1 = geometry.lastVisibleGroup(panX, bodyW)
+        val row0 = geometry.firstVisibleRow(panY, zoom)
+        val row1 = geometry.lastVisibleRow(panY, bodyH, zoom)
+        val g0 = geometry.firstVisibleGroup(panX, zoom)
+        val g1 = geometry.lastVisibleGroup(panX, bodyW, zoom)
+        val cellW = geometry.groupW * zoom
+        val cellH = geometry.rowH * zoom
         val thin = 1.dp.toPx()
         val thick = 2.dp.toPx()
 
         for (r in row0..row1) {
             val row = model.rows[r]
-            val top = geometry.rowScreenTop(r, panY)
+            val top = geometry.rowScreenTop(r, panY, zoom)
             for (g in g0..g1) {
-                val left = geometry.groupScreenLeft(g, panX)
+                val left = geometry.groupScreenLeft(g, panX, zoom)
                 val colorIndex = model.contractors[g].colorIndex
-                drawRect(
-                    color = colors.contractor(colorIndex).copy(alpha = colors.cellTintAlpha),
-                    topLeft = Offset(left, top),
-                    size = Size(geometry.groupW, geometry.rowH),
+                val cell = row.cells[g]
+                if (lod == Lod.LOD2) {
+                    // «Картина месяца»: заполненная ячейка — сплошной блок цвета подрядчика. Без линий,
+                    // тонировки, битмапов и текста — иначе тысячи видимых ячеек не уложатся в кадр.
+                    if (cell != null) {
+                        drawRect(colors.contractor(colorIndex), Offset(left, top), Size(cellW, cellH))
+                    }
+                } else {
+                    drawRect(
+                        color = colors.contractor(colorIndex).copy(alpha = colors.cellTintAlpha),
+                        topLeft = Offset(left, top),
+                        size = Size(cellW, cellH),
+                    )
+                    if (cell != null) drawFilledCell(cell, left, top, colorIndex, zoom, lod, thumbnails)
+                    drawLine(
+                        color = colors.gridLine,
+                        start = Offset(left + cellW, top),
+                        end = Offset(left + cellW, top + cellH),
+                        strokeWidth = thin,
+                    )
+                }
+            }
+            when {
+                lod != Lod.LOD2 -> drawLine(
+                    color = if (row.isFirstOfDay) colors.dayDivider else colors.gridLine,
+                    start = Offset(0f, top),
+                    end = Offset(size.width, top),
+                    strokeWidth = if (row.isFirstOfDay) thick else thin,
                 )
-                row.cells[g]?.let { cell -> drawFilledCell(cell, left, top, colorIndex, thumbnails) }
-                drawLine(
-                    color = colors.gridLine,
-                    start = Offset(left + geometry.groupW, top),
-                    end = Offset(left + geometry.groupW, top + geometry.rowH),
+                row.isFirstOfDay -> drawLine(
+                    color = colors.dayDivider,
+                    start = Offset(0f, top),
+                    end = Offset(size.width, top),
                     strokeWidth = thin,
                 )
             }
-            drawLine(
-                color = if (row.isFirstOfDay) colors.dayDivider else colors.gridLine,
-                start = Offset(0f, top),
-                end = Offset(size.width, top),
-                strokeWidth = if (row.isFirstOfDay) thick else thin,
-            )
         }
     }
 
+    /**
+     * Содержимое заполненной ячейки рисуется в базовых (zoom = 1) координатах внутри
+     * translate+scale, поэтому измеренный в кэше текст и битмап масштабируются canvas'ом, без перемера.
+     */
     private fun DrawScope.drawFilledCell(
         cell: GridCell,
         left: Float,
         top: Float,
         colorIndex: Int,
+        zoom: Float,
+        lod: Lod,
         thumbnails: ThumbnailSource,
     ) {
-        val boxLeft = left + geometry.photoPadX
-        val boxTop = top + geometry.photoPadY
-        val box = geometry.photoBoxPx
-        val key = cell.thumbKey
-        when {
-            key == null -> drawRect(
-                color = colors.contractor(colorIndex).copy(alpha = colors.emptyPhotoAlpha),
-                topLeft = Offset(boxLeft, boxTop),
-                size = Size(box, box),
-            )
-            else -> {
-                val bitmap = thumbnails.peek(key)
-                if (bitmap != null) {
-                    drawThumb(bitmap, boxLeft, boxTop, box)
-                } else {
-                    drawRect(
-                        color = colors.contractor(colorIndex).copy(alpha = colors.placeholderAlpha),
+        translate(left = left, top = top) {
+            scale(scale = zoom, pivot = Offset.Zero) {
+                val box = geometry.photoBoxPx
+                val boxLeft = geometry.photoPadX
+                val boxTop = geometry.photoPadY
+                val key = cell.thumbKey
+                when {
+                    key == null -> drawRect(
+                        color = colors.contractor(colorIndex).copy(alpha = colors.emptyPhotoAlpha),
                         topLeft = Offset(boxLeft, boxTop),
                         size = Size(box, box),
                     )
-                    thumbnails.request(key, box.roundToInt())
+                    else -> {
+                        val bitmap = thumbnails.peek(key)
+                        if (bitmap != null) {
+                            drawThumb(bitmap, boxLeft, boxTop, box)
+                        } else {
+                            drawRect(
+                                color = colors.contractor(colorIndex).copy(alpha = colors.placeholderAlpha),
+                                topLeft = Offset(boxLeft, boxTop),
+                                size = Size(box, box),
+                            )
+                            thumbnails.request(key, (box * zoom).roundToInt())
+                        }
+                    }
+                }
+
+                val contentTop = geometry.cellPad
+                val location = cache.location(
+                    measurer = measurer,
+                    recordId = cell.recordId,
+                    text = cell.locationCode,
+                    style = styles.location,
+                    widthPx = (geometry.locColW - 2 * geometry.cellPad).roundToInt(),
+                )
+                drawText(
+                    textLayoutResult = location,
+                    color = colors.primaryText,
+                    topLeft = Offset(geometry.photoColW + geometry.cellPad, contentTop),
+                )
+                if (lod == Lod.LOD0) {
+                    val work = cache.work(
+                        measurer = measurer,
+                        recordId = cell.recordId,
+                        text = cell.workText,
+                        style = styles.work,
+                        widthPx = (geometry.workColW - 2 * geometry.cellPad).roundToInt(),
+                    )
+                    drawText(
+                        textLayoutResult = work,
+                        color = colors.secondaryText,
+                        topLeft = Offset(geometry.photoColW + geometry.locColW + geometry.cellPad, contentTop),
+                    )
                 }
             }
         }
-
-        val text = cache.cell(
-            measurer = measurer,
-            recordId = cell.recordId,
-            workText = cell.workText,
-            locationText = cell.locationCode,
-            workStyle = styles.work,
-            locationStyle = styles.location,
-            workWidthPx = (geometry.workColW - 2 * geometry.cellPad).roundToInt(),
-            locationWidthPx = (geometry.locColW - 2 * geometry.cellPad).roundToInt(),
-        )
-        val contentTop = top + geometry.cellPad
-        drawText(
-            textLayoutResult = text.location,
-            color = colors.primaryText,
-            topLeft = Offset(left + geometry.photoColW + geometry.cellPad, contentTop),
-        )
-        drawText(
-            textLayoutResult = text.work,
-            color = colors.secondaryText,
-            topLeft = Offset(left + geometry.photoColW + geometry.locColW + geometry.cellPad, contentTop),
-        )
     }
 
     private fun DrawScope.drawThumb(image: ImageBitmap, boxLeft: Float, boxTop: Float, box: Float) {
@@ -173,105 +228,162 @@ internal class MatrixRenderer(
         )
     }
 
-    private fun DrawScope.drawDateColumn(model: GridModel, panY: Float, bodyH: Float) {
+    private fun DrawScope.drawDateColumn(
+        model: GridModel,
+        panY: Float,
+        bodyH: Float,
+        zoom: Float,
+        lod: Lod,
+        dateColW: Float,
+        headerH: Float,
+    ) {
         drawRect(
             color = colors.stickyBackground,
-            topLeft = Offset(0f, geometry.headerH),
-            size = Size(geometry.dateColW, size.height - geometry.headerH),
+            topLeft = Offset(0f, headerH),
+            size = Size(dateColW, size.height - headerH),
         )
         if (geometry.rowCount == 0) return
-        val row0 = geometry.firstVisibleRow(panY)
-        val row1 = geometry.lastVisibleRow(panY, bodyH)
-        val labelWidth = (geometry.dateColW - 2 * geometry.cellPad).roundToInt()
+        val ds = geometry.dateColScale(zoom)
+        val row0 = geometry.firstVisibleRow(panY, zoom)
+        val row1 = geometry.lastVisibleRow(panY, bodyH, zoom)
+        val labelWidth = (geometry.dateColWBase - 2 * geometry.cellPad).roundToInt()
         for (r in row0..row1) {
             val row = model.rows[r]
             if (!row.isFirstOfDay) continue
-            val top = geometry.rowScreenTop(r, panY)
-            val layout = cache.static(measurer, row.dayLabel, row.dayLabel, styles.dayLabel, labelWidth, 1)
-            drawText(layout, color = colors.headerText, topLeft = Offset(geometry.cellPad, top + geometry.cellPad))
+            val top = geometry.rowScreenTop(r, panY, zoom)
+            // На LOD2 колонка дат показывает только число дня — так подписи не сливаются на сжатых строках.
+            val text = if (lod == Lod.LOD2) row.dayNumber else row.dayLabel
+            val layout = cache.static(measurer, text, text, styles.dayLabel, labelWidth, 1)
+            translate(left = 0f, top = top) {
+                scale(scale = ds, pivot = Offset.Zero) {
+                    drawText(layout, color = colors.headerText, topLeft = Offset(geometry.cellPad, geometry.cellPad))
+                }
+            }
             drawLine(
                 color = colors.dayDivider,
                 start = Offset(0f, top),
-                end = Offset(geometry.dateColW, top),
+                end = Offset(dateColW, top),
                 strokeWidth = 2.dp.toPx(),
             )
         }
         drawLine(
             color = colors.gridLine,
-            start = Offset(geometry.dateColW, geometry.headerH),
-            end = Offset(geometry.dateColW, size.height),
+            start = Offset(dateColW, headerH),
+            end = Offset(dateColW, size.height),
             strokeWidth = 1.dp.toPx(),
         )
     }
 
-    private fun DrawScope.drawHeader(model: GridModel, panX: Float, bodyW: Float) {
+    private fun DrawScope.drawHeader(
+        model: GridModel,
+        panX: Float,
+        bodyW: Float,
+        zoom: Float,
+        lod: Lod,
+        dateColW: Float,
+        headerH: Float,
+    ) {
         drawRect(
             color = colors.headerBackground,
-            topLeft = Offset(geometry.dateColW, 0f),
-            size = Size(size.width - geometry.dateColW, geometry.headerH),
+            topLeft = Offset(dateColW, 0f),
+            size = Size(size.width - dateColW, headerH),
         )
         if (geometry.groupCount == 0) return
-        val g0 = geometry.firstVisibleGroup(panX)
-        val g1 = geometry.lastVisibleGroup(panX, bodyW)
+        val hs = geometry.headerScale(zoom)
+        val nameRowH = geometry.nameRowH(zoom)
+        val subHeaderH = geometry.subHeaderH(zoom)
+        val g0 = geometry.firstVisibleGroup(panX, zoom)
+        val g1 = geometry.lastVisibleGroup(panX, bodyW, zoom)
+        val cellW = geometry.groupW * zoom
         val thin = 1.dp.toPx()
         val nameWidth = (geometry.groupW - 2 * geometry.cellPad).roundToInt()
+
         for (g in g0..g1) {
-            val left = geometry.groupScreenLeft(g, panX)
+            val left = geometry.groupScreenLeft(g, panX, zoom)
             val contractor = model.contractors[g]
-            val name = cache.static(measurer, contractor.id, contractor.name, styles.contractorName, nameWidth, 1)
-            drawText(
-                textLayoutResult = name,
-                color = colors.headerText,
-                topLeft = Offset(left + geometry.cellPad, (geometry.nameRowH - name.size.height) / 2f),
-            )
-            drawSubHeader(LABEL_PHOTO, left, geometry.photoColW)
-            drawSubHeader(LABEL_LOCATION, left + geometry.photoColW, geometry.locColW)
-            drawSubHeader(LABEL_WORK, left + geometry.photoColW + geometry.locColW, geometry.workColW)
-            drawLine(
-                color = colors.gridLine,
-                start = Offset(left + geometry.groupW, 0f),
-                end = Offset(left + geometry.groupW, geometry.headerH),
-                strokeWidth = thin,
-            )
+            // Каждая шапка группы клипится своей колонкой: имя/подписи не должны затекать в соседа,
+            // когда на слабом зуме кегль клампится, а колонка узкая.
+            clipRect(left, 0f, left + cellW, headerH) {
+                if (lod == Lod.LOD2) {
+                    val short = cache.static(measurer, "s:" + contractor.id, contractor.shortName, styles.contractorName, nameWidth, 1)
+                    drawScaledLabel(short, colors.headerText, hs, left, cellW, 0f, headerH, center = true)
+                } else {
+                    val name = cache.static(measurer, contractor.id, contractor.name, styles.contractorName, nameWidth, 1)
+                    drawScaledLabel(name, colors.headerText, hs, left + geometry.cellPad * hs, cellW, 0f, nameRowH, center = false)
+                    val photoW = geometry.photoColW * zoom
+                    val locW = geometry.locColW * zoom
+                    val workW = geometry.workColW * zoom
+                    drawSubHeader(LABEL_PHOTO, left, photoW, geometry.photoColW, nameRowH, subHeaderH, hs)
+                    drawSubHeader(LABEL_LOCATION, left + photoW, locW, geometry.locColW, nameRowH, subHeaderH, hs)
+                    drawSubHeader(LABEL_WORK, left + photoW + locW, workW, geometry.workColW, nameRowH, subHeaderH, hs)
+                }
+            }
+            if (lod != Lod.LOD2) {
+                drawLine(
+                    color = colors.gridLine,
+                    start = Offset(left + cellW, 0f),
+                    end = Offset(left + cellW, headerH),
+                    strokeWidth = thin,
+                )
+            }
         }
-        drawLine(
-            color = colors.gridLine,
-            start = Offset(geometry.dateColW, geometry.nameRowH),
-            end = Offset(size.width, geometry.nameRowH),
-            strokeWidth = thin,
-        )
-        drawLine(
-            color = colors.dayDivider,
-            start = Offset(geometry.dateColW, geometry.headerH),
-            end = Offset(size.width, geometry.headerH),
-            strokeWidth = thin,
-        )
+        if (lod != Lod.LOD2) {
+            drawLine(color = colors.gridLine, start = Offset(dateColW, nameRowH), end = Offset(size.width, nameRowH), strokeWidth = thin)
+        }
+        drawLine(color = colors.dayDivider, start = Offset(dateColW, headerH), end = Offset(size.width, headerH), strokeWidth = thin)
     }
 
-    private fun DrawScope.drawSubHeader(label: String, subLeft: Float, subWidth: Float) {
-        val layout = cache.static(measurer, label, label, styles.subHeader, (subWidth - 2 * geometry.cellPad).roundToInt(), 1)
-        drawText(
-            textLayoutResult = layout,
-            color = colors.secondaryText,
-            topLeft = Offset(
-                subLeft + (subWidth - layout.size.width) / 2f,
-                geometry.nameRowH + (geometry.subHeaderH - layout.size.height) / 2f,
-            ),
-        )
+    private fun DrawScope.drawSubHeader(
+        label: String,
+        subLeft: Float,
+        subWidth: Float,
+        baseSubWidth: Float,
+        nameRowH: Float,
+        subHeaderH: Float,
+        hs: Float,
+    ) {
+        val layout = cache.static(measurer, label, label, styles.subHeader, (baseSubWidth - 2 * geometry.cellPad).roundToInt(), 1)
+        drawScaledLabel(layout, colors.secondaryText, hs, subLeft, subWidth, nameRowH, subHeaderH, center = true)
     }
 
-    private fun DrawScope.drawCorner() {
-        drawRect(color = colors.headerBackground, topLeft = Offset.Zero, size = Size(geometry.dateColW, geometry.headerH))
+    /**
+     * Рисует заранее измеренную подпись, масштабируя её кегль на [scaleFactor] (клампленный масштаб
+     * шапки) и размещая в экранной полосе [boxLeft]..[boxLeft]+[boxWidth] × [bandTop]..[bandTop]+[bandHeight].
+     * [center] — по центру полосы (shortName, подписи Ф/Л/ВИД), иначе от левого края (полное имя).
+     */
+    private fun DrawScope.drawScaledLabel(
+        layout: TextLayoutResult,
+        color: Color,
+        scaleFactor: Float,
+        boxLeft: Float,
+        boxWidth: Float,
+        bandTop: Float,
+        bandHeight: Float,
+        center: Boolean,
+    ) {
+        val w = layout.size.width * scaleFactor
+        val h = layout.size.height * scaleFactor
+        val x = if (center) boxLeft + (boxWidth - w) / 2f else boxLeft
+        val y = bandTop + (bandHeight - h) / 2f
+        translate(left = x, top = y) {
+            scale(scale = scaleFactor, pivot = Offset.Zero) {
+                drawText(layout, color = color, topLeft = Offset.Zero)
+            }
+        }
+    }
+
+    private fun DrawScope.drawCorner(dateColW: Float, headerH: Float) {
+        drawRect(color = colors.headerBackground, topLeft = Offset.Zero, size = Size(dateColW, headerH))
         drawLine(
             color = colors.gridLine,
-            start = Offset(geometry.dateColW, 0f),
-            end = Offset(geometry.dateColW, geometry.headerH),
+            start = Offset(dateColW, 0f),
+            end = Offset(dateColW, headerH),
             strokeWidth = 1.dp.toPx(),
         )
         drawLine(
             color = colors.dayDivider,
-            start = Offset(0f, geometry.headerH),
-            end = Offset(geometry.dateColW, geometry.headerH),
+            start = Offset(0f, headerH),
+            end = Offset(dateColW, headerH),
             strokeWidth = 1.dp.toPx(),
         )
     }

@@ -5,7 +5,8 @@ package ru.papasheets.matrixgrid
  *
  * Модуль matrixgrid ничего не знает о Room, файлах и Coil: приходит готовая раскладка
  * (строится в app/GridModelBuilder), картинки поступают через [ThumbnailSource] по ключу.
- * Смена модели — единственный повод для рекомпозиции матрицы; pan/zoom живут в MatrixState
+ * Смена экземпляра модели — единственный повод для рекомпозиции матрицы и сброса кэшей рендерера
+ * (инвалидация идёт по идентичности экземпляра, см. [CellTextCache]); pan/zoom живут в [MatrixState]
  * и до рекомпозиции не дотрагиваются.
  */
 class GridModel(
@@ -13,24 +14,23 @@ class GridModel(
     val contractors: List<ContractorColumn>,
     /** Все строки в порядке отображения (сортировку по дате решает builder). */
     val rows: List<GridRow>,
-) {
-    /** Стабильный ключ содержимого — позволяет пропускать пересоздание кэшей при равных моделях. */
-    val contentKey: Int = rows.size * 31 + contractors.size
-}
+)
 
 class ContractorColumn(
     val id: String,
     val name: String,
     /** Короткое имя для шапки на сильном отдалении (LOD2). */
     val shortName: String,
-    /** Индекс в палитре модуля (см. ContractorPalette, M4) — цвет блоков LOD2 и акцентов. */
+    /** Индекс в палитре модуля (см. [ContractorPalette]) — цвет блоков LOD2 и тонировки ячеек. */
     val colorIndex: Int,
 )
 
 class GridRow(
     val dateEpochDay: Long,
-    /** Подпись даты в закреплённой колонке, например «17 июл»; рисуется только при [isFirstOfDay]. */
+    /** Подпись даты в закреплённой колонке, например «17 июл» (LOD0/LOD1); рисуется только при [isFirstOfDay]. */
     val dayLabel: String,
+    /** Только число дня, например «17» — компактная подпись колонки дат на LOD2 («картина месяца»). */
+    val dayNumber: String,
     /** Первая строка блока дня: рисует подпись даты и верхнюю границу-разделитель дня. */
     val isFirstOfDay: Boolean,
     /** Ровно contractors.size элементов; null = пустой слот (тап по нему = создание записи). */

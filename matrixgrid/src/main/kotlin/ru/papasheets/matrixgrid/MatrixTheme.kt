@@ -8,10 +8,11 @@ import androidx.compose.ui.unit.sp
 /**
  * Цвета матрицы. Модуль зависит только от compose ui/foundation (без material3), поэтому палитра
  * задана здесь, а не берётся из MaterialTheme. Светлую/тёмную ветку выбирает [MatrixView] по
- * isSystemInDarkTheme(). Палитра подрядчиков дублирует app-овскую ContractorColors по значениям —
- * в M4 её заменит общий ContractorPalette.
+ * isSystemInDarkTheme(). Цвета подрядчиков берутся из общего [ContractorPalette] — единый источник
+ * и для матрицы, и для списка записей в app.
  */
 internal class MatrixColors private constructor(
+    private val dark: Boolean,
     val background: Color,
     val gridLine: Color,
     val dayDivider: Color,
@@ -21,7 +22,7 @@ internal class MatrixColors private constructor(
     val secondaryText: Color,
     val headerText: Color,
 ) {
-    /** Прозрачность тонировки фона ячейки цветом подрядчика. */
+    /** Прозрачность тонировки фона ячейки цветом подрядчика (LOD0/LOD1). */
     val cellTintAlpha: Float = 0.06f
 
     /** Прозрачность плейсхолдера фото (пока превью не декодировано). */
@@ -30,17 +31,13 @@ internal class MatrixColors private constructor(
     /** Прозрачность блока «фото ещё не добавлено» в заполненной ячейке без photoId. */
     val emptyPhotoAlpha: Float = 0.12f
 
-    fun contractor(colorIndex: Int): Color = PALETTE[((colorIndex % PALETTE.size) + PALETTE.size) % PALETTE.size]
+    /** Цвет подрядчика (с учётом темы). Полная непрозрачность — блок «картины месяца» LOD2. */
+    fun contractor(colorIndex: Int): Color = ContractorPalette.color(colorIndex, dark)
 
     companion object {
-        private val PALETTE = listOf(
-            Color(0xFFE53935), Color(0xFF1E88E5), Color(0xFF43A047), Color(0xFFFB8C00),
-            Color(0xFF8E24AA), Color(0xFF00897B), Color(0xFFD81B60), Color(0xFF6D4C41),
-            Color(0xFF3949AB), Color(0xFFC0CA33),
-        )
-
         fun of(dark: Boolean): MatrixColors = if (dark) {
             MatrixColors(
+                dark = true,
                 background = Color(0xFF121212),
                 gridLine = Color(0xFF2B2B2B),
                 dayDivider = Color(0xFF474747),
@@ -52,6 +49,7 @@ internal class MatrixColors private constructor(
             )
         } else {
             MatrixColors(
+                dark = false,
                 background = Color(0xFFFFFFFF),
                 gridLine = Color(0xFFE4E4E4),
                 dayDivider = Color(0xFFBDBDBD),

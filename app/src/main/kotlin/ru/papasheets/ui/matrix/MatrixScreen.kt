@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -64,6 +65,7 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
     val journal by viewModel.journal.collectAsState()
     val gridModel by viewModel.gridModel.collectAsState()
     val matrixState = rememberMatrixState()
+    val scope = rememberCoroutineScope()
 
     var sheetMode by rememberSaveable(stateSaver = RecordSheetModeSaver) { mutableStateOf<RecordSheetMode?>(null) }
     var recordPendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
@@ -102,6 +104,21 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
                 title = { Text(journal?.title ?: "") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
+                },
+                actions = {
+                    // Кнопка обзора: тот же код-путь, что double-tap. «Месяц» уводит в fit («вся картина
+                    // месяца»), «1:1» возвращает к детальному зуму. Метка следит за текущим ярусом зума.
+                    val model = gridModel
+                    if (model != null && model.rows.isNotEmpty()) {
+                        TextButton(onClick = { matrixState.toggleOverview(scope) }) {
+                            Text(
+                                stringResource(
+                                    if (matrixState.isOverview) R.string.matrix_zoom_detail
+                                    else R.string.matrix_zoom_overview,
+                                ),
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),
             )

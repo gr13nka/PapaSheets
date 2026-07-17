@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,7 +56,7 @@ import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.photos.PhotoStore
 import ru.papasheets.ui.LocalAppGraph
-import ru.papasheets.ui.common.ContractorColors
+import ru.papasheets.matrixgrid.ContractorPalette
 import ru.papasheets.ui.record.RecordSheet
 import ru.papasheets.ui.record.RecordSheetMode
 import ru.papasheets.ui.record.RecordSheetModeSaver
@@ -221,7 +222,7 @@ private fun RecordCard(
                     modifier = Modifier
                         .size(12.dp)
                         .clip(CircleShape)
-                        .background(ContractorColors.forIndex(entry.contractor?.colorIndex ?: 0)),
+                        .background(ContractorPalette.color(entry.contractor?.colorIndex ?: 0, isSystemInDarkTheme())),
                 )
             }
             Column(modifier = Modifier.weight(1f)) {

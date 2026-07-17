@@ -16,6 +16,9 @@
     <string name="day_list_add_record">+ Запись</string>
     <string name="day_list_empty">Пока нет записей</string>
 
+    <string name="matrix_zoom_overview">Месяц</string>
+    <string name="matrix_zoom_detail">1:1</string>
+
     <string name="record_delete_confirm_title">Удалить запись?</string>
     <string name="record_delete_confirm_message">Это действие нельзя отменить.</string>
 
