@@ -1,15 +1,21 @@
 package ru.papasheets.ui.record
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -32,17 +38,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import coil.compose.AsyncImage
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import ru.papasheets.R
+import ru.papasheets.photos.CameraCapture
+import ru.papasheets.photos.GalleryPick
 import ru.papasheets.ui.LocalAppGraph
 
 private val dateButtonFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -52,7 +66,7 @@ private val dateButtonFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Unit) {
     val graph = LocalAppGraph.current
     val viewModelKey = when (mode) {
-        is RecordSheetMode.Create -> "create-${mode.journalId}-${mode.defaultDate}"
+        is RecordSheetMode.Create -> "create-${mode.sessionId}"
         is RecordSheetMode.Edit -> "edit-${mode.recordId}"
     }
     val viewModel: RecordEditViewModel = viewModel(
@@ -66,6 +80,8 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                     recordRepository = graph.recordRepository,
                     contractorRepository = graph.contractorRepository,
                     locationSuggester = graph.locationSuggester,
+                    photoStore = graph.photoStore,
+                    savedStateHandle = createSavedStateHandle(),
                 )
             }
         },
@@ -74,12 +90,39 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
     // Форма не помещается в свёрнутое состояние (кнопка «Сохранить» уходит за экран) — открываем сразу развёрнутой.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     fun dismiss(after: () -> Unit) {
+        viewModel.discardUnsavedPhoto()
         scope.launch { sheetState.hide() }.invokeOnCompletion { after() }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        viewModel.onCameraResult(success)?.let { uri ->
+            scope.launch { CameraCapture.copyToGallery(context, uri) }
+        }
+    }
+    fun launchCamera() {
+        val uri = CameraCapture.createTempUri(context)
+        viewModel.onCameraLaunchStarted(uri)
+        cameraLauncher.launch(uri)
+    }
+    val writePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        // Снимок работает и без разрешения — просто не попадёт копией в галерею (см. CameraCapture).
+        launchCamera()
+    }
+    fun requestCamera() {
+        if (CameraCapture.needsWriteStoragePermission && !CameraCapture.hasWriteStoragePermission(context)) {
+            writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            launchCamera()
+        }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        viewModel.onGalleryPicked(uri)
+    }
+
+    ModalBottomSheet(onDismissRequest = { dismiss(onDismiss) }, sheetState = sheetState) {
         if (!state.isLoaded) {
             Box(
                 modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -216,9 +259,13 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.record_photo_placeholder))
-            }
+            PhotoSlot(
+                state = state,
+                onCameraClick = ::requestCamera,
+                onGalleryClick = { galleryLauncher.launch(GalleryPick.request) },
+                onRemoveClick = viewModel::onPhotoRemoved,
+                thumbFile = state.photoId?.let(graph.photoStore::thumbFile),
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -237,6 +284,89 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                     Text(stringResource(R.string.action_save))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PhotoSlot(
+    state: RecordEditUiState,
+    onCameraClick: () -> Unit,
+    onGalleryClick: () -> Unit,
+    onRemoveClick: () -> Unit,
+    thumbFile: File?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        when {
+            state.photoLoading -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text(stringResource(R.string.record_photo_processing))
+            }
+
+            thumbFile != null -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AsyncImage(
+                    model = thumbFile,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    var replaceExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        OutlinedButton(onClick = { replaceExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.record_photo_replace))
+                        }
+                        DropdownMenu(expanded = replaceExpanded, onDismissRequest = { replaceExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.record_photo_camera)) },
+                                onClick = { replaceExpanded = false; onCameraClick() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.record_photo_gallery)) },
+                                onClick = { replaceExpanded = false; onGalleryClick() },
+                            )
+                        }
+                    }
+                    OutlinedButton(onClick = onRemoveClick, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.record_photo_remove))
+                    }
+                }
+            }
+
+            else -> Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onCameraClick, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.record_photo_camera))
+                }
+                OutlinedButton(onClick = onGalleryClick, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.record_photo_gallery))
+                }
+            }
+        }
+
+        if (state.showPhotoError) {
+            Text(
+                text = stringResource(R.string.record_validation_photo_required),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (state.showPhotoImportError) {
+            Text(
+                text = stringResource(R.string.record_photo_import_error),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }

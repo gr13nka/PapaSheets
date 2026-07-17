@@ -9,6 +9,8 @@ class ContractorRepository(private val dao: ContractorDao) {
 
     fun observeAll(): Flow<List<ContractorEntity>> = dao.observeAll()
 
+    suspend fun getById(id: String): ContractorEntity? = dao.getById(id)
+
     suspend fun insert(contractor: ContractorEntity) = dao.insert(contractor)
 
     suspend fun update(contractor: ContractorEntity) = dao.update(contractor)

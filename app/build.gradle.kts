@@ -54,5 +54,8 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.core.ktx)
     debugImplementation(libs.compose.ui.tooling)
 }

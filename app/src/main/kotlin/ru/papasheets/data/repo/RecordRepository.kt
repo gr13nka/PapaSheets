@@ -16,6 +16,7 @@ class RecordRepository(private val dao: RecordDao) {
         contractorId: String,
         locationCode: String,
         workText: String,
+        photoId: String?,
     ) {
         val now = System.currentTimeMillis()
         dao.insert(
@@ -26,7 +27,7 @@ class RecordRepository(private val dao: RecordDao) {
                 contractorId = contractorId,
                 locationCode = locationCode,
                 workText = workText,
-                photoId = null,
+                photoId = photoId,
                 createdAt = now,
                 updatedAt = now,
             ),
@@ -39,6 +40,7 @@ class RecordRepository(private val dao: RecordDao) {
         contractorId: String,
         locationCode: String,
         workText: String,
+        photoId: String?,
     ) {
         dao.update(
             existing.copy(
@@ -46,6 +48,7 @@ class RecordRepository(private val dao: RecordDao) {
                 contractorId = contractorId,
                 locationCode = locationCode,
                 workText = workText,
+                photoId = photoId,
                 updatedAt = System.currentTimeMillis(),
             ),
         )

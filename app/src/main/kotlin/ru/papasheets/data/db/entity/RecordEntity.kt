@@ -6,8 +6,9 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Одна запись журнала: дата + подрядчик + локация + вид работ (+ фото — придёт в M2).
- * `photoId` пока просто nullable-поле без FK: PhotoEntity ещё не существует.
+ * Одна запись журнала: дата + подрядчик + локация + вид работ + фото.
+ * `photoId` nullable в схеме (SET_NULL при удалении фото) — обязательность фото проверяется
+ * валидацией формы, а не БД: ровно одно фото на запись, но пока форма не сохранена, ссылки нет.
  */
 @Entity(
     tableName = "records",
@@ -24,10 +25,17 @@ import androidx.room.PrimaryKey
             childColumns = ["contractorId"],
             onDelete = ForeignKey.RESTRICT,
         ),
+        ForeignKey(
+            entity = PhotoEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["photoId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["journalId", "dateEpochDay"]),
         Index(value = ["contractorId"]),
+        Index(value = ["photoId"], unique = true),
     ],
 )
 data class RecordEntity(

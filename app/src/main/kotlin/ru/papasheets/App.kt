@@ -2,21 +2,36 @@ package ru.papasheets
 
 import android.app.Application
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.LocationSuggester
 import ru.papasheets.data.repo.RecordRepository
+import ru.papasheets.photos.PhotoStore
+
+/** Задержка перед первым GC — даёт форме записи время доимпортировать и сохранить свежее фото. */
+private const val PHOTO_GC_STARTUP_DELAY_MS = 10_000L
 
 class App : Application() {
 
     lateinit var graph: AppGraph
         private set
 
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this)
+        appScope.launch {
+            delay(PHOTO_GC_STARTUP_DELAY_MS)
+            graph.photoStore.collectGarbage()
+        }
     }
 }
 
@@ -31,4 +46,5 @@ class AppGraph(context: Context) {
     val recordRepository: RecordRepository by lazy { RecordRepository(database.recordDao()) }
     val contractorRepository: ContractorRepository by lazy { ContractorRepository(database.contractorDao()) }
     val locationSuggester: LocationSuggester by lazy { LocationSuggester(database.locationDao()) }
+    val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
 }

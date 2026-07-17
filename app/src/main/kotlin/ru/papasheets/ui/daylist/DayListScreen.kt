@@ -3,6 +3,7 @@ package ru.papasheets.ui.daylist
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,10 +34,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,21 +48,44 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import coil.compose.AsyncImage
 import java.time.LocalDate
+import java.util.UUID
 import ru.papasheets.R
 import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.data.db.entity.RecordEntity
+import ru.papasheets.photos.PhotoStore
 import ru.papasheets.ui.LocalAppGraph
 import ru.papasheets.ui.common.ContractorColors
 import ru.papasheets.ui.record.RecordSheet
 import ru.papasheets.ui.record.RecordSheetMode
+
+/** Переживает смерть процесса — иначе форма (и её ViewModel с temp-uri камеры) теряется вместе со свёрнутым приложением. */
+private val RecordSheetModeSaver = listSaver<RecordSheetMode?, Any>(
+    save = { mode ->
+        when (mode) {
+            null -> emptyList()
+            is RecordSheetMode.Create -> listOf("create", mode.journalId, mode.defaultDate.toEpochDay(), mode.sessionId)
+            is RecordSheetMode.Edit -> listOf("edit", mode.recordId)
+        }
+    },
+    restore = { saved ->
+        if (saved.isEmpty()) {
+            null
+        } else when (saved[0]) {
+            "create" -> RecordSheetMode.Create(saved[1] as String, LocalDate.ofEpochDay(saved[2] as Long), saved[3] as String)
+            "edit" -> RecordSheetMode.Edit(saved[1] as String)
+            else -> null
+        }
+    },
+)
 
 /**
  * Временный экран журнала до матрицы (M3): плоский список записей по дням, но с полноценным CRUD.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DayListScreen(journalId: String, onBack: () -> Unit) {
+fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String) -> Unit) {
     val graph = LocalAppGraph.current
     val viewModel: DayListViewModel = viewModel(
         factory = viewModelFactory {
@@ -73,7 +101,7 @@ fun DayListScreen(journalId: String, onBack: () -> Unit) {
     )
     val journal by viewModel.journal.collectAsState()
     val dayGroups by viewModel.dayGroups.collectAsState()
-    var sheetMode by remember { mutableStateOf<RecordSheetMode?>(null) }
+    var sheetMode by rememberSaveable(stateSaver = RecordSheetModeSaver) { mutableStateOf<RecordSheetMode?>(null) }
     var recordPendingDelete by remember { mutableStateOf<RecordEntity?>(null) }
 
     Scaffold(
@@ -88,7 +116,9 @@ fun DayListScreen(journalId: String, onBack: () -> Unit) {
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { sheetMode = RecordSheetMode.Create(journalId, defaultDateFor(journal)) },
+                onClick = {
+                    sheetMode = RecordSheetMode.Create(journalId, defaultDateFor(journal), sessionId = UUID.randomUUID().toString())
+                },
             ) {
                 Text(stringResource(R.string.day_list_add_record))
             }
@@ -123,8 +153,10 @@ fun DayListScreen(journalId: String, onBack: () -> Unit) {
                     items(group.records, key = { it.record.id }) { entry ->
                         RecordCard(
                             entry = entry,
+                            photoStore = graph.photoStore,
                             onClick = { sheetMode = RecordSheetMode.Edit(entry.record.id) },
                             onLongClick = { recordPendingDelete = entry.record },
+                            onPhotoClick = { onOpenLightbox(entry.record.id) },
                         )
                     }
                 }
@@ -175,7 +207,13 @@ private fun defaultDateFor(journal: JournalEntity?): LocalDate {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RecordCard(entry: RecordWithContractor, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun RecordCard(
+    entry: RecordWithContractor,
+    photoStore: PhotoStore,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onPhotoClick: () -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -186,12 +224,25 @@ private fun RecordCard(entry: RecordWithContractor, onClick: () -> Unit, onLongC
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(ContractorColors.forIndex(entry.contractor?.colorIndex ?: 0)),
-            )
+            val photoId = entry.record.photoId
+            if (photoId != null) {
+                AsyncImage(
+                    model = photoStore.thumbFile(photoId),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(onClick = onPhotoClick),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(ContractorColors.forIndex(entry.contractor?.colorIndex ?: 0)),
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

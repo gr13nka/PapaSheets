@@ -15,6 +15,9 @@ interface ContractorDao {
     @Query("SELECT * FROM contractors ORDER BY orderIndex")
     fun observeAll(): Flow<List<ContractorEntity>>
 
+    @Query("SELECT * FROM contractors WHERE id = :id")
+    suspend fun getById(id: String): ContractorEntity?
+
     @Insert
     suspend fun insert(contractor: ContractorEntity)
 
