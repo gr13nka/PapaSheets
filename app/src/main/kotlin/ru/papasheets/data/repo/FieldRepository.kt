@@ -19,4 +19,7 @@ class FieldRepository(private val dao: FieldDefDao) {
 
     /** Все определения, включая архивные — их нужно видеть экрану полей и бэкапу. */
     suspend fun getAll(): List<FieldDefEntity> = dao.getAll()
+
+    /** Восстанавливает определение поля из бэкапа как есть (решение принимает [ru.papasheets.domain.backup.MergeRules]). */
+    suspend fun upsertFromBackup(field: FieldDefEntity) = dao.upsertFromBackup(field)
 }

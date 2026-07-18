@@ -42,8 +42,10 @@
     <string name="import_result_row">%1$s — добавлено %2$d, обновлено %3$d, пропущено %4$d</string>
     <string name="import_result_journals">Журналы</string>
     <string name="import_result_contractors">Подрядчики</string>
+    <string name="import_result_fields">Поля</string>
     <string name="import_result_presets">Локации</string>
     <string name="import_result_records">Записи</string>
+    <string name="import_result_values">Значения полей</string>
     <string name="import_result_photos">Фото</string>
 
     <string name="record_delete_confirm_title">Удалить запись?</string>

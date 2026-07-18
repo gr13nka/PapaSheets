@@ -13,7 +13,12 @@ private const val THUMB_PREFIX = "photos/thumb/"
 
 private val json = Json { ignoreUnknownKeys = true }
 
-/** Разобранный .psbackup: к моменту возврата из [BackupReader.read] версия формата уже проверена. */
+/**
+ * Разобранный .psbackup: к моменту возврата из [BackupReader.read] версия формата уже проверена, а
+ * [data] приведена к текущей версии формата независимо от того, какой была в файле. Исходную версию
+ * при необходимости видно в `manifest.formatVersion`, но данные читать по ней не нужно — вызывающей
+ * стороне старые версии не видны вообще.
+ */
 data class BackupContents(val manifest: BackupManifest, val data: BackupData)
 
 /**
@@ -54,15 +59,22 @@ object BackupReader {
 
         val finalManifest = manifest ?: throw BackupFormatException("В архиве нет manifest.json")
         val finalData = data ?: throw BackupFormatException("В архиве нет data.json")
-        return BackupContents(finalManifest, finalData)
+        return BackupContents(finalManifest, BackupUpgrade.toCurrent(finalManifest.formatVersion, finalData))
     }
 
     private fun photoIdFrom(entryName: String, prefix: String): String = entryName.removePrefix(prefix).removeSuffix(".jpg")
 
+    /** Диапазон допустимых версий и причины, по которым он такой, — в KDoc [BackupManifest]. */
     private fun validateFormatVersion(manifest: BackupManifest) {
-        if (manifest.formatVersion != BackupManifest.CURRENT_FORMAT_VERSION) {
+        val version = manifest.formatVersion
+        if (version > BackupManifest.CURRENT_FORMAT_VERSION) {
             throw BackupFormatException(
-                "Формат бэкапа (версия ${manifest.formatVersion}) не поддерживается этой версией приложения",
+                "Бэкап создан более новой версией приложения (формат $version) — обновите PapaSheets",
+            )
+        }
+        if (version < BackupManifest.MIN_SUPPORTED_FORMAT_VERSION) {
+            throw BackupFormatException(
+                "Формат бэкапа (версия $version) слишком старый и больше не поддерживается",
             )
         }
     }

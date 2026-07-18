@@ -95,12 +95,15 @@ class AppGraph(context: Context) {
         }
     }
     val backupInteractor: BackupInteractor by lazy {
-        BackupInteractor(journalRepository, contractorRepository, recordRepository, locationRepository, photoStore, appContext)
+        BackupInteractor(
+            journalRepository, contractorRepository, recordRepository, locationRepository,
+            fieldRepository, photoStore, appContext,
+        )
     }
     val importInteractor: ImportInteractor by lazy {
         ImportInteractor(
             journalRepository, contractorRepository, recordRepository, locationRepository,
-            photoStore, transactionRunner, appContext,
+            fieldRepository, photoStore, transactionRunner, appContext,
         )
     }
 }

@@ -36,6 +36,14 @@ class RecordRepository(
     /** Все записи всех журналов — источник данных для бэкапа (M7). */
     suspend fun getAll(): List<RecordEntity> = dao.getAll()
 
+    /**
+     * Все значения всех записей — вторая половина слепка для бэкапа.
+     *
+     * Отдельным запросом целиком, а не через `@Relation` к [getAll]: бэкап берёт записи всех журналов
+     * сразу, а `@Relation` подставил бы их id в `IN (...)` и упёрся в лимит переменных SQLite.
+     */
+    suspend fun getAllValues(): List<RecordValueEntity> = valueDao.getAll()
+
     /** photoId записей журнала — каскадное удаление журнала (M8) сносит эти фото явно. */
     suspend fun photoIdsForJournal(journalId: String): List<String> = dao.photoIdsForJournal(journalId)
 
@@ -96,6 +104,18 @@ class RecordRepository(
 
     /** Восстанавливает запись из бэкапа как есть (побеждающая версия уже решена [ru.papasheets.domain.backup.MergeRules]). */
     suspend fun upsertFromBackup(record: RecordEntity) = dao.upsertFromBackup(record)
+
+    /**
+     * Значения записи, восстановленной из бэкапа: набор заменяется целиком — тем же путём, что и при
+     * сохранении формы, поэтому «очистить поле» и здесь означает отсутствие строки, а не пустую.
+     * Замена (а не upsert) обязательна: без предварительного удаления запись, у которой поле очистили
+     * уже после снятия бэкапа, воскресила бы старое значение — строки для него в бэкапе просто нет,
+     * а upsert ничего не удаляет.
+     *
+     * Вызывается внутри транзакции импорта, после вставки самой записи — иначе не пройдёт FK.
+     */
+    suspend fun replaceValuesFromBackup(recordId: String, values: List<RecordValueEntity>) =
+        replaceValues(recordId, values.associate { it.fieldId to it.value })
 
     private suspend fun replaceValues(recordId: String, values: Map<String, String>) {
         valueDao.deleteForRecord(recordId)

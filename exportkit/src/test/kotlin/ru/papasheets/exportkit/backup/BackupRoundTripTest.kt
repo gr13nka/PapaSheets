@@ -23,7 +23,10 @@ class BackupRoundTripTest {
         exportedAtMillis = 1_752_000_000_000L,
     )
 
-    /** Кириллица и `&<>"` вперемешку — проверка, что JSON, а не XML-экранирование, не корёжит текст. */
+    /**
+     * Формат v2: содержимое записи — в `recordValues`, замороженные колонки не заполняются.
+     * Кириллица и `&<>"` вперемешку — проверка, что JSON, а не XML-экранирование, не корёжит текст.
+     */
     private fun data() = BackupData(
         journals = listOf(BackupJournal(id = "j1", year = 2026, month = 7, title = "Июль 2026", createdAt = 1)),
         contractors = listOf(
@@ -35,7 +38,6 @@ class BackupRoundTripTest {
         records = listOf(
             BackupRecord(
                 id = "r1", journalId = "j1", dateEpochDay = 100, contractorId = "c1",
-                locationCode = "1-01", workText = "Штукатурка <потолок>\nвторая строка",
                 photoId = PHOTO_A, createdAt = 1, updatedAt = 2,
             ),
         ),
@@ -44,6 +46,22 @@ class BackupRoundTripTest {
             BackupPhoto(id = PHOTO_B, width = 720, height = 1280, sizeBytes = 543, originUri = null, createdAt = 2),
         ),
         locationPresets = listOf(BackupLocationPreset(id = "l1", code = "1-01", orderIndex = 0)),
+        fieldDefs = listOf(
+            BackupFieldDef(
+                id = BuiltInFields.LOCATION_ID, key = BuiltInFields.LOCATION_KEY, title = "Л", label = "Локация",
+                orderIndex = 0, isArchived = false, isBuiltIn = true, isRequired = false,
+                suggestFromHistory = true, columnWidthDp = 56, maxLines = 2, showAtCompactLod = true, createdAt = 1,
+            ),
+            BackupFieldDef(
+                id = "f-custom", key = "volume", title = "ОБЪЁМ", label = "Объём & \"брутто\"",
+                orderIndex = 2, isArchived = true, isBuiltIn = false, isRequired = false,
+                suggestFromHistory = false, columnWidthDp = 80, maxLines = 1, showAtCompactLod = false, createdAt = 3,
+            ),
+        ),
+        recordValues = listOf(
+            BackupRecordValue("r1", BuiltInFields.LOCATION_ID, "1-01"),
+            BackupRecordValue("r1", "f-custom", "12 м²"),
+        ),
     )
 
     private fun photoBytes(id: String, kind: BackupPhotoKind): ByteArray = "$id/${kind.zipDir}-bytes".toByteArray()

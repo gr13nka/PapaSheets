@@ -4,8 +4,11 @@ package ru.papasheets.domain.backup
 data class BackupImportResult(
     val journals: MergeStats,
     val contractors: MergeStats,
+    val fieldDefs: MergeStats,
     val locationPresets: MergeStats,
     val records: MergeStats,
+    /** Значения считаются построчно, но действие берут у своей записи (см. [MergeRules]). */
+    val recordValues: MergeStats,
     val photos: MergeStats,
 )
 

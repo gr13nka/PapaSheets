@@ -252,8 +252,10 @@ private fun ImportResultDialog(result: BackupImportResult, onDismiss: () -> Unit
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ImportResultRow(R.string.import_result_journals, result.journals)
                 ImportResultRow(R.string.import_result_contractors, result.contractors)
+                ImportResultRow(R.string.import_result_fields, result.fieldDefs)
                 ImportResultRow(R.string.import_result_presets, result.locationPresets)
                 ImportResultRow(R.string.import_result_records, result.records)
+                ImportResultRow(R.string.import_result_values, result.recordValues)
                 ImportResultRow(R.string.import_result_photos, result.photos)
             }
         },

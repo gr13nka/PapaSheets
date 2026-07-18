@@ -7,6 +7,10 @@ import kotlinx.serialization.Serializable
  * ничего не знает о Room, а app при экспорте/импорте сам мапит [ru.papasheets.data.db.entity]-классы
  * в эти DTO и обратно (см. `BackupMappers.kt` в app). Поля — один в один с entity (UUID, epochDay,
  * millis, orderIndex, isArchived как есть), чтобы маппинг был тривиальным в обе стороны.
+ *
+ * У списков, появившихся в v2, есть значения по умолчанию, и это не украшение: благодаря им
+ * data.json версии 1 разбирается тем же кодом, без второго набора DTO и без ветки «а если старый».
+ * Разобранное затем приводится к текущей форме — [BackupUpgrade].
  */
 @Serializable
 data class BackupData(
@@ -15,6 +19,8 @@ data class BackupData(
     val records: List<BackupRecord>,
     val photos: List<BackupPhoto>,
     val locationPresets: List<BackupLocationPreset>,
+    val fieldDefs: List<BackupFieldDef> = emptyList(),
+    val recordValues: List<BackupRecordValue> = emptyList(),
 )
 
 @Serializable
@@ -43,8 +49,14 @@ data class BackupRecord(
     val journalId: String,
     val dateEpochDay: Long,
     val contractorId: String,
-    val locationCode: String,
-    val workText: String,
+    /**
+     * Только для чтения бэкапов v1, где содержимое записи ещё лежало в колонках `records`.
+     * v2 их не пишет (всегда `null`): содержимое живёт в [BackupData.recordValues].
+     * [BackupUpgrade] разворачивает их в значения и обнуляет здесь.
+     */
+    val locationCode: String? = null,
+    /** См. [locationCode]: только для чтения v1, v2 пишет `null`. */
+    val workText: String? = null,
     val photoId: String?,
     val createdAt: Long,
     val updatedAt: Long,
@@ -65,4 +77,34 @@ data class BackupLocationPreset(
     val id: String,
     val code: String,
     val orderIndex: Int,
+)
+
+/** Определение поля записи — поле в поле с `FieldDefEntity`. Встроенные узнаются по id (см. [BuiltInFields]). */
+@Serializable
+data class BackupFieldDef(
+    val id: String,
+    val key: String,
+    val title: String,
+    val label: String,
+    val orderIndex: Int,
+    val isArchived: Boolean,
+    val isBuiltIn: Boolean,
+    val isRequired: Boolean,
+    val suggestFromHistory: Boolean,
+    val columnWidthDp: Int,
+    val maxLines: Int,
+    val showAtCompactLod: Boolean,
+    val createdAt: Long,
+)
+
+/**
+ * Значение одного поля в одной записи. Пустых значений здесь не бывает — инвариант `RecordValueEntity`
+ * («очистить поле» = удалить строку) распространяется и на бэкап, иначе при импорте «пусто» пришло бы
+ * в двух неразличимых видах.
+ */
+@Serializable
+data class BackupRecordValue(
+    val recordId: String,
+    val fieldId: String,
+    val value: String,
 )

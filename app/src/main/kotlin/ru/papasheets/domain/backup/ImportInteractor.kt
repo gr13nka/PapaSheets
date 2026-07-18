@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.RecordRepository
@@ -21,12 +22,19 @@ import ru.papasheets.photos.PhotoStore
  * невозможен. Существующие id читаются один раз до цикла (не по одному на строку — бэкап реального
  * журнала это сотни записей). Правила слияния — [MergeRules]: это восстановление бэкапа, а не
  * двусторонний sync.
+ *
+ * Порядок вставки внутри транзакции продиктован внешними ключами и менять его нельзя:
+ * журналы → подрядчики → определения полей → пресеты → фото → записи → значения записей.
+ *
+ * Бэкап любой поддерживаемой версии формата приходит сюда уже в текущей форме — приводит его
+ * `BackupUpgrade` внутри [BackupReader], так что здесь про версии знать не нужно.
  */
 class ImportInteractor(
     private val journalRepository: JournalRepository,
     private val contractorRepository: ContractorRepository,
     private val recordRepository: RecordRepository,
     private val locationRepository: LocationRepository,
+    private val fieldRepository: FieldRepository,
     private val photoStore: PhotoStore,
     private val transactionRunner: TransactionRunner,
     private val context: Context,
@@ -42,6 +50,7 @@ class ImportInteractor(
         transactionRunner.run {
             val existingJournalIds = journalRepository.getAll().mapTo(HashSet()) { it.id }
             val existingPresetIds = locationRepository.getAll().mapTo(HashSet()) { it.id }
+            val existingFieldIds = fieldRepository.getAll().mapTo(HashSet()) { it.id }
             val existingPhotoIds = photoStore.getAllMeta().mapTo(HashSet()) { it.id }
             val existingRecordUpdatedAt = recordRepository.getAll().associate { it.id to it.updatedAt }
 
@@ -49,6 +58,8 @@ class ImportInteractor(
             // подрядчики на нём тогда это одноразовая заглушка DefaultSeed со случайными UUID, которые
             // никогда не совпадут с UUID из бэкапа. Заменяем её целиком — иначе те же 5 подрядчиков
             // задвоились бы под новыми id рядом с настоящими из бэкапа.
+            // На определения полей это не распространяется: их id — константы (BuiltInFields), так что
+            // встроенное поле из бэкапа совпадёт со здешним по id и просто заменит его, без задвоения.
             if (existingJournalIds.isEmpty() && existingRecordUpdatedAt.isEmpty() && contents.data.contractors.isNotEmpty()) {
                 contractorRepository.deleteAll()
             }
@@ -64,6 +75,12 @@ class ImportInteractor(
                 contractorRepository.upsertFromBackup(contractor.toEntity())
                 acc + action
             }
+            // До записей и их значений: record_values ссылается на field_defs по внешнему ключу.
+            val fieldStats = contents.data.fieldDefs.fold(MergeStats()) { acc, field ->
+                val action = MergeRules.forReplaceable(field.id in existingFieldIds)
+                fieldRepository.upsertFromBackup(field.toEntity())
+                acc + action
+            }
             val presetStats = contents.data.locationPresets.fold(MergeStats()) { acc, preset ->
                 val action = MergeRules.forReplaceable(preset.id in existingPresetIds)
                 locationRepository.upsertFromBackup(preset.toEntity())
@@ -75,17 +92,31 @@ class ImportInteractor(
                 if (action == MergeAction.INSERT) photoStore.insertMetaIfAbsent(photo.toMeta())
                 acc + action
             }
-            val recordStats = contents.data.records.fold(MergeStats()) { acc, record ->
-                val action = MergeRules.forRecord(existingRecordUpdatedAt[record.id], record.updatedAt)
+            // Решение по каждой записи принимается один раз: его же слушаются её значения ниже.
+            val recordActions = contents.data.records.map { record ->
+                record to MergeRules.forRecord(existingRecordUpdatedAt[record.id], record.updatedAt)
+            }
+            val recordStats = recordActions.fold(MergeStats()) { acc, (record, action) ->
                 if (action != MergeAction.SKIP) recordRepository.upsertFromBackup(record.toEntity())
                 acc + action
+            }
+            // Значения — последними: FK ведут и на records, и на field_defs, обе уже на месте.
+            val valuesByRecord = contents.data.recordValues.groupBy { it.recordId }
+            val valueStats = recordActions.fold(MergeStats()) { acc, (record, action) ->
+                val values = valuesByRecord[record.id].orEmpty()
+                if (action != MergeAction.SKIP) {
+                    recordRepository.replaceValuesFromBackup(record.id, values.map { it.toEntity() })
+                }
+                values.fold(acc) { stats, _ -> stats + action }
             }
 
             BackupImportResult(
                 journals = journalStats,
                 contractors = contractorStats,
+                fieldDefs = fieldStats,
                 locationPresets = presetStats,
                 records = recordStats,
+                recordValues = valueStats,
                 photos = photoStats,
             )
         }
