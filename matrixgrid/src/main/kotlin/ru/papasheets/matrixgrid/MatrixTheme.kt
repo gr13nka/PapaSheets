@@ -65,9 +65,18 @@ internal class MatrixColors private constructor(
 
 /** Типографика матрицы. Цвет в стили не зашит — его задаёт drawText, поэтому кэш layout'ов не зависит от темы. */
 internal class MatrixTextStyles {
-    val work = TextStyle(fontSize = 12.sp, lineHeight = 15.sp)
-    val location = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    /** Второстепенные поля ячейки: подробности, читаемые уже после того, как глаз нашёл строку. */
+    val cellSecondary = TextStyle(fontSize = 12.sp, lineHeight = 15.sp)
+
+    /** Первое поле ячейки — опорное при беглом просмотре колонки, поэтому крупнее и жирнее. */
+    val cellPrimary = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium)
     val contractorName = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     val subHeader = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp)
     val dayLabel = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+
+    /**
+     * Стиль значения поля по его позиции в группе. Правило одно на весь модуль (и для замера высот
+     * строк, и для отрисовки), поэтому живёт здесь, а не дублируется у обоих вызывающих.
+     */
+    fun cell(fieldIndex: Int): TextStyle = if (fieldIndex == 0) cellPrimary else cellSecondary
 }

@@ -41,9 +41,14 @@ fun MatrixView(
 
     val colors = remember(dark) { MatrixColors.of(dark) }
     val styles = remember { MatrixTextStyles() }
-    val cache = remember { CellTextCache() }
-    val geometry = remember(density, model.contractors.size, model.rows.size) {
-        MatrixGeometry(density, rowCount = model.rows.size, groupCount = model.contractors.size)
+    // Кэш переживает смену модели (сам её отслеживает), но не смену плотности: замеры сделаны в
+    // пикселях, и после смены масштаба шрифта/экрана они уже не про эту раскладку.
+    val cache = remember(density) { CellTextCache() }
+    // Ключ — сама модель, а не её размеры: правка ширины поля или текста ячейки меняет раскладку, не
+    // меняя ни числа строк, ни числа колонок, и по размерам была бы не видна.
+    val geometry = remember(density, model, styles) {
+        cache.sync(model)
+        buildMatrixGeometry(density, model, measurer, cache, styles)
     }
     val renderer = remember(geometry, colors, styles) {
         MatrixRenderer(geometry, colors, styles, measurer, cache)

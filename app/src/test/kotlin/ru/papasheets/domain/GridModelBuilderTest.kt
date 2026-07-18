@@ -59,6 +59,35 @@ class GridModelBuilderTest {
     }
 
     @Test
+    fun `cell values follow the field order of the model`() {
+        val contractors = listOf(contractor("A", 0))
+        val records = listOf(record("a1", day1, "A", createdAt = 100))
+
+        val model = buildGridModel(records, contractors, sortDesc = false)
+
+        assertEquals(listOf("location", "work"), model.fields.map { it.id })
+        val values = model.rows[0].cells[0]!!.values
+        assertEquals("одно значение на поле", model.fields.size, values.size)
+        assertEquals("1-01", values[0])
+        assertEquals("работа a1", values[1])
+    }
+
+    @Test
+    fun `missing value yields an empty string instead of shifting positions`() {
+        // Пустая локация не должна «съехать» в подколонку вида работ: позиция в values и есть привязка
+        // к полю (см. GridCell).
+        val contractors = listOf(contractor("A", 0))
+        val records = listOf(record("a1", day1, "A", createdAt = 100).copy(locationCode = ""))
+
+        val model = buildGridModel(records, contractors, sortDesc = false)
+
+        val values = model.rows[0].cells[0]!!.values
+        assertEquals(model.fields.size, values.size)
+        assertEquals("", values[0])
+        assertEquals("работа a1", values[1])
+    }
+
+    @Test
     fun `sortDesc reverses day order but keeps within-day order`() {
         val contractors = listOf(contractor("A", 0), contractor("B", 1))
         val records = listOf(

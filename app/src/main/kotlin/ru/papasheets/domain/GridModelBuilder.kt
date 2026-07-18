@@ -5,12 +5,26 @@ import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.matrixgrid.ContractorColumn
 import ru.papasheets.matrixgrid.GridCell
+import ru.papasheets.matrixgrid.GridField
 import ru.papasheets.matrixgrid.GridModel
 import ru.papasheets.matrixgrid.GridRow
 
 /** Короткие русские месяцы для меток дат («17 июл»). Захардкожены здесь, чтобы функция оставалась чистой JVM. */
 private val SHORT_MONTHS = arrayOf(
     "янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
+)
+
+/**
+ * ВРЕМЕННЫЙ синтез набора полей: движок матрицы уже умеет произвольное их число, а схема БД — ещё
+ * нет, поэтому здесь воспроизводятся ровно те две подколонки, что были захардкожены в матрице до
+ * рефакторинга. В этапе 3 набор придёт из БД, и константа исчезнет.
+ *
+ * `maxLines = 0` у вида работ снимает потолок строк: строка матрицы растягивается так, чтобы текст
+ * был виден целиком, а не обрезался многоточием.
+ */
+private val LEGACY_FIELDS = listOf(
+    GridField(id = "location", title = "Л", widthDp = 56, maxLines = 2, showAtCompactLod = true),
+    GridField(id = "work", title = "ВИД РАБОТ", widthDp = 168, maxLines = 0, showAtCompactLod = false),
 )
 
 /**
@@ -64,7 +78,7 @@ fun buildGridModel(
             val cells = ArrayList<GridCell?>(columns.size)
             for (column in columns.indices) {
                 val record = perColumn[column]?.getOrNull(rowInDay)
-                cells.add(record?.let { GridCell(it.id, it.photoId, it.locationCode, it.workText) })
+                cells.add(record?.let { GridCell(it.id, it.photoId, listOf(it.locationCode, it.workText)) })
             }
             rows.add(
                 GridRow(
@@ -80,6 +94,7 @@ fun buildGridModel(
 
     return GridModel(
         contractors = columns.map { ContractorColumn(it.id, it.name, it.shortName, it.colorIndex, it.isArchived) },
+        fields = LEGACY_FIELDS,
         rows = rows,
     )
 }

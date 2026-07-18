@@ -47,5 +47,14 @@ fun buildJournalSnapshot(
     )
 }
 
+/**
+ * exportkit пока знает ровно две текстовые колонки, поэтому здесь берутся первые два поля модели —
+ * тот же порядок, что синтезирует [buildGridModel]. Переход экспорта на произвольный набор полей —
+ * этап 2; до него позиционный доступ и есть точка стыковки.
+ */
 private fun toSnapshotCell(cell: GridCell): SnapshotCell =
-    SnapshotCell(locationCode = cell.locationCode, workText = cell.workText, photoId = cell.thumbKey)
+    SnapshotCell(
+        locationCode = cell.values.getOrElse(0) { "" },
+        workText = cell.values.getOrElse(1) { "" },
+        photoId = cell.thumbKey,
+    )

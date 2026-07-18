@@ -7,18 +7,23 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 
+/** Суммарный бюджет замеров ячеек на все поля вместе. */
+private const val CELL_BUDGET = 2048
+
+/** Нижняя граница бюджета одного поля: даже при многих полях кэш должен покрывать экран целиком. */
+private const val FIELD_BUDGET_MIN = 256
+
 /**
  * Кэш результатов измерения текста — главная цена Canvas-рендера (см. spec, риск 3). Замер идёт лишь
  * для впервые показанной ячейки, дальше берётся из кэша.
  *
- * Текст всегда измеряется в базовом масштабе (zoom = 1) с фиксированными по типу колонки ширинами;
+ * Текст всегда измеряется в базовом масштабе (zoom = 1) с фиксированной по полю шириной;
  * промежуточный зум внутри яруса рендерер добирает canvas-трансформом
  * [androidx.compose.ui.graphics.drawscope.DrawScope.scale]. Поэтому раскладка не зависит от зума, и в
- * живом пинче перемера нет вовсе. Ярус (LOD) решает лишь, какие тексты вообще нужны: LOD0 — и локация,
- * и вид работ; LOD1 — только локация; LOD2 — ничего. Отсюда кэши разбиты по типу текста
- * ([work]/[location]), а не по составному ключу (recordId, ярус): это и есть разбиение «по ярусу», но
- * без склейки строки-ключа в горячем цикле (recordId — уже готовый ключ). Статические подписи (имена
- * подрядчиков, «Ф/Л/ВИД РАБОТ», метки дат) живут отдельной небольшой картой.
+ * живом пинче перемера нет вовсе. Ярус (LOD) решает лишь, какие поля вообще нужны (см.
+ * [GridField.showAtCompactLod]). Отсюда кэши разбиты ПО ИНДЕКСУ ПОЛЯ, а не по составному ключу
+ * (recordId, поле): recordId — уже готовый ключ, а склейка строки-ключа в горячем цикле недопустима.
+ * Статические подписи (имена подрядчиков, заголовки полей, метки дат) живут отдельной небольшой картой.
  *
  * Инвалидация — при смене экземпляра [GridModel] (builder создаёт новый на каждое изменение данных).
  * Идентичность экземпляра, а не хэш содержимого: он не заметил бы правку текста ячейки при неизменном
@@ -26,58 +31,45 @@ import androidx.compose.ui.unit.Constraints
  * видимых замеров дёшев и безопасен.
  */
 internal class CellTextCache {
-    private var modelToken: Any? = null
-    private val work = LruCache<String, TextLayoutResult>(1024)
-    private val location = LruCache<String, TextLayoutResult>(1024)
+    private var model: GridModel? = null
+    private var fields: Array<LruCache<String, TextLayoutResult>> = emptyArray()
     private val statics = HashMap<String, TextLayoutResult>()
 
-    /** Сбрасывает кэши при смене экземпляра модели. Вызывается в начале кадра — no-op при той же модели. */
-    fun sync(token: Any) {
-        if (token !== modelToken) {
-            modelToken = token
-            work.evictAll()
-            location.evictAll()
-            statics.clear()
-        }
+    /**
+     * Сбрасывает кэши при смене экземпляра модели и подгоняет число кэшей под её поля.
+     * Вызывается в начале кадра — no-op при той же модели.
+     */
+    fun sync(model: GridModel) {
+        if (model === this.model) return
+        this.model = model
+        val budget = (CELL_BUDGET / maxOf(1, model.fields.size)).coerceAtLeast(FIELD_BUDGET_MIN)
+        fields = Array(model.fields.size) { LruCache(budget) }
+        statics.clear()
     }
 
-    /** Код локации ячейки (LOD0/LOD1). Ключ — recordId: ширина фиксирована, ярус на замер не влияет. */
-    fun location(
+    /**
+     * Значение поля [fieldIndex] в ячейке [recordId]. Ключ — recordId: ширина поля фиксирована,
+     * ярус на замер не влияет.
+     */
+    fun field(
         measurer: TextMeasurer,
+        fieldIndex: Int,
         recordId: String,
         text: String,
         style: TextStyle,
         widthPx: Int,
+        maxLines: Int,
     ): TextLayoutResult {
-        location.get(recordId)?.let { return it }
+        val cache = fields[fieldIndex]
+        cache.get(recordId)?.let { return it }
         val measured = measurer.measure(
             text = text,
             style = style,
             overflow = TextOverflow.Ellipsis,
-            maxLines = 2,
+            maxLines = maxLines,
             constraints = Constraints(maxWidth = widthPx.coerceAtLeast(0)),
         )
-        location.put(recordId, measured)
-        return measured
-    }
-
-    /** Вид работ ячейки (только LOD0). Ключ — recordId. */
-    fun work(
-        measurer: TextMeasurer,
-        recordId: String,
-        text: String,
-        style: TextStyle,
-        widthPx: Int,
-    ): TextLayoutResult {
-        work.get(recordId)?.let { return it }
-        val measured = measurer.measure(
-            text = text,
-            style = style,
-            overflow = TextOverflow.Ellipsis,
-            maxLines = 3,
-            constraints = Constraints(maxWidth = widthPx.coerceAtLeast(0)),
-        )
-        work.put(recordId, measured)
+        cache.put(recordId, measured)
         return measured
     }
 

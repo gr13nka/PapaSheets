@@ -11,7 +11,14 @@ import org.junit.Test
  */
 class MatrixStateTest {
     private val density = Density(2f)
-    private fun bigGeometry() = MatrixGeometry(density, rowCount = 300, groupCount = 28)
+
+    private val fields = listOf(
+        GridField(id = "location", title = "Л", widthDp = 56, maxLines = 2, showAtCompactLod = true),
+        GridField(id = "work", title = "ВИД РАБОТ", widthDp = 168, maxLines = 0, showAtCompactLod = false),
+    )
+
+    private fun bigGeometry() =
+        MatrixGeometry(density, fields, groupCount = 28, rowMetrics = RowMetrics.uniform(density, 300))
     private val viewportW = 1080f
     private val viewportH = 2000f
 

@@ -19,8 +19,13 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val LABEL_PHOTO = "Ф"
-private const val LABEL_LOCATION = "Л"
-private const val LABEL_WORK = "ВИД РАБОТ"
+
+/**
+ * Ключ фото-подколонки в кэше статических подписей. Подписи полей идут под ключами `"h:" + id`:
+ * ключом служит идентификатор поля, а не его текст, потому что заголовки задаёт пользователь и два
+ * поля вполне могут называться одинаково, а [CellTextCache.static] — общая карта на всю матрицу.
+ */
+private const val KEY_PHOTO_HEADER = "h:photo"
 
 /**
  * Рисует кадр матрицы на текущем зуме. Экземпляр держит неизменные за кадр зависимости (геометрия,
@@ -96,13 +101,14 @@ internal class MatrixRenderer(
         val g0 = geometry.firstVisibleGroup(panX, zoom)
         val g1 = geometry.lastVisibleGroup(panX, bodyW, zoom)
         val cellW = geometry.groupW * zoom
-        val cellH = geometry.rowH * zoom
         val thin = 1.dp.toPx()
         val thick = 2.dp.toPx()
 
         for (r in row0..row1) {
             val row = model.rows[r]
             val top = geometry.rowScreenTop(r, panY, zoom)
+            // Высота своя у каждой строки: на LOD0 строка растянута под самый длинный текст в ней.
+            val cellH = geometry.rowHeight(r, zoom) * zoom
             for (g in g0..g1) {
                 val left = geometry.groupScreenLeft(g, panX, zoom)
                 val colorIndex = model.contractors[g].colorIndex
@@ -119,7 +125,7 @@ internal class MatrixRenderer(
                         topLeft = Offset(left, top),
                         size = Size(cellW, cellH),
                     )
-                    if (cell != null) drawFilledCell(cell, left, top, colorIndex, zoom, lod, thumbnails)
+                    if (cell != null) drawFilledCell(model.fields, cell, left, top, colorIndex, zoom, lod, thumbnails)
                     drawLine(
                         color = colors.gridLine,
                         start = Offset(left + cellW, top),
@@ -148,8 +154,13 @@ internal class MatrixRenderer(
     /**
      * Содержимое заполненной ячейки рисуется в базовых (zoom = 1) координатах внутри
      * translate+scale, поэтому измеренный в кэше текст и битмап масштабируются canvas'ом, без перемера.
+     *
+     * Фото и текст выровнены по ВЕРХУ ячейки (общий отступ [MatrixGeometry.cellPad]). При базовой
+     * высоте строки это ровно прежнее вертикальное центрирование плитки, а в выросшей под длинный
+     * текст строке фото остаётся у своей подписи, а не уползает в середину пустоты.
      */
     private fun DrawScope.drawFilledCell(
+        fields: List<GridField>,
         cell: GridCell,
         left: Float,
         top: Float,
@@ -162,7 +173,7 @@ internal class MatrixRenderer(
             scale(scale = zoom, pivot = Offset.Zero) {
                 val box = geometry.photoBoxPx
                 val boxLeft = geometry.photoPadX
-                val boxTop = geometry.photoPadY
+                val boxTop = geometry.cellPad
                 val key = cell.thumbKey
                 when {
                     key == null -> drawRect(
@@ -185,31 +196,25 @@ internal class MatrixRenderer(
                     }
                 }
 
-                val contentTop = geometry.cellPad
-                val location = cache.location(
-                    measurer = measurer,
-                    recordId = cell.recordId,
-                    text = cell.locationCode,
-                    style = styles.location,
-                    widthPx = (geometry.locColW - 2 * geometry.cellPad).roundToInt(),
-                )
-                drawText(
-                    textLayoutResult = location,
-                    color = colors.primaryText,
-                    topLeft = Offset(geometry.photoColW + geometry.cellPad, contentTop),
-                )
-                if (lod == Lod.LOD0) {
-                    val work = cache.work(
+                val pad = geometry.cellPad
+                for (i in fields.indices) {
+                    val field = fields[i]
+                    if (lod == Lod.LOD1 && !field.showAtCompactLod) continue
+                    val text = cell.values.getOrNull(i) ?: continue
+                    if (text.isEmpty()) continue
+                    val layout = cache.field(
                         measurer = measurer,
+                        fieldIndex = i,
                         recordId = cell.recordId,
-                        text = cell.workText,
-                        style = styles.work,
-                        widthPx = (geometry.workColW - 2 * geometry.cellPad).roundToInt(),
+                        text = text,
+                        style = styles.cell(i),
+                        widthPx = (geometry.fieldWidth(i) - 2 * pad).roundToInt(),
+                        maxLines = field.lineCap(),
                     )
                     drawText(
-                        textLayoutResult = work,
-                        color = colors.secondaryText,
-                        topLeft = Offset(geometry.photoColW + geometry.locColW + geometry.cellPad, contentTop),
+                        textLayoutResult = layout,
+                        color = if (i == 0) colors.primaryText else colors.secondaryText,
+                        topLeft = Offset(geometry.fieldLeft(i) + pad, pad),
                     )
                 }
             }
@@ -316,12 +321,20 @@ internal class MatrixRenderer(
                 } else {
                     val name = cache.static(measurer, contractor.id, contractor.name, styles.contractorName, nameWidth, 1)
                     drawScaledLabel(name, nameColor, hs, left + geometry.cellPad * hs, cellW, 0f, nameRowH, center = false)
-                    val photoW = geometry.photoColW * zoom
-                    val locW = geometry.locColW * zoom
-                    val workW = geometry.workColW * zoom
-                    drawSubHeader(LABEL_PHOTO, left, photoW, geometry.photoColW, nameRowH, subHeaderH, hs)
-                    drawSubHeader(LABEL_LOCATION, left + photoW, locW, geometry.locColW, nameRowH, subHeaderH, hs)
-                    drawSubHeader(LABEL_WORK, left + photoW + locW, workW, geometry.workColW, nameRowH, subHeaderH, hs)
+                    drawSubHeader(KEY_PHOTO_HEADER, LABEL_PHOTO, left, geometry.photoColW, nameRowH, subHeaderH, hs, zoom)
+                    for (i in model.fields.indices) {
+                        val field = model.fields[i]
+                        drawSubHeader(
+                            key = "h:" + field.id,
+                            label = field.title,
+                            subLeft = left + geometry.fieldLeft(i) * zoom,
+                            baseSubWidth = geometry.fieldWidth(i),
+                            nameRowH = nameRowH,
+                            subHeaderH = subHeaderH,
+                            hs = hs,
+                            zoom = zoom,
+                        )
+                    }
                 }
             }
             if (lod != Lod.LOD2) {
@@ -340,16 +353,17 @@ internal class MatrixRenderer(
     }
 
     private fun DrawScope.drawSubHeader(
+        key: String,
         label: String,
         subLeft: Float,
-        subWidth: Float,
         baseSubWidth: Float,
         nameRowH: Float,
         subHeaderH: Float,
         hs: Float,
+        zoom: Float,
     ) {
-        val layout = cache.static(measurer, label, label, styles.subHeader, (baseSubWidth - 2 * geometry.cellPad).roundToInt(), 1)
-        drawScaledLabel(layout, colors.secondaryText, hs, subLeft, subWidth, nameRowH, subHeaderH, center = true)
+        val layout = cache.static(measurer, key, label, styles.subHeader, (baseSubWidth - 2 * geometry.cellPad).roundToInt(), 1)
+        drawScaledLabel(layout, colors.secondaryText, hs, subLeft, baseSubWidth * zoom, nameRowH, subHeaderH, center = true)
     }
 
     /**
