@@ -26,6 +26,11 @@ interface RecordDao {
     @Query("SELECT * FROM records")
     suspend fun getAll(): List<RecordEntity>
 
+    /** photoId записей журнала (без null) — каскадное удаление журнала (M8) сносит эти фото явно: FK
+     *  CASCADE уносит записи вместе с журналом, но файлы/строки фото не трогает. */
+    @Query("SELECT DISTINCT photoId FROM records WHERE journalId = :journalId AND photoId IS NOT NULL")
+    suspend fun photoIdsForJournal(journalId: String): List<String>
+
     @Insert
     suspend fun insert(record: RecordEntity)
 

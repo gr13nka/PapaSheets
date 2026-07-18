@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.TextLayoutResult
@@ -308,8 +309,10 @@ internal class MatrixRenderer(
             val nameColor = if (contractor.isArchived) colors.secondaryText else colors.headerText
             clipRect(left, 0f, left + cellW, headerH) {
                 if (lod == Lod.LOD2) {
+                    // Колонка подрядчика на LOD2 — тонкая полоска (~13dp): горизонтальный shortName
+                    // наезжал бы на соседей. Рисуем вертикально (снизу вверх) — влезает в свою колонку.
                     val short = cache.static(measurer, "s:" + contractor.id, contractor.shortName, styles.contractorName, nameWidth, 1)
-                    drawScaledLabel(short, nameColor, hs, left, cellW, 0f, headerH, center = true)
+                    drawVerticalLabel(short, nameColor, hs, left, cellW, headerH)
                 } else {
                     val name = cache.static(measurer, contractor.id, contractor.name, styles.contractorName, nameWidth, 1)
                     drawScaledLabel(name, nameColor, hs, left + geometry.cellPad * hs, cellW, 0f, nameRowH, center = false)
@@ -371,6 +374,33 @@ internal class MatrixRenderer(
         translate(left = x, top = y) {
             scale(scale = scaleFactor, pivot = Offset.Zero) {
                 drawText(layout, color = color, topLeft = Offset.Zero)
+            }
+        }
+    }
+
+    /**
+     * Рисует подпись повёрнутой на 90° (читается снизу вверх), по центру узкой колонки
+     * [boxLeft]..[boxLeft]+[boxWidth] в полосе высотой [bandHeight]. Нужна для shortName подрядчиков на
+     * LOD2, где колонка тоньше горизонтальной подписи. Кегль масштабируется на [scaleFactor], как в
+     * [drawScaledLabel]; поворот вокруг центра колонки, текст центрируется в (cx, cy).
+     */
+    private fun DrawScope.drawVerticalLabel(
+        layout: TextLayoutResult,
+        color: Color,
+        scaleFactor: Float,
+        boxLeft: Float,
+        boxWidth: Float,
+        bandHeight: Float,
+    ) {
+        val cx = boxLeft + boxWidth / 2f
+        val cy = bandHeight / 2f
+        val w = layout.size.width * scaleFactor
+        val h = layout.size.height * scaleFactor
+        rotate(degrees = -90f, pivot = Offset(cx, cy)) {
+            translate(left = cx - w / 2f, top = cy - h / 2f) {
+                scale(scale = scaleFactor, pivot = Offset.Zero) {
+                    drawText(layout, color = color, topLeft = Offset.Zero)
+                }
             }
         }
     }

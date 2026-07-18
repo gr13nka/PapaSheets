@@ -69,6 +69,7 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
                     contractorRepository = graph.contractorRepository,
                     photoStore = graph.photoStore,
                     exportInteractor = graph.exportInteractor,
+                    appContext = graph.appContext,
                 )
             }
         },

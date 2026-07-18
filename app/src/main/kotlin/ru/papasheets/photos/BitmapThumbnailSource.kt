@@ -1,5 +1,8 @@
 package ru.papasheets.photos
 
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.runtime.State
@@ -36,11 +39,18 @@ private const val STEP_FULL = 256
  * [request] дедуплицирует заявки (одна декодировка на ключ) и уводит саму декодировку на IO. Инкремент
  * [version] и запись в кэш возвращаются на главный поток — иначе snapshot-подписка draw не увидела бы
  * изменения как redraw. Поэтому [inFlight]/[decodedStep] трогаются только с главного потока.
+ *
+ * Как [ComponentCallbacks2] сам сбрасывает LRU под нехваткой памяти и при уходе в фон (см. spec, риск 1):
+ * регистрируется в приложении при создании и снимается [dispose] при уходе экрана (MatrixViewModel.onCleared).
+ * Колбэки приходят на главном потоке, так что инвариант «кэш только с главного потока» не нарушается.
  */
 class BitmapThumbnailSource(
     private val photoStore: PhotoStore,
     private val scope: CoroutineScope,
-) : ThumbnailSource {
+    context: Context,
+) : ThumbnailSource, ComponentCallbacks2 {
+
+    private val appContext = context.applicationContext.also { it.registerComponentCallbacks(this) }
 
     private val decodedStep = HashMap<String, Int>()
     private val cache = object : LruCache<String, ImageBitmap>(CACHE_BYTES) {
@@ -91,5 +101,21 @@ class BitmapThumbnailSource(
         var sample = 1
         while (sourcePx / (sample * 2) >= targetPx) sample *= 2
         return sample
+    }
+
+    // При заметной нехватке памяти или уходе приложения в фон отдаём ~48 МБ превью системе —
+    // они дёшево пере-декодируются из thumb-файлов при следующем кадре.
+    override fun onTrimMemory(level: Int) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) cache.evictAll()
+    }
+
+    override fun onLowMemory() = cache.evictAll()
+
+    override fun onConfigurationChanged(newConfig: Configuration) { /* превью не зависят от конфигурации */ }
+
+    /** Снимает подписку на системные колбэки и освобождает кэш. Зовётся при уходе экрана (VM.onCleared). */
+    fun dispose() {
+        appContext.unregisterComponentCallbacks(this)
+        cache.evictAll()
     }
 }

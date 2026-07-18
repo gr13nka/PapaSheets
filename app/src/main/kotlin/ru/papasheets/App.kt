@@ -2,11 +2,14 @@ package ru.papasheets
 
 import android.app.Application
 import android.content.Context
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.room.withTransaction
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
@@ -16,13 +19,14 @@ import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.LocationSuggester
 import ru.papasheets.data.repo.RecordRepository
+import ru.papasheets.domain.DeleteJournalInteractor
 import ru.papasheets.domain.backup.BackupInteractor
 import ru.papasheets.domain.backup.ImportInteractor
 import ru.papasheets.domain.export.ExportInteractor
 import ru.papasheets.photos.PhotoStore
 
-/** Задержка перед первым GC — даёт форме записи время доимпортировать и сохранить свежее фото. */
-private const val PHOTO_GC_STARTUP_DELAY_MS = 10_000L
+/** GC сирот-фото гоняется при выходе приложения на передний план, но не чаще одного раза за этот период. */
+private val PHOTO_GC_MIN_INTERVAL_MS = TimeUnit.HOURS.toMillis(12)
 
 class App : Application() {
 
@@ -31,19 +35,35 @@ class App : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    @Volatile
+    private var lastGcAt = 0L
+
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this)
-        appScope.launch {
-            delay(PHOTO_GC_STARTUP_DELAY_MS)
-            graph.photoStore.collectGarbage()
-        }
+        scheduleForegroundGc()
+    }
+
+    /**
+     * Подчистка рассинхрона фото/БД ([PhotoStore.collectGarbage]) при каждом выходе на передний план,
+     * с троттлингом [PHOTO_GC_MIN_INTERVAL_MS]. Надёжнее разового старта: чинит и при долгой работе, и
+     * после возврата из фона; свежие фото защищены 24-часовым grace-периодом внутри самого GC.
+     */
+    private fun scheduleForegroundGc() {
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                val now = System.currentTimeMillis()
+                if (now - lastGcAt < PHOTO_GC_MIN_INTERVAL_MS) return
+                lastGcAt = now
+                appScope.launch { graph.photoStore.collectGarbage() }
+            }
+        })
     }
 }
 
 /** Ручной контейнер зависимостей приложения (без Hilt). Всё — по требованию, через `by lazy`. */
 class AppGraph(context: Context) {
-    private val appContext = context.applicationContext
+    val appContext: Context = context.applicationContext
 
     private val database: AppDatabase by lazy { AppDatabase.build(appContext) }
     private val monthTitleFormatter: MonthTitleFormatter by lazy { MonthTitleFormatter(appContext) }
@@ -51,6 +71,9 @@ class AppGraph(context: Context) {
     val journalRepository: JournalRepository by lazy { JournalRepository(database.journalDao(), monthTitleFormatter) }
     val recordRepository: RecordRepository by lazy { RecordRepository(database.recordDao()) }
     val contractorRepository: ContractorRepository by lazy { ContractorRepository(database.contractorDao()) }
+    val deleteJournalInteractor: DeleteJournalInteractor by lazy {
+        DeleteJournalInteractor(journalRepository, recordRepository, photoStore)
+    }
     val locationSuggester: LocationSuggester by lazy { LocationSuggester(database.locationDao()) }
     val locationRepository: LocationRepository by lazy { LocationRepository(database.locationDao()) }
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }

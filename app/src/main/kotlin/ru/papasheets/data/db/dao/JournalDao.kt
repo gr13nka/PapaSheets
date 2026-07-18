@@ -47,6 +47,11 @@ interface JournalDao {
     @Insert
     suspend fun insert(journal: JournalEntity)
 
+    /** Удаляет журнал; его записи уносит FK CASCADE ([ru.papasheets.data.db.entity.RecordEntity]).
+     *  Фото каскад НЕ трогает — их сносит явно [ru.papasheets.domain.DeleteJournalInteractor]. */
+    @Query("DELETE FROM journals WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     /**
      * Upsert, не `@Insert(onConflict = REPLACE)` — REPLACE в SQLite это DELETE+INSERT, а DELETE
      * каскадно уносит все записи этого журнала ([ru.papasheets.data.db.entity.RecordEntity] — CASCADE

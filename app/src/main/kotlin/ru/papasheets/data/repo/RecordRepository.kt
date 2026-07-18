@@ -17,6 +17,9 @@ class RecordRepository(private val dao: RecordDao) {
     /** Все записи всех журналов — источник данных для бэкапа (M7). */
     suspend fun getAll(): List<RecordEntity> = dao.getAll()
 
+    /** photoId записей журнала — каскадное удаление журнала (M8) сносит эти фото явно. */
+    suspend fun photoIdsForJournal(journalId: String): List<String> = dao.photoIdsForJournal(journalId)
+
     suspend fun createRecord(
         journalId: String,
         dateEpochDay: Long,

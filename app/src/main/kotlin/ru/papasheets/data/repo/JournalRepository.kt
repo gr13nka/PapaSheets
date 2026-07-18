@@ -36,4 +36,7 @@ class JournalRepository(
 
     /** Восстанавливает журнал из бэкапа как есть (id/поля уже решены [ru.papasheets.domain.backup.MergeRules]). */
     suspend fun upsertFromBackup(journal: JournalEntity) = dao.upsertFromBackup(journal)
+
+    /** Удаляет журнал (его записи уносит FK CASCADE). Фото сносит [ru.papasheets.domain.DeleteJournalInteractor]. */
+    suspend fun delete(journalId: String) = dao.deleteById(journalId)
 }

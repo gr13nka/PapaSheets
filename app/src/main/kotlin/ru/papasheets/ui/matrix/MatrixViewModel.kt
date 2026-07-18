@@ -1,5 +1,6 @@
 package ru.papasheets.ui.matrix
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -50,9 +51,14 @@ class MatrixViewModel(
     contractorRepository: ContractorRepository,
     photoStore: PhotoStore,
     private val exportInteractor: ExportInteractor,
+    appContext: Context,
 ) : ViewModel() {
 
-    val thumbnails = BitmapThumbnailSource(photoStore, viewModelScope)
+    val thumbnails = BitmapThumbnailSource(photoStore, viewModelScope, appContext)
+
+    override fun onCleared() {
+        thumbnails.dispose()
+    }
 
     val journal: StateFlow<JournalEntity?> = journalRepository.observeById(journalId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

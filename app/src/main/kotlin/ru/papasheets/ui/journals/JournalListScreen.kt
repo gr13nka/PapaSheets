@@ -68,13 +68,19 @@ fun JournalListScreen(
     val graph = LocalAppGraph.current
     val viewModel: JournalListViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { JournalListViewModel(graph.journalRepository, graph.backupInteractor, graph.importInteractor) }
+            initializer {
+                JournalListViewModel(
+                    graph.journalRepository, graph.backupInteractor, graph.importInteractor,
+                    graph.deleteJournalInteractor,
+                )
+            }
         },
     )
     val journals by viewModel.journals.collectAsState()
     val busy by viewModel.busy.collectAsState()
     var showMonthPicker by remember { mutableStateOf(false) }
     var importResult by remember { mutableStateOf<BackupImportResult?>(null) }
+    var journalPendingDelete by remember { mutableStateOf<JournalWithStats?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -99,6 +105,7 @@ fun JournalListScreen(
                 is BackupUiEvent.BackupFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
                 is BackupUiEvent.ImportDone -> importResult = event.result
                 is BackupUiEvent.ImportFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
+                is BackupUiEvent.DeleteFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -173,7 +180,11 @@ fun JournalListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(journals, key = JournalWithStats::id) { journal ->
-                    JournalCard(journal = journal, onClick = { onOpenJournal(journal.id) })
+                    JournalCard(
+                        journal = journal,
+                        onClick = { onOpenJournal(journal.id) },
+                        onLongClick = { journalPendingDelete = journal },
+                    )
                 }
             }
         }
@@ -204,6 +215,29 @@ fun JournalListScreen(
 
     importResult?.let { result ->
         ImportResultDialog(result = result, onDismiss = { importResult = null })
+    }
+
+    journalPendingDelete?.let { journal ->
+        AlertDialog(
+            onDismissRequest = { journalPendingDelete = null },
+            title = { Text(stringResource(R.string.journal_delete_confirm_title)) },
+            text = {
+                Text(stringResource(R.string.journal_delete_confirm_message, journal.title, journal.recordCount))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteJournal(journal.id)
+                    journalPendingDelete = null
+                }) {
+                    Text(stringResource(R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { journalPendingDelete = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 
@@ -260,11 +294,13 @@ private fun NewJournalFab(onClick: () -> Unit, onLongPress: (() -> Unit)?) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun JournalCard(journal: JournalWithStats, onClick: () -> Unit) {
+private fun JournalCard(journal: JournalWithStats, onClick: () -> Unit, onLongClick: () -> Unit) {
     Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = journal.title, style = MaterialTheme.typography.titleMedium)

@@ -49,6 +49,9 @@
     <string name="record_delete_confirm_title">Удалить запись?</string>
     <string name="record_delete_confirm_message">Это действие нельзя отменить.</string>
 
+    <string name="journal_delete_confirm_title">Удалить журнал?</string>
+    <string name="journal_delete_confirm_message">Журнал «%1$s» со всеми записями (%2$d) и фотографиями будет удалён без возможности восстановления.</string>
+
     <string name="record_title_create">Новая запись</string>
     <string name="record_title_edit">Редактировать запись</string>
     <string name="record_contractor_label">Подрядчик</string>

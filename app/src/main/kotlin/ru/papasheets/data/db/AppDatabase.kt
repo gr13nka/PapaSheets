@@ -40,9 +40,10 @@ abstract class AppDatabase : RoomDatabase() {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, DB_NAME)
                 .addCallback(DefaultSeed.callback())
-                // Схема v1 ещё меняется без миграций (БД нигде не установлена в проде) — при
-                // расхождении identity hash со старой тестовой установкой просто пересоздаём файл.
-                .fallbackToDestructiveMigration()
+                // Схема заморожена на v1 (см. exportSchema). Никакого destructive-fallback: в релизе это
+                // была бы молчаливая потеря данных при первом же расхождении. Любое будущее изменение
+                // схемы = bump version + настоящий Migration (иначе Room упадёт на несовпадении hash —
+                // и это правильно, лучше явный отказ, чем тихо стёртый журнал прораба).
                 .build()
     }
 }

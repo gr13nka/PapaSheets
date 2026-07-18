@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.papasheets.data.db.dao.JournalWithStats
 import ru.papasheets.data.repo.JournalRepository
+import ru.papasheets.domain.DeleteJournalInteractor
 import ru.papasheets.domain.backup.BackupImportResult
 import ru.papasheets.domain.backup.BackupInteractor
 import ru.papasheets.domain.backup.ImportInteractor
@@ -29,12 +30,14 @@ sealed interface BackupUiEvent {
     data class BackupFailed(val message: String) : BackupUiEvent
     data class ImportDone(val result: BackupImportResult) : BackupUiEvent
     data class ImportFailed(val message: String) : BackupUiEvent
+    data class DeleteFailed(val message: String) : BackupUiEvent
 }
 
 class JournalListViewModel(
     private val journalRepository: JournalRepository,
     private val backupInteractor: BackupInteractor,
     private val importInteractor: ImportInteractor,
+    private val deleteJournalInteractor: DeleteJournalInteractor,
 ) : ViewModel() {
     val journals: StateFlow<List<JournalWithStats>> = journalRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -50,6 +53,22 @@ class JournalListViewModel(
         viewModelScope.launch {
             val journal = journalRepository.createOrGetJournal(year, month)
             onReady(journal.id)
+        }
+    }
+
+    /** Удаляет журнал со всеми записями и фото (см. [DeleteJournalInteractor]). Блокирует на время busy-диалогом. */
+    fun deleteJournal(journalId: String) {
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                deleteJournalInteractor.delete(journalId)
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteJournal failed: $journalId", e)
+                _events.emit(BackupUiEvent.DeleteFailed(e.message ?: "Не удалось удалить журнал"))
+            } finally {
+                _busy.value = false
+            }
         }
     }
 
