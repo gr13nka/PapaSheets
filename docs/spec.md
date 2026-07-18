@@ -79,10 +79,10 @@ PK везде TEXT UUID; `createdAt`/`updatedAt` millis; даты как epochDa
 
 ## Экраны (single-activity, Navigation Compose)
 
-`journals` → `journal/{id}` → `lightbox/{recordId}`; `settings/contractors`, `settings/locations`. Форма записи — `ModalBottomSheet` внутри MatrixScreen, не destination.
+`journals` → `journal/{id}` → `lightbox/{recordId}`; `settings/contractors`, `settings/locations`. Форма записи — `ModalBottomSheet` внутри JournalScreen, не destination.
 
 1. **JournalListScreen** — карточки месяцев, FAB «Новый журнал», импорт бэкапа, настройки.
-2. **MatrixScreen** — MatrixView во весь экран; topBar: сортировка ↑↓, экспорт; FAB «+ Запись»; тап по пустому слоту → форма с предзаполненными датой/подрядчиком.
+2. **JournalScreen** — два вида одной выборки: MatrixView во весь экран и плоский «Список» с сортировкой по любому столбцу; общий фильтр (подрядчики, значения полей, поиск) применяется до раскладки; topBar: вид, фильтр, сортировка ↑↓, экспорт; FAB «+ Запись»; тап по пустому слоту → форма с предзаполненными датой/подрядчиком.
 3. **RecordSheet** — дата (default сегодня), подрядчик (dropdown), локация (автодополнение), вид работ (multiline), фото (камера/галерея), «Продолжить вчерашнее» (копирует подрядчика/локацию/текст, фото — новое). Без фото не сохраняем.
 4. **LightboxScreen** — fullscreen medium-фото с пинч-зумом, подпись, «Редактировать запись».
 5. **ContractorsScreen** — CRUD, drag-reorder, цвет, архив. **LocationsScreen** — CRUD пресетов.

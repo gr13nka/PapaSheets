@@ -20,6 +20,15 @@
     <string name="matrix_zoom_detail">1:1</string>
     <string name="matrix_sort_desc">↓ даты</string>
     <string name="matrix_sort_asc">↑ даты</string>
+    <string name="journal_view_matrix">Матрица</string>
+    <string name="journal_view_list">Список</string>
+    <string name="journal_column_date">Дата</string>
+    <string name="journal_column_contractor">Подрядчик</string>
+    <string name="journal_filter">Фильтр</string>
+    <string name="journal_filter_active">Фильтр (%d)</string>
+    <string name="journal_filter_clear">Сбросить</string>
+    <string name="journal_filter_search">Поиск по тексту</string>
+    <string name="journal_filter_empty">Под фильтр не попала ни одна запись</string>
     <string name="matrix_menu_action">Ещё</string>
     <string name="matrix_menu_export">Экспорт</string>
 
@@ -27,6 +36,7 @@
     <string name="export_option_xlsx_photos">Excel (.xlsx) с фото</string>
     <string name="export_option_xlsx_no_photos">Excel (.xlsx) без фото</string>
     <string name="export_option_csv">Таблица CSV</string>
+    <string name="export_filter_warning">Фильтр на экране не влияет на выгрузку: в файл пойдёт весь журнал.</string>
     <string name="export_in_progress">Экспортируем…</string>
     <string name="export_success">Сохранено</string>
 

@@ -22,4 +22,13 @@ class ValueSuggester(
         result.addAll(valueDao.suggestFromHistory(fieldId, prefix))
         return result.toList()
     }
+
+    /**
+     * Значения, которые в поле уже встречаются, — варианты фильтра по столбцу (Э7).
+     *
+     * Тот же запрос истории, что и у [suggest], но без пресетов: пресет, которым ещё ни разу не
+     * воспользовались, в фильтре означал бы кнопку, гарантированно дающую пустой экран. Потолок
+     * запроса (15 значений) наследуется как есть — для выбора галочкой список длиннее бесполезен.
+     */
+    suspend fun usedValues(fieldId: String): List<String> = valueDao.suggestFromHistory(fieldId, "")
 }

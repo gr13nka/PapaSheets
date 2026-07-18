@@ -7,9 +7,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ru.papasheets.ui.daylist.DayListScreen
+import ru.papasheets.ui.journal.JournalScreen
 import ru.papasheets.ui.journals.JournalListScreen
 import ru.papasheets.ui.lightbox.LightboxScreen
-import ru.papasheets.ui.matrix.MatrixScreen
 import ru.papasheets.ui.settings.ContractorsScreen
 import ru.papasheets.ui.settings.FieldsScreen
 
@@ -46,7 +46,7 @@ fun AppNav() {
             arguments = listOf(navArgument(ARG_JOURNAL_ID) { type = NavType.StringType }),
         ) { backStackEntry ->
             val journalId = backStackEntry.arguments?.getString(ARG_JOURNAL_ID) ?: return@composable
-            MatrixScreen(
+            JournalScreen(
                 journalId = journalId,
                 onBack = { navController.popBackStack() },
                 onOpenLightbox = { recordId -> navController.navigate("lightbox/$recordId") },

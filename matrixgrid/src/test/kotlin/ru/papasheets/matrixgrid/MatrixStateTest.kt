@@ -63,4 +63,33 @@ class MatrixStateTest {
         assertEquals(123f, s.panX, 1e-4f)
         assertEquals(456f, s.panY, 1e-4f)
     }
+
+    /**
+     * Состояние, восстановленное после поворота, считалось под прежний вьюпорт и вполне может лежать
+     * за границами нового мира. Первая публикация контекста обязана его подтянуть — иначе матрица
+     * открылась бы в пустоте за краем журнала, и починил бы это только жест.
+     */
+    @Test
+    fun firstViewportPublicationClampsRestoredTransform() {
+        val s = MatrixState()
+        s.setTransform(zoom = 1f, panX = 1e6f, panY = 1e6f) // клампить ещё нечем — сохранилось как есть
+        val g = bigGeometry()
+
+        s.updateViewport(g, viewportW, viewportH)
+
+        assertEquals(g.maxPanX(viewportW, 1f), s.panX, 0.5f)
+        assertEquals(g.maxPanY(viewportH, 1f), s.panY, 0.5f)
+    }
+
+    /** Смена размеров кадра (поворот) переклампливает pan по новым границам, а не ждёт жеста. */
+    @Test
+    fun viewportResizeReclampsPan() {
+        val (s, g) = stateWithViewport()
+        s.setTransform(zoom = 1f, panX = g.maxPanX(viewportW, 1f), panY = 0f)
+
+        val widerViewport = viewportW * 4f
+        s.updateViewport(g, widerViewport, viewportH)
+
+        assertEquals(g.maxPanX(widerViewport, 1f), s.panX, 0.5f)
+    }
 }

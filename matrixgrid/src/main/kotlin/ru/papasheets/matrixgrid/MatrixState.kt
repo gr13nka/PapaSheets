@@ -8,15 +8,20 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/** Держатель состояния прокрутки/зума матрицы. Переживает рекомпозицию, пока модель на экране. */
+/**
+ * Держатель состояния прокрутки/зума матрицы. Переживает не только рекомпозицию, но и поворот экрана
+ * со смертью процесса: без этого разворот телефона выбрасывал прораба из места, куда он доскроллил,
+ * обратно в начало журнала — а именно поворотом он и смотрит широкую матрицу.
+ */
 @Composable
-fun rememberMatrixState(): MatrixState = remember { MatrixState() }
+fun rememberMatrixState(): MatrixState = rememberSaveable(saver = MatrixState.Saver) { MatrixState() }
 
 /**
  * Изменяемое состояние вьюпорта матрицы. Ключевое правило проекта: [panX]/[panY]/[zoom] —
@@ -68,11 +73,22 @@ class MatrixState {
         z < (g.fitZoom(viewportW, viewportH) + 1f) / 2f
     }
 
-    /** Рендерер/жест публикуют контекст клампинга текущего кадра. Обычная запись полей — без инвалидации draw. */
+    /**
+     * Рендерер/жест публикуют контекст клампинга текущего кадра. Обычная запись полей — без
+     * инвалидации draw.
+     *
+     * Смена контекста (первый кадр, поворот экрана, перестройка модели) переклампливает уже
+     * сохранённое pan/zoom: восстановленная из [Saver] позиция считалась под другой вьюпорт и вполне
+     * может лежать за границами нового мира, а до первого жеста её никто бы не поправил. Условие на
+     * изменение обязательно — переклампливание на каждом кадре писало бы snapshot-состояние прямо
+     * из draw.
+     */
     internal fun updateViewport(geometry: MatrixGeometry, viewportW: Float, viewportH: Float) {
+        val changed = this.geometry !== geometry || this.viewportW != viewportW || this.viewportH != viewportH
         this.geometry = geometry
         this.viewportW = viewportW
         this.viewportH = viewportH
+        if (changed) setTransform(zoom, panX, panY)
     }
 
     /**
@@ -141,5 +157,19 @@ class MatrixState {
             val z = start + (target - start) * value
             setTransform(z, g.panXForZoom(focusX, startPanX, start, z), g.panYForZoom(focusY, startPanY, start, z))
         }
+    }
+
+    companion object {
+        /**
+         * Сохраняются только pan/zoom. Контекст клампинга (geometry, размеры кадра) не сохраняется
+         * намеренно: после поворота он другой, и восстановленную позицию всё равно пришлось бы
+         * пересчитывать — этим занимается [updateViewport] на первом же кадре.
+         */
+        val Saver = listSaver<MatrixState, Float>(
+            save = { listOf(it.panX, it.panY, it.zoom) },
+            restore = { saved ->
+                MatrixState().apply { setTransform(zoom = saved[2], panX = saved[0], panY = saved[1]) }
+            },
+        )
     }
 }

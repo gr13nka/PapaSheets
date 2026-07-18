@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,11 +33,16 @@ private const val MIME_CSV = "text/csv"
  * Диалог экспорта журнала: выбор формата → системный SAF `CreateDocument` → прогресс. Сам решает,
  * с каким MIME-типом и именем открыть системный пикер; фактическую запись делает [onExport]
  * (VM/Interactor) — диалог только собирает выбор пользователя и показывает [exporting].
+ *
+ * @param filterActive на экране включён фильтр. Выгрузка его не учитывает (см.
+ *   [ru.papasheets.domain.export.buildJournalSnapshot]), и об этом надо предупредить здесь: без
+ *   предупреждения прораб ждёт в файле ровно то, что видит на экране, а получает весь журнал.
  */
 @Composable
 fun ExportDialog(
     defaultFileName: (ExportFormat) -> String,
     exporting: Boolean,
+    filterActive: Boolean,
     onExport: (ExportFormat, Uri) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -72,6 +78,14 @@ fun ExportDialog(
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (filterActive) {
+                        Text(
+                            text = stringResource(R.string.export_filter_warning),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
                     TextButton(onClick = { launch(ExportFormat.XLSX_WITH_PHOTOS) }, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.export_option_xlsx_photos))
                     }
