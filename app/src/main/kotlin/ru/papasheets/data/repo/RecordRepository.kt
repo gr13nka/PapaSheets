@@ -2,17 +2,36 @@ package ru.papasheets.data.repo
 
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.db.dao.RecordDao
+import ru.papasheets.data.db.dao.RecordValueDao
 import ru.papasheets.data.db.entity.RecordEntity
+import ru.papasheets.data.db.entity.RecordValueEntity
+import ru.papasheets.data.db.entity.RecordWithValues
 
-class RecordRepository(private val dao: RecordDao) {
-    fun observeByJournal(journalId: String): Flow<List<RecordEntity>> = dao.observeByJournal(journalId)
+/**
+ * Записи журнала вместе с их содержимым.
+ *
+ * Здесь и только здесь живут два правила хранения значений: значение обрезается по краям, а пустое
+ * после обрезки не сохраняется вовсе (инвариант [RecordValueEntity]); набор значений записи при
+ * сохранении заменяется целиком, иначе очищенное пользователем поле воскресало бы старым значением.
+ * Вызывающая сторона передаёт карту «как в форме» и об этих правилах не знает.
+ */
+class RecordRepository(
+    private val dao: RecordDao,
+    private val valueDao: RecordValueDao,
+    private val transactionRunner: TransactionRunner,
+) {
+    fun observeByJournal(journalId: String): Flow<List<RecordWithValues>> = dao.observeWithValuesByJournal(journalId)
 
+    /** Только строка записи — для удаления и для переноса неизменных полей при обновлении. */
     suspend fun getById(id: String): RecordEntity? = dao.getById(id)
 
+    suspend fun getWithValues(id: String): RecordWithValues? = dao.getWithValuesById(id)
+
     /** Записи подрядчика за конкретный день этого журнала — источник для «продолжить вчерашнее» (M5). */
-    suspend fun listByContractorAndDate(journalId: String, contractorId: String, dateEpochDay: Long): List<RecordEntity> =
-        dao.listByContractorAndDate(journalId, contractorId, dateEpochDay)
+    suspend fun listByContractorAndDate(journalId: String, contractorId: String, dateEpochDay: Long): List<RecordWithValues> =
+        dao.listWithValuesByContractorAndDate(journalId, contractorId, dateEpochDay)
 
     /** Все записи всех журналов — источник данных для бэкапа (M7). */
     suspend fun getAll(): List<RecordEntity> = dao.getAll()
@@ -20,48 +39,51 @@ class RecordRepository(private val dao: RecordDao) {
     /** photoId записей журнала — каскадное удаление журнала (M8) сносит эти фото явно. */
     suspend fun photoIdsForJournal(journalId: String): List<String> = dao.photoIdsForJournal(journalId)
 
+    /**
+     * @param values `fieldId → значение`, как их набрали в форме; чистить и отсеивать пустые не нужно.
+     */
     suspend fun createRecord(
         journalId: String,
         dateEpochDay: Long,
         contractorId: String,
-        locationCode: String,
-        workText: String,
+        values: Map<String, String>,
         photoId: String?,
-    ) {
+    ) = transactionRunner.run {
         val now = System.currentTimeMillis()
+        val id = UUID.randomUUID().toString()
         dao.insert(
             RecordEntity(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 journalId = journalId,
                 dateEpochDay = dateEpochDay,
                 contractorId = contractorId,
-                locationCode = locationCode,
-                workText = workText,
+                // Колонки заморожены с v2: содержимое живёт в record_values, читать их больше нельзя.
+                locationCode = "",
+                workText = "",
                 photoId = photoId,
                 createdAt = now,
                 updatedAt = now,
             ),
         )
+        replaceValues(id, values)
     }
 
     suspend fun updateRecord(
         existing: RecordEntity,
         dateEpochDay: Long,
         contractorId: String,
-        locationCode: String,
-        workText: String,
+        values: Map<String, String>,
         photoId: String?,
-    ) {
+    ) = transactionRunner.run {
         dao.update(
             existing.copy(
                 dateEpochDay = dateEpochDay,
                 contractorId = contractorId,
-                locationCode = locationCode,
-                workText = workText,
                 photoId = photoId,
                 updatedAt = System.currentTimeMillis(),
             ),
         )
+        replaceValues(existing.id, values)
     }
 
     suspend fun delete(record: RecordEntity) = dao.delete(record)
@@ -69,6 +91,18 @@ class RecordRepository(private val dao: RecordDao) {
     /** Пакетная вставка готовых записей одной транзакцией — используется генератором тестовых данных. */
     suspend fun insertAll(records: List<RecordEntity>) = dao.insertAll(records)
 
+    /** Значения готовых записей одной пачкой — тот же путь генератора тестовых данных. */
+    suspend fun insertValues(values: List<RecordValueEntity>) = valueDao.upsertAll(values)
+
     /** Восстанавливает запись из бэкапа как есть (побеждающая версия уже решена [ru.papasheets.domain.backup.MergeRules]). */
     suspend fun upsertFromBackup(record: RecordEntity) = dao.upsertFromBackup(record)
+
+    private suspend fun replaceValues(recordId: String, values: Map<String, String>) {
+        valueDao.deleteForRecord(recordId)
+        val rows = values.mapNotNull { (fieldId, raw) ->
+            val value = raw.trim()
+            if (value.isEmpty()) null else RecordValueEntity(recordId, fieldId, value)
+        }
+        if (rows.isNotEmpty()) valueDao.upsertAll(rows)
+    }
 }

@@ -13,12 +13,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.papasheets.data.db.entity.ContractorEntity
-import ru.papasheets.data.db.entity.RecordEntity
+import ru.papasheets.data.db.entity.FieldDefEntity
+import ru.papasheets.data.db.entity.RecordWithValues
 import ru.papasheets.data.repo.ContractorRepository
-import ru.papasheets.data.repo.LocationSuggester
+import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.RecordRepository
+import ru.papasheets.data.repo.ValueSuggester
 import ru.papasheets.domain.ContinueYesterday
 import ru.papasheets.domain.buildContractorOptions
+import ru.papasheets.domain.validateRecord
 import ru.papasheets.photos.PhotoSource
 import ru.papasheets.photos.PhotoStore
 
@@ -26,27 +29,42 @@ data class RecordEditUiState(
     val date: LocalDate = LocalDate.now(),
     val contractors: List<ContractorEntity> = emptyList(),
     val selectedContractorId: String? = null,
-    val locationCode: String = "",
-    val locationSuggestions: List<String> = emptyList(),
-    val workText: String = "",
+    /** Активные определения полей в порядке отображения — форма рисуется ровно по ним. */
+    val fields: List<FieldDefEntity> = emptyList(),
+    val values: Map<String, String> = emptyMap(),
+    /** Поле, в котором сейчас печатают: подсказки нужны только ему одному. */
+    val suggestionFieldId: String? = null,
+    val suggestions: List<String> = emptyList(),
     val photoId: String? = null,
     val photoLoading: Boolean = false,
     val showContractorError: Boolean = false,
-    val showWorkTextError: Boolean = false,
-    val showPhotoError: Boolean = false,
+    val emptyRequiredFieldIds: Set<String> = emptySet(),
+    val showBlankRecordError: Boolean = false,
     val showPhotoImportError: Boolean = false,
-    val isLoaded: Boolean = false,
+    val fieldsLoaded: Boolean = false,
+    val recordLoaded: Boolean = false,
     /** Записи выбранного подрядчика за (дата формы − 1 день) в этом журнале; пусто вне режима создания. */
-    val yesterdayRecords: List<RecordEntity> = emptyList(),
+    val yesterdayRecords: List<RecordWithValues> = emptyList(),
     val showContinuationPicker: Boolean = false,
 ) {
+    /** Форма показывается целиком или не показывается вовсе: рисовать её без полей нечем. */
+    val isLoaded: Boolean get() = fieldsLoaded && recordLoaded
+
     /** Кнопка «Продолжить вчерашнее» активна, только когда есть из чего выбирать. */
     val canContinueYesterday: Boolean get() = yesterdayRecords.isNotEmpty()
+
+    fun valueOf(fieldId: String): String = values[fieldId].orEmpty()
+
+    fun suggestionsFor(fieldId: String): List<String> = if (suggestionFieldId == fieldId) suggestions else emptyList()
 }
 
 /**
  * Данные и валидация формы записи. Режим (создание/редактирование) задаётся один раз при
  * создании ViewModel — [journalId] нужен только для создания, [recordId] только для загрузки существующей записи.
+ *
+ * Состав полей формы — данные, а не код: приходит из [FieldRepository], и заведённое прорабом поле
+ * появляется в форме само. Обрезка значений и отбрасывание пустых — забота [RecordRepository];
+ * что считать заполненной записью — забота [validateRecord]; здесь только состояние экрана.
  *
  * Фото ведёт себя как черновик: [PhotoStore.import] вызывается сразу при выборе (нужен превью), но
  * старое фото при замене/удалении удаляется из [PhotoStore] только после успешного сохранения записи —
@@ -59,7 +77,8 @@ class RecordEditViewModel(
     initialContractorId: String? = null,
     private val recordRepository: RecordRepository,
     contractorRepository: ContractorRepository,
-    private val locationSuggester: LocationSuggester,
+    fieldRepository: FieldRepository,
+    private val valueSuggester: ValueSuggester,
     private val photoStore: PhotoStore,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -69,7 +88,7 @@ class RecordEditViewModel(
             date = initialDate,
             // Предзаполнение подрядчика имеет смысл только при создании из пустого слота матрицы.
             selectedContractorId = if (recordId == null) initialContractorId else null,
-            isLoaded = recordId == null,
+            recordLoaded = recordId == null,
         ),
     )
     val uiState: StateFlow<RecordEditUiState> = _uiState.asStateFlow()
@@ -98,19 +117,23 @@ class RecordEditViewModel(
                 _uiState.update { it.copy(contractors = options) }
             }
         }
+        viewModelScope.launch {
+            fieldRepository.observeActive().collect { fields ->
+                _uiState.update { it.copy(fields = fields, fieldsLoaded = true) }
+            }
+        }
         if (recordId != null) {
             viewModelScope.launch {
-                recordRepository.getById(recordId)?.let { existing ->
-                    originalPhotoId = existing.photoId
-                    currentContractorId.value = existing.contractorId
+                recordRepository.getWithValues(recordId)?.let { existing ->
+                    originalPhotoId = existing.record.photoId
+                    currentContractorId.value = existing.record.contractorId
                     _uiState.update {
                         it.copy(
-                            date = LocalDate.ofEpochDay(existing.dateEpochDay),
-                            selectedContractorId = existing.contractorId,
-                            locationCode = existing.locationCode,
-                            workText = existing.workText,
-                            photoId = existing.photoId,
-                            isLoaded = true,
+                            date = LocalDate.ofEpochDay(existing.record.dateEpochDay),
+                            selectedContractorId = existing.record.contractorId,
+                            values = existing.asMap(),
+                            photoId = existing.record.photoId,
+                            recordLoaded = true,
                         )
                     }
                 }
@@ -144,7 +167,7 @@ class RecordEditViewModel(
         }
     }
 
-    fun onContinuationPicked(record: RecordEntity) {
+    fun onContinuationPicked(record: RecordWithValues) {
         applyContinuation(record)
         _uiState.update { it.copy(showContinuationPicker = false) }
     }
@@ -153,8 +176,15 @@ class RecordEditViewModel(
         _uiState.update { it.copy(showContinuationPicker = false) }
     }
 
-    private fun applyContinuation(record: RecordEntity) {
-        _uiState.update { it.copy(locationCode = record.locationCode, workText = record.workText) }
+    private fun applyContinuation(record: RecordWithValues) {
+        _uiState.update { state ->
+            state.copy(
+                // Только поля формы: у вчерашней записи могут остаться значения уже архивированного поля.
+                values = state.fields.associate { it.id to record.valueOf(it.id) },
+                emptyRequiredFieldIds = emptySet(),
+                showBlankRecordError = false,
+            )
+        }
     }
 
     /** Только для создания новой записи — у редактируемой уже есть неизменные подрядчик/дата. */
@@ -173,21 +203,26 @@ class RecordEditViewModel(
         }
     }
 
-    fun onLocationChanged(text: String) {
-        _uiState.update { it.copy(locationCode = text) }
+    fun onValueChanged(fieldId: String, text: String) {
+        _uiState.update { it.withValue(fieldId, text) }
+        val field = _uiState.value.fields.find { it.id == fieldId } ?: return
+        if (!field.suggestFromHistory) return
         viewModelScope.launch {
-            val suggestions = if (text.isBlank()) emptyList() else locationSuggester.suggest(text)
-            _uiState.update { it.copy(locationSuggestions = suggestions) }
+            val suggestions = if (text.isBlank()) emptyList() else valueSuggester.suggest(fieldId, text)
+            _uiState.update { it.copy(suggestionFieldId = fieldId, suggestions = suggestions) }
         }
     }
 
-    fun onLocationSuggestionPicked(code: String) {
-        _uiState.update { it.copy(locationCode = code, locationSuggestions = emptyList()) }
+    fun onSuggestionPicked(fieldId: String, value: String) {
+        _uiState.update { it.withValue(fieldId, value).copy(suggestions = emptyList()) }
     }
 
-    fun onWorkTextChanged(text: String) {
-        _uiState.update { it.copy(workText = text, showWorkTextError = false) }
-    }
+    /** Правка любого поля снимает жалобы, которые она могла погасить — ошибка не должна висеть до Save. */
+    private fun RecordEditUiState.withValue(fieldId: String, text: String) = copy(
+        values = values + (fieldId to text),
+        emptyRequiredFieldIds = emptyRequiredFieldIds - fieldId,
+        showBlankRecordError = false,
+    )
 
     /** Вызывается композаблом сразу перед запуском системной камеры — temp-uri должен пережить смерть процесса. */
     fun onCameraLaunchStarted(uri: Uri) {
@@ -227,7 +262,7 @@ class RecordEditViewModel(
 
     private fun importPhoto(source: PhotoSource) {
         val previousStaged = _uiState.value.photoId
-        _uiState.update { it.copy(photoLoading = true, showPhotoError = false, showPhotoImportError = false) }
+        _uiState.update { it.copy(photoLoading = true, showBlankRecordError = false, showPhotoImportError = false) }
         viewModelScope.launch {
             try {
                 val meta = photoStore.import(source)
@@ -249,31 +284,30 @@ class RecordEditViewModel(
 
     fun save(onSaved: () -> Unit) {
         val state = _uiState.value
-        val contractorId = state.selectedContractorId
-        val workText = state.workText.trim()
-        val hasContractorError = contractorId == null
-        val hasWorkTextError = workText.isBlank()
-        val hasPhotoError = state.photoId == null
-        Log.d(TAG, "save: photoId=${state.photoId} photoLoading=${state.photoLoading} contractorId=$contractorId workText='$workText'")
-        if (hasContractorError || hasWorkTextError || hasPhotoError) {
+        val validation = validateRecord(
+            contractorId = state.selectedContractorId,
+            fields = state.fields,
+            values = state.values,
+            hasPhoto = state.photoId != null,
+        )
+        if (!validation.isValid) {
             _uiState.update {
                 it.copy(
-                    showContractorError = hasContractorError,
-                    showWorkTextError = hasWorkTextError,
-                    showPhotoError = hasPhotoError,
+                    showContractorError = validation.contractorMissing,
+                    emptyRequiredFieldIds = validation.emptyRequiredFieldIds,
+                    showBlankRecordError = validation.isBlankRecord,
                 )
             }
             return
         }
+        val contractorId = requireNotNull(state.selectedContractorId)
         viewModelScope.launch {
-            val locationCode = state.locationCode.trim()
             if (recordId == null) {
                 recordRepository.createRecord(
                     journalId = requireNotNull(journalId) { "journalId обязателен при создании записи" },
                     dateEpochDay = state.date.toEpochDay(),
-                    contractorId = contractorId!!,
-                    locationCode = locationCode,
-                    workText = workText,
+                    contractorId = contractorId,
+                    values = state.values,
                     photoId = state.photoId,
                 )
             } else {
@@ -281,9 +315,8 @@ class RecordEditViewModel(
                     recordRepository.updateRecord(
                         existing = existing,
                         dateEpochDay = state.date.toEpochDay(),
-                        contractorId = contractorId!!,
-                        locationCode = locationCode,
-                        workText = workText,
+                        contractorId = contractorId,
+                        values = state.values,
                         photoId = state.photoId,
                     )
                 }

@@ -2,7 +2,8 @@ package ru.papasheets.domain.export
 
 import java.time.LocalDate
 import ru.papasheets.data.db.entity.ContractorEntity
-import ru.papasheets.data.db.entity.RecordEntity
+import ru.papasheets.data.db.entity.FieldDefEntity
+import ru.papasheets.data.db.entity.RecordWithValues
 import ru.papasheets.domain.JournalDates
 import ru.papasheets.domain.buildGridModel
 import ru.papasheets.exportkit.model.JournalSnapshot
@@ -22,10 +23,11 @@ import ru.papasheets.exportkit.xlsx.Widths
  */
 fun buildJournalSnapshot(
     journalTitle: String,
-    records: List<RecordEntity>,
+    records: List<RecordWithValues>,
     contractors: List<ContractorEntity>,
+    fields: List<FieldDefEntity>,
 ): JournalSnapshot {
-    val grid = buildGridModel(records, contractors, sortDesc = false)
+    val grid = buildGridModel(records, contractors, fields, sortDesc = false)
 
     val days = ArrayList<SnapshotDay>()
     var index = 0

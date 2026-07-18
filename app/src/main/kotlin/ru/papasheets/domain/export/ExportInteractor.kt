@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.exportkit.csv.CsvWriter
@@ -27,6 +28,7 @@ class ExportInteractor(
     private val journalRepository: JournalRepository,
     private val recordRepository: RecordRepository,
     private val contractorRepository: ContractorRepository,
+    private val fieldRepository: FieldRepository,
     private val photoStore: PhotoStore,
     private val context: Context,
 ) {
@@ -34,7 +36,8 @@ class ExportInteractor(
         val journal = requireNotNull(journalRepository.getById(journalId)) { "Журнал не найден: $journalId" }
         val records = recordRepository.observeByJournal(journalId).first()
         val contractors = contractorRepository.observeAll().first()
-        val snapshot = buildJournalSnapshot(journal.title, records, contractors)
+        val fields = fieldRepository.observeActive().first()
+        val snapshot = buildJournalSnapshot(journal.title, records, contractors, fields)
 
         val out = requireNotNull(context.contentResolver.openOutputStream(targetUri)) {
             "Не удалось открыть поток для записи: $targetUri"

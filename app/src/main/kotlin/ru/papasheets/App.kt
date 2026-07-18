@@ -15,10 +15,11 @@ import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
 import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.LocationRepository
-import ru.papasheets.data.repo.LocationSuggester
 import ru.papasheets.data.repo.RecordRepository
+import ru.papasheets.data.repo.ValueSuggester
 import ru.papasheets.domain.DeleteJournalInteractor
 import ru.papasheets.domain.backup.BackupInteractor
 import ru.papasheets.domain.backup.ImportInteractor
@@ -69,19 +70,25 @@ class AppGraph(context: Context) {
     private val monthTitleFormatter: MonthTitleFormatter by lazy { MonthTitleFormatter(appContext) }
 
     val journalRepository: JournalRepository by lazy { JournalRepository(database.journalDao(), monthTitleFormatter) }
-    val recordRepository: RecordRepository by lazy { RecordRepository(database.recordDao()) }
+    val recordRepository: RecordRepository by lazy {
+        RecordRepository(database.recordDao(), database.recordValueDao(), transactionRunner)
+    }
     val contractorRepository: ContractorRepository by lazy { ContractorRepository(database.contractorDao()) }
+    val fieldRepository: FieldRepository by lazy { FieldRepository(database.fieldDefDao()) }
     val deleteJournalInteractor: DeleteJournalInteractor by lazy {
         DeleteJournalInteractor(journalRepository, recordRepository, photoStore)
     }
-    val locationSuggester: LocationSuggester by lazy { LocationSuggester(database.locationDao()) }
+    val valueSuggester: ValueSuggester by lazy { ValueSuggester(database.recordValueDao(), database.locationDao()) }
     val locationRepository: LocationRepository by lazy { LocationRepository(database.locationDao()) }
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
     val exportInteractor: ExportInteractor by lazy {
-        ExportInteractor(journalRepository, recordRepository, contractorRepository, photoStore, appContext)
+        ExportInteractor(journalRepository, recordRepository, contractorRepository, fieldRepository, photoStore, appContext)
     }
 
-    /** Единственное место, где виден [database] целиком — восстановлению бэкапа (M7) нужна одна транзакция сразу по нескольким репозиториям. */
+    /**
+     * Единственное место, где виден [database] целиком: одна транзакция сразу по нескольким таблицам
+     * нужна и восстановлению бэкапа (M7), и сохранению записи вместе с её значениями.
+     */
     private val transactionRunner: TransactionRunner by lazy {
         object : TransactionRunner {
             override suspend fun <T> run(block: suspend () -> T): T = database.withTransaction(block)

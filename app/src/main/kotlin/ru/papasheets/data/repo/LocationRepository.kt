@@ -8,7 +8,7 @@ import ru.papasheets.data.db.entity.LocationPresetEntity
 
 /**
  * CRUD пресетов локаций для [LocationsScreen][ru.papasheets.ui.settings.LocationsScreen] — отдельно
- * от [LocationSuggester], который только читает пресеты для автодополнения формы.
+ * от [ValueSuggester], который только читает пресеты для автодополнения формы.
  */
 class LocationRepository(private val dao: LocationDao) {
     fun observePresets(): Flow<List<LocationPresetEntity>> = dao.observePresets()

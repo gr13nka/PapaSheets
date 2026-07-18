@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.domain.buildGridModel
@@ -38,8 +39,8 @@ sealed interface ExportEvent {
 }
 
 /**
- * Модель экрана матрицы. Держит потоки записей, подрядчиков и тумблера сортировки и сшивает их в
- * иммутабельный [GridModel] на [Dispatchers.Default] (раскладка сотен строк не должна дёргать главный
+ * Модель экрана матрицы. Держит потоки записей, подрядчиков, полей и тумблера сортировки и сшивает их
+ * в иммутабельный [GridModel] на [Dispatchers.Default] (раскладка сотен строк не должна дёргать главный
  * поток). Подрядчики берутся через [ContractorRepository.observeAll] (не только активные) — архивный
  * с записями в этом журнале остаётся колонкой, решает об этом уже [buildGridModel]. [thumbnails]
  * живёт столько же, сколько ViewModel — его LRU переживает рекомпозиции экрана.
@@ -49,6 +50,7 @@ class MatrixViewModel(
     journalRepository: JournalRepository,
     private val recordRepository: RecordRepository,
     contractorRepository: ContractorRepository,
+    fieldRepository: FieldRepository,
     photoStore: PhotoStore,
     private val exportInteractor: ExportInteractor,
     appContext: Context,
@@ -71,9 +73,10 @@ class MatrixViewModel(
     val gridModel: StateFlow<GridModel?> = combine(
         recordRepository.observeByJournal(journalId),
         contractorRepository.observeAll(),
+        fieldRepository.observeActive(),
         _sortDesc,
-    ) { records, contractors, sortDesc ->
-        withContext(Dispatchers.Default) { buildGridModel(records, contractors, sortDesc) }
+    ) { records, contractors, fields, sortDesc ->
+        withContext(Dispatchers.Default) { buildGridModel(records, contractors, fields, sortDesc) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun toggleSortDesc() {

@@ -43,6 +43,7 @@ fun LightboxScreen(recordId: String, onClose: () -> Unit) {
                     recordId = recordId,
                     recordRepository = graph.recordRepository,
                     contractorRepository = graph.contractorRepository,
+                    fieldRepository = graph.fieldRepository,
                 )
             }
         },
@@ -98,7 +99,7 @@ private fun captionText(state: LightboxUiState): String {
     } else {
         ""
     }
-    return listOf(datePart, state.contractorShortName, state.locationCode)
+    return listOf(datePart, state.contractorShortName, state.recordLabel)
         .filter { it.isNotBlank() }
         .joinToString(" · ")
 }

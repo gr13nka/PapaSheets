@@ -77,6 +77,7 @@ fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String
                     journalRepository = graph.journalRepository,
                     recordRepository = graph.recordRepository,
                     contractorRepository = graph.contractorRepository,
+                    fieldRepository = graph.fieldRepository,
                 )
             }
         },
@@ -134,7 +135,7 @@ fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String
                     }
                     items(group.records, key = { it.record.id }) { entry ->
                         RecordCard(
-                            entry = entry,
+                            item = entry,
                             photoStore = graph.photoStore,
                             onClick = { sheetMode = RecordSheetMode.Edit(entry.record.id) },
                             onLongClick = { recordPendingDelete = entry.record },
@@ -190,7 +191,7 @@ private fun defaultDateFor(journal: JournalEntity?): LocalDate {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RecordCard(
-    entry: RecordWithContractor,
+    item: RecordCardItem,
     photoStore: PhotoStore,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -206,7 +207,7 @@ private fun RecordCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val photoId = entry.record.photoId
+            val photoId = item.record.photoId
             if (photoId != null) {
                 AsyncImage(
                     model = photoStore.thumbFile(photoId),
@@ -222,7 +223,7 @@ private fun RecordCard(
                     modifier = Modifier
                         .size(12.dp)
                         .clip(CircleShape)
-                        .background(ContractorPalette.color(entry.contractor?.colorIndex ?: 0, isSystemInDarkTheme())),
+                        .background(ContractorPalette.color(item.contractor?.colorIndex ?: 0, isSystemInDarkTheme())),
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -231,19 +232,19 @@ private fun RecordCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = entry.contractor?.shortName ?: "?",
+                        text = item.contractor?.shortName ?: "?",
                         style = MaterialTheme.typography.labelLarge,
                     )
-                    if (entry.record.locationCode.isNotBlank()) {
+                    if (item.display.primary.isNotBlank()) {
                         SuggestionChip(
                             onClick = {},
-                            label = { Text(entry.record.locationCode) },
+                            label = { Text(item.display.primary) },
                             colors = SuggestionChipDefaults.suggestionChipColors(),
                         )
                     }
                 }
                 Text(
-                    text = entry.record.workText,
+                    text = item.display.secondaryLines.joinToString("\n"),
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,

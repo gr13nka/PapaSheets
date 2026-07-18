@@ -22,16 +22,4 @@ interface LocationDao {
     /** Upsert — восстановление бэкапа (M7): это не двусторонний sync, импортируемая строка побеждает. */
     @Upsert
     suspend fun upsertFromBackup(preset: LocationPresetEntity)
-
-    /** Самые недавно использованные коды локаций с заданным префиксом — история для автодополнения. */
-    @Query(
-        """
-        SELECT DISTINCT locationCode FROM records
-        WHERE locationCode LIKE :prefix || '%' AND locationCode != ''
-        GROUP BY locationCode
-        ORDER BY MAX(updatedAt) DESC
-        LIMIT 15
-        """,
-    )
-    suspend fun suggestFromHistory(prefix: String): List<String>
 }

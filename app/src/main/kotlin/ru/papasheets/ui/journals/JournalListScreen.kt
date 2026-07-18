@@ -118,6 +118,7 @@ fun JournalListScreen(
                     contractorRepository = graph.contractorRepository,
                     journalRepository = graph.journalRepository,
                     recordRepository = graph.recordRepository,
+                    fieldRepository = graph.fieldRepository,
                 ).seedAndGetJournalId()
                 onOpenJournal(journalId)
             }

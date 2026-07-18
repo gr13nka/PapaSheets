@@ -5,7 +5,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.papasheets.data.db.entity.ContractorEntity
-import ru.papasheets.data.db.entity.RecordEntity
+import ru.papasheets.exportkit.backup.BuiltInFields
+import ru.papasheets.testing.builtInFields
+import ru.papasheets.testing.testField
+import ru.papasheets.testing.testRecord
 
 class SnapshotBuilderTest {
 
@@ -16,9 +19,9 @@ class SnapshotBuilderTest {
         ContractorEntity(id = id, name = "Подрядчик $id", shortName = id, colorIndex = order, orderIndex = order, isArchived = archived, createdAt = 0)
 
     private fun record(id: String, day: Long, contractorId: String, createdAt: Long, photoId: String? = null) =
-        RecordEntity(
-            id = id, journalId = "j", dateEpochDay = day, contractorId = contractorId,
-            locationCode = "1-01", workText = "работа $id", photoId = photoId, createdAt = createdAt, updatedAt = createdAt,
+        testRecord(
+            id = id, dateEpochDay = day, contractorId = contractorId, photoId = photoId, createdAt = createdAt,
+            values = mapOf(BuiltInFields.LOCATION_ID to "1-01", BuiltInFields.WORK_ID to "работа $id"),
         )
 
     @Test
@@ -29,7 +32,7 @@ class SnapshotBuilderTest {
             record("a1", day1, "A", createdAt = 200),
         )
 
-        val snapshot = buildJournalSnapshot("Июль 2026", records, contractors)
+        val snapshot = buildJournalSnapshot("Июль 2026", records, contractors, builtInFields)
 
         assertEquals("Июль 2026", snapshot.title)
         assertEquals(listOf("Подрядчик A", "Подрядчик B"), snapshot.contractors.map { it.name })
@@ -52,7 +55,7 @@ class SnapshotBuilderTest {
         val contractors = listOf(contractor("A", 0), contractor("Z", 1, archived = true))
         val records = listOf(record("z1", day1, "Z", createdAt = 100))
 
-        val snapshot = buildJournalSnapshot("Июль 2026", records, contractors)
+        val snapshot = buildJournalSnapshot("Июль 2026", records, contractors, builtInFields)
 
         assertEquals(listOf("Подрядчик A", "Подрядчик Z"), snapshot.contractors.map { it.name })
         assertEquals(listOf("1-01", "работа z1"), snapshot.days.single().rows.single().cells[1]?.values)
@@ -64,11 +67,30 @@ class SnapshotBuilderTest {
      */
     @Test
     fun `fields carry excel geometry derived from the grid model`() {
-        val snapshot = buildJournalSnapshot("Июль 2026", listOf(record("a1", day1, "A", createdAt = 0)), listOf(contractor("A", 0)))
+        val snapshot = buildJournalSnapshot(
+            "Июль 2026",
+            listOf(record("a1", day1, "A", createdAt = 0)),
+            listOf(contractor("A", 0)),
+            builtInFields,
+        )
 
         assertEquals(listOf("Л", "ВИД РАБОТ"), snapshot.fields.map { it.title })
         assertEquals(listOf(7.75, 50.75), snapshot.fields.map { it.widthChars })
         assertEquals(listOf(true, true), snapshot.fields.map { it.wrap })
         assertEquals(snapshot.fields.size, snapshot.days.single().rows.single().cells[0]?.values?.size)
+    }
+
+    @Test
+    fun `columns of the export follow the field definitions of the journal`() {
+        // Экспорт и матрица берут поля из одного источника — состав колонок листа расходиться не может.
+        val fields = listOf(testField("volume", title = "ОБЪЁМ", columnWidthDp = 72, maxLines = 1))
+        val records = listOf(testRecord("r1", dateEpochDay = day1, contractorId = "A", values = mapOf("volume" to "12 м²")))
+
+        val snapshot = buildJournalSnapshot("Июль 2026", records, listOf(contractor("A", 0)), fields)
+
+        assertEquals(listOf("ОБЪЁМ"), snapshot.fields.map { it.title })
+        // maxLines == 1 — единственный случай, когда перенос строк в ячейке листа выключен.
+        assertEquals(listOf(false), snapshot.fields.map { it.wrap })
+        assertEquals(listOf("12 м²"), snapshot.days.single().rows.single().cells[0]?.values)
     }
 }

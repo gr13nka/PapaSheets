@@ -7,7 +7,9 @@ import kotlin.random.Random
 import kotlinx.coroutines.flow.first
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.data.db.entity.RecordEntity
+import ru.papasheets.data.db.entity.RecordValueEntity
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 
@@ -17,6 +19,9 @@ private const val FAKE_MONTH = 1
 
 /** Целевое число колонок — как в реальном Июнь.xlsx (28 подрядчиков). */
 private const val TARGET_CONTRACTORS = 28
+
+/** Ширина, до которой подколонка считается «кодовой»: в такую влезает код локации, но не фраза. */
+private const val NARROW_FIELD_DP = 80
 
 /**
  * Генератор нагрузочного журнала (только debug): 28 подрядчиков × ~300 строк за месяц с плотностью,
@@ -30,6 +35,7 @@ class FakeDataSeeder(
     private val contractorRepository: ContractorRepository,
     private val journalRepository: JournalRepository,
     private val recordRepository: RecordRepository,
+    private val fieldRepository: FieldRepository,
 ) {
     suspend fun seedAndGetJournalId(): String {
         ensureContractors()
@@ -37,8 +43,31 @@ class FakeDataSeeder(
         if (recordRepository.observeByJournal(journal.id).first().isNotEmpty()) return journal.id
 
         val contractors = contractorRepository.observeActive().first().sortedBy { it.orderIndex }
-        recordRepository.insertAll(generateRecords(journal.id, contractors))
+        val records = generateRecords(journal.id, contractors)
+        recordRepository.insertAll(records)
+        recordRepository.insertValues(generateValues(records))
         return journal.id
+    }
+
+    /**
+     * По значению в каждое активное поле: нагрузка на текст-раскладку должна расти вместе с числом
+     * подколонок, а не оставаться привязанной к двум встроенным полям.
+     */
+    private suspend fun generateValues(records: List<RecordEntity>): List<RecordValueEntity> {
+        val fields = fieldRepository.observeActive().first()
+        if (fields.isEmpty()) return emptyList()
+        val random = Random(FAKE_YEAR)
+        return records.flatMap { record ->
+            fields.map { field ->
+                // Узкая подколонка получает код локации, широкая — фразу о ходе работ.
+                val value = if (field.maxLines == 1 || field.columnWidthDp <= NARROW_FIELD_DP) {
+                    LOCATIONS[random.nextInt(LOCATIONS.size)]
+                } else {
+                    fakeWorkText(random)
+                }
+                RecordValueEntity(record.id, field.id, value)
+            }
+        }
     }
 
     private suspend fun ensureContractors() {
@@ -74,13 +103,13 @@ class FakeDataSeeder(
             val epochDay = LocalDate.of(FAKE_YEAR, FAKE_MONTH, day).toEpochDay()
             // Первый подрядчик задаёт высоту дня (8..12 строк) — почти в каждой строке.
             repeat(8 + random.nextInt(5)) {
-                records += fakeRecord(journalId, epochDay, contractors[0].id, random, stamp++)
+                records += fakeRecord(journalId, epochDay, contractors[0].id, stamp++)
             }
             // Остальные — разреженно: у большинства пусто, изредка 1-2 записи.
             for (columnIndex in 1 until contractors.size) {
                 val count = if (random.nextInt(100) < 72) 0 else 1 + random.nextInt(2)
                 repeat(count) {
-                    records += fakeRecord(journalId, epochDay, contractors[columnIndex].id, random, stamp++)
+                    records += fakeRecord(journalId, epochDay, contractors[columnIndex].id, stamp++)
                 }
             }
         }
@@ -91,15 +120,15 @@ class FakeDataSeeder(
         journalId: String,
         epochDay: Long,
         contractorId: String,
-        random: Random,
         createdAt: Long,
     ): RecordEntity = RecordEntity(
         id = UUID.randomUUID().toString(),
         journalId = journalId,
         dateEpochDay = epochDay,
         contractorId = contractorId,
-        locationCode = LOCATIONS[random.nextInt(LOCATIONS.size)],
-        workText = fakeWorkText(random),
+        // Колонки заморожены с v2 — содержимое пишется отдельно, в record_values.
+        locationCode = "",
+        workText = "",
         photoId = null,
         createdAt = createdAt,
         updatedAt = createdAt,

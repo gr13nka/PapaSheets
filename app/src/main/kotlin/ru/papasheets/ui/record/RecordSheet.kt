@@ -33,6 +33,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,6 +56,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.coroutines.launch
 import ru.papasheets.R
+import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.domain.ContinueYesterday
 import ru.papasheets.domain.JournalDates
 import ru.papasheets.domain.contractorDisplayName
@@ -81,7 +83,8 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                     initialContractorId = (mode as? RecordSheetMode.Create)?.contractorId,
                     recordRepository = graph.recordRepository,
                     contractorRepository = graph.contractorRepository,
-                    locationSuggester = graph.locationSuggester,
+                    fieldRepository = graph.fieldRepository,
+                    valueSuggester = graph.valueSuggester,
                     photoStore = graph.photoStore,
                     savedStateHandle = createSavedStateHandle(),
                 )
@@ -225,52 +228,18 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 }
             }
 
-            var locationExpanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(
-                expanded = locationExpanded && state.locationSuggestions.isNotEmpty(),
-                onExpandedChange = { locationExpanded = it },
-            ) {
-                OutlinedTextField(
-                    value = state.locationCode,
-                    onValueChange = {
-                        viewModel.onLocationChanged(it)
-                        locationExpanded = true
-                    },
-                    label = { Text(stringResource(R.string.record_location_label)) },
-                    modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryEditable)
-                        .fillMaxWidth(),
-                )
-                ExposedDropdownMenu(
-                    expanded = locationExpanded && state.locationSuggestions.isNotEmpty(),
-                    onDismissRequest = { locationExpanded = false },
-                ) {
-                    state.locationSuggestions.forEach { suggestion ->
-                        DropdownMenuItem(
-                            text = { Text(suggestion) },
-                            onClick = {
-                                viewModel.onLocationSuggestionPicked(suggestion)
-                                locationExpanded = false
-                            },
-                        )
-                    }
+            state.fields.forEach { field ->
+                key(field.id) {
+                    FieldInput(
+                        field = field,
+                        value = state.valueOf(field.id),
+                        suggestions = state.suggestionsFor(field.id),
+                        isError = field.id in state.emptyRequiredFieldIds,
+                        onValueChange = { viewModel.onValueChanged(field.id, it) },
+                        onSuggestionPicked = { viewModel.onSuggestionPicked(field.id, it) },
+                    )
                 }
             }
-
-            OutlinedTextField(
-                value = state.workText,
-                onValueChange = viewModel::onWorkTextChanged,
-                label = { Text(stringResource(R.string.record_work_label)) },
-                isError = state.showWorkTextError,
-                supportingText = if (state.showWorkTextError) {
-                    { Text(stringResource(R.string.record_validation_required)) }
-                } else {
-                    null
-                },
-                minLines = 3,
-                maxLines = 6,
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             PhotoSlot(
                 state = state,
@@ -279,6 +248,14 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 onRemoveClick = viewModel::onPhotoRemoved,
                 thumbFile = state.photoId?.let(graph.photoStore::thumbFile),
             )
+
+            if (state.showBlankRecordError) {
+                Text(
+                    text = stringResource(R.string.record_validation_blank),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -311,7 +288,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                             onClick = { viewModel.onContinuationPicked(record) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(ContinueYesterday.preview(record), modifier = Modifier.fillMaxWidth())
+                            Text(ContinueYesterday.preview(record, state.fields), modifier = Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -323,6 +300,80 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
             },
         )
     }
+}
+
+/**
+ * Одна строка формы по определению поля. Вид ввода целиком выводится из определения: подсказки —
+ * там, где включена история, многострочность — там же, где матрица снимает потолок строк
+ * ([FieldDefEntity.maxLines] != 1), так что ячейка и поле ввода не расходятся видом.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FieldInput(
+    field: FieldDefEntity,
+    value: String,
+    suggestions: List<String>,
+    isError: Boolean,
+    onValueChange: (String) -> Unit,
+    onSuggestionPicked: (String) -> Unit,
+) {
+    if (!field.suggestFromHistory) {
+        FieldTextField(field, value, isError, onValueChange, Modifier.fillMaxWidth())
+        return
+    }
+    var expanded by remember { mutableStateOf(false) }
+    val menuOpen = expanded && suggestions.isNotEmpty()
+    ExposedDropdownMenuBox(expanded = menuOpen, onExpandedChange = { expanded = it }) {
+        FieldTextField(
+            field = field,
+            value = value,
+            isError = isError,
+            onValueChange = {
+                onValueChange(it)
+                expanded = true
+            },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryEditable)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = menuOpen, onDismissRequest = { expanded = false }) {
+            suggestions.forEach { suggestion ->
+                DropdownMenuItem(
+                    text = { Text(suggestion) },
+                    onClick = {
+                        onSuggestionPicked(suggestion)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FieldTextField(
+    field: FieldDefEntity,
+    value: String,
+    isError: Boolean,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier,
+) {
+    val singleLine = field.maxLines == 1
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(field.label) },
+        isError = isError,
+        supportingText = if (isError) {
+            { Text(stringResource(R.string.record_validation_required)) }
+        } else {
+            null
+        },
+        singleLine = singleLine,
+        minLines = if (singleLine) 1 else 3,
+        maxLines = if (singleLine) 1 else 6,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -391,13 +442,6 @@ private fun PhotoSlot(
             }
         }
 
-        if (state.showPhotoError) {
-            Text(
-                text = stringResource(R.string.record_validation_photo_required),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
         if (state.showPhotoImportError) {
             Text(
                 text = stringResource(R.string.record_photo_import_error),

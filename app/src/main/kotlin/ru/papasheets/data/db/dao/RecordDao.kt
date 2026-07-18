@@ -4,23 +4,32 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import ru.papasheets.data.db.entity.RecordEntity
+import ru.papasheets.data.db.entity.RecordWithValues
 
 @Dao
 interface RecordDao {
     /** Отсортировано так, чтобы группировка по дате в UI сохраняла и порядок дат, и порядок внутри дня. */
+    @Transaction
     @Query("SELECT * FROM records WHERE journalId = :journalId ORDER BY dateEpochDay DESC, createdAt ASC")
-    fun observeByJournal(journalId: String): Flow<List<RecordEntity>>
+    fun observeWithValuesByJournal(journalId: String): Flow<List<RecordWithValues>>
 
+    /** Без значений: путь удаления и путь обновления правят саму строку записи, содержимое им не нужно. */
     @Query("SELECT * FROM records WHERE id = :id")
     suspend fun getById(id: String): RecordEntity?
 
+    @Transaction
+    @Query("SELECT * FROM records WHERE id = :id")
+    suspend fun getWithValuesById(id: String): RecordWithValues?
+
     /** Записи вчерашнего дня того же подрядчика — источник для «продолжить вчерашнее» (M5). */
+    @Transaction
     @Query("SELECT * FROM records WHERE journalId = :journalId AND contractorId = :contractorId AND dateEpochDay = :dateEpochDay")
-    suspend fun listByContractorAndDate(journalId: String, contractorId: String, dateEpochDay: Long): List<RecordEntity>
+    suspend fun listWithValuesByContractorAndDate(journalId: String, contractorId: String, dateEpochDay: Long): List<RecordWithValues>
 
     /** Все записи всех журналов как есть — источник данных для полного бэкапа (M7). */
     @Query("SELECT * FROM records")
