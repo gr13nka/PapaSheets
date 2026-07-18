@@ -4,7 +4,6 @@ import java.io.OutputStream
 import java.io.OutputStreamWriter
 import ru.papasheets.exportkit.model.JournalSnapshot
 
-private const val CSV_HEADER = "Дата;Подрядчик;Локация;Вид работ;Фото"
 private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 
 /**
@@ -17,15 +16,17 @@ object CsvWriter {
     fun write(snapshot: JournalSnapshot, out: OutputStream) {
         out.write(UTF8_BOM)
         val writer = OutputStreamWriter(out, Charsets.UTF_8)
-        writer.write(CSV_HEADER)
-        writer.write("\r\n")
+        // Заголовок собирается из тех же полей, что и данные, и экранируется тем же escape:
+        // подпись поля задаёт пользователь, и `;` или `"` в ней сломали бы разбор первой строки.
+        writer.write(csvLine(listOf("Дата", "Подрядчик") + snapshot.fields.map { it.title } + "Фото"))
         for (day in snapshot.days) {
             for (row in day.rows) {
                 row.cells.forEachIndexed { index, cell ->
                     if (cell != null) {
                         val contractor = snapshot.contractors[index].name
                         val photoFile = cell.photoId?.let { "$it.jpg" } ?: ""
-                        writer.write(csvLine(day.dateLabel, contractor, cell.locationCode, cell.workText, photoFile))
+                        val values = snapshot.fields.indices.map { cell.values.getOrElse(it) { "" } }
+                        writer.write(csvLine(listOf(day.dateLabel, contractor) + values + photoFile))
                     }
                 }
             }
@@ -33,7 +34,7 @@ object CsvWriter {
         writer.flush()
     }
 
-    private fun csvLine(vararg fields: String): String =
+    private fun csvLine(fields: List<String>): String =
         fields.joinToString(separator = ";", postfix = "\r\n") { escape(it) }
 
     private fun escape(field: String): String =

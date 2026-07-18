@@ -78,7 +78,7 @@ class XlsxWriterTest {
         assertEquals("ВИД РАБОТ", sheet.cellText("D2"))
 
         // Строка 3 = день1: только подрядчик1 (с фото), подрядчик2 в этот день пуст.
-        assertEquals("01.07.2026", sheet.cellText("A3"))
+        assertEquals("01.07", sheet.cellText("A3"))
         assertNull(sheet.cellText("B3")) // Ф — под фото, без текста
         assertEquals("1-01", sheet.cellText("C3"))
         assertEquals("Штукатурка <потолок>\nвторая строка", sheet.cellText("D3"))
@@ -87,7 +87,7 @@ class XlsxWriterTest {
         assertNull(sheet.cellText("G3"))
 
         // Строка 4 = день2: оба подрядчика заполнены, только подрядчик2 с фото.
-        assertEquals("02.07.2026", sheet.cellText("A4"))
+        assertEquals("02.07", sheet.cellText("A4"))
         assertNull(sheet.cellText("B4"))
         assertEquals("1-02", sheet.cellText("C4"))
         assertEquals("Заливка пола", sheet.cellText("D4"))

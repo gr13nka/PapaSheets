@@ -33,11 +33,12 @@ class SnapshotBuilderTest {
 
         assertEquals("Июль 2026", snapshot.title)
         assertEquals(listOf("Подрядчик A", "Подрядчик B"), snapshot.contractors.map { it.name })
-        assertEquals(listOf("17.07.2026", "18.07.2026"), snapshot.days.map { it.dateLabel })
+        // Без года: он уже стоит в заголовке журнала, который идёт в имя листа и имя файла.
+        assertEquals(listOf("17.07", "18.07"), snapshot.days.map { it.dateLabel })
 
         val day1Row = snapshot.days[0].rows.single()
-        assertEquals("1-01", day1Row.cells[0]?.locationCode)
-        assertEquals("работа a1", day1Row.cells[0]?.workText)
+        // Порядок значений ячейки строго соответствует snapshot.fields.
+        assertEquals(listOf("1-01", "работа a1"), day1Row.cells[0]?.values)
         assertNull(day1Row.cells[0]?.photoId)
         assertNull(day1Row.cells[1])
 
@@ -54,6 +55,20 @@ class SnapshotBuilderTest {
         val snapshot = buildJournalSnapshot("Июль 2026", records, contractors)
 
         assertEquals(listOf("Подрядчик A", "Подрядчик Z"), snapshot.contractors.map { it.name })
-        assertEquals("работа z1", snapshot.days.single().rows.single().cells[1]?.workText)
+        assertEquals(listOf("1-01", "работа z1"), snapshot.days.single().rows.single().cells[1]?.values)
+    }
+
+    /**
+     * Поля снимка описывают ту же раскладку, что и матрица: ширина переведена из dp в единицы Excel,
+     * перенос строк включён там, где матрица снимает потолок строк.
+     */
+    @Test
+    fun `fields carry excel geometry derived from the grid model`() {
+        val snapshot = buildJournalSnapshot("Июль 2026", listOf(record("a1", day1, "A", createdAt = 0)), listOf(contractor("A", 0)))
+
+        assertEquals(listOf("Л", "ВИД РАБОТ"), snapshot.fields.map { it.title })
+        assertEquals(listOf(7.75, 50.75), snapshot.fields.map { it.widthChars })
+        assertEquals(listOf(true, true), snapshot.fields.map { it.wrap })
+        assertEquals(snapshot.fields.size, snapshot.days.single().rows.single().cells[0]?.values?.size)
     }
 }

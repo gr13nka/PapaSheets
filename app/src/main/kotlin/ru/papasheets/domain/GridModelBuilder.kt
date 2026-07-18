@@ -9,11 +9,6 @@ import ru.papasheets.matrixgrid.GridField
 import ru.papasheets.matrixgrid.GridModel
 import ru.papasheets.matrixgrid.GridRow
 
-/** Короткие русские месяцы для меток дат («17 июл»). Захардкожены здесь, чтобы функция оставалась чистой JVM. */
-private val SHORT_MONTHS = arrayOf(
-    "янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
-)
-
 /**
  * ВРЕМЕННЫЙ синтез набора полей: движок матрицы уже умеет произвольное их число, а схема БД — ещё
  * нет, поэтому здесь воспроизводятся ровно те две подколонки, что были захардкожены в матрице до
@@ -72,8 +67,8 @@ fun buildGridModel(
 
         val rowCount = maxOf(1, perColumn.maxOf { it?.size ?: 0 })
         val date = LocalDate.ofEpochDay(day)
-        val label = "${date.dayOfMonth} ${SHORT_MONTHS[date.monthValue - 1]}"
-        val number = date.dayOfMonth.toString()
+        val label = JournalDates.shortMonth(date)
+        val number = JournalDates.dayNumber(date)
         for (rowInDay in 0 until rowCount) {
             val cells = ArrayList<GridCell?>(columns.size)
             for (column in columns.indices) {

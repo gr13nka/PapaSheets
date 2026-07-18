@@ -47,13 +47,16 @@ object XlsxWriter {
     }
 
     /**
-     * Один проход по снимку: якорь на Ф-ячейку каждой записи с фото (Ф-колонка группы = `1 + 3*colIndex`,
-     * первая строка данных = абсолютная строка листа 3 → 0-based 2, см. [SheetXml]), размер — из реальных
-     * пикселей фото ([PhotoBytesProvider.size]) с сохранением пропорций.
+     * Один проход по снимку: якорь на Ф-ячейку каждой записи с фото (Ф-колонка группы =
+     * `1 + groupCols*colIndex`, первая строка данных = абсолютная строка листа 3 → 0-based 2,
+     * см. [SheetXml]), размер — из реальных пикселей фото ([PhotoBytesProvider.size]) с сохранением
+     * пропорций. Ширина группы обязана совпадать с той, по которой [SheetXml] раскладывает колонки,
+     * иначе фото окажутся в чужих колонках.
      */
     private fun collectAnchors(snapshot: JournalSnapshot, photos: PhotoBytesProvider): List<PhotoAnchor> {
         val anchors = ArrayList<PhotoAnchor>()
         val cy = Emu.fromPoints(PHOTO_DISPLAY_HEIGHT_PT)
+        val groupCols = 1 + snapshot.fields.size
         var rowIndex = 2
         for (day in snapshot.days) {
             for (row in day.rows) {
@@ -63,7 +66,7 @@ object XlsxWriter {
                         val (width, height) = photos.size(photoId)
                         val cx = Math.round(cy * (width.toDouble() / height.toDouble()))
                         anchors += PhotoAnchor(
-                            col = 1 + 3 * colIndex,
+                            col = 1 + groupCols * colIndex,
                             row = rowIndex,
                             rId = "rId${anchors.size + 1}",
                             extCx = cx,
@@ -78,12 +81,23 @@ object XlsxWriter {
         return anchors
     }
 
-    private fun workbookXml(title: String): String =
-        """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""" +
+    /**
+     * `xl/workbook.xml`. Кроме единственного листа объявляет `_xlnm.Print_Titles` — встроенное имя,
+     * которым Excel повторяет шапку (строки 1–2) на каждой печатной странице; иначе со второй
+     * страницы читатель видит колонки без подрядчиков. Порядок элементов задан схемой:
+     * `definedNames` идут после `sheets`.
+     */
+    private fun workbookXml(title: String): String {
+        val sheetName = sanitizeSheetName(title)
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""" +
             """<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" """ +
             """xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">""" +
-            """<sheets><sheet name="${Xml.escape(sanitizeSheetName(title))}" sheetId="1" r:id="rId1"/></sheets>""" +
+            """<sheets><sheet name="${Xml.escape(sheetName)}" sheetId="1" r:id="rId1"/></sheets>""" +
+            """<definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">""" +
+            Xml.escape("'${sheetName.replace("'", "''")}'!${'$'}1:${'$'}2") +
+            """</definedName></definedNames>""" +
             """</workbook>"""
+    }
 
     /** Имена листов Excel: максимум 31 символ, без `\/?*[]:`. Заголовок журнала («Июль 2026») и так укладывается — это подстраховка. */
     private fun sanitizeSheetName(title: String): String {

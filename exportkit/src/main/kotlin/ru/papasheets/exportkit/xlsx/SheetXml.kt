@@ -2,33 +2,28 @@ package ru.papasheets.exportkit.xlsx
 
 import ru.papasheets.exportkit.model.JournalSnapshot
 
-// Ширины колонок группы подрядчика (символьные единицы Excel) — как в эталонном журнале
-// (docs/reference/iyun-xlsx/xl/worksheets/sheet1.xml, <cols>): Ф≈5.75, Л≈7.75, ВИД РАБОТ≈50.75.
-// Колонка A немного шире эталонной (5.75), чтобы полная дата «17.07.2026» не резалась соседней ячейкой.
+// Ширины двух служебных колонок (символьные единицы Excel) — как в эталонном журнале
+// (docs/reference/iyun-xlsx/xl/worksheets/sheet1.xml, <cols>): Ф≈5.75. Ширины подколонок полей
+// приходят из их dp через [Widths]. Колонка A шире эталонной (5.75) с запасом под дату.
 private const val COL_DATE_WIDTH = 10.5
 private const val COL_PHOTO_WIDTH = 5.75
-private const val COL_LOCATION_WIDTH = 7.75
-private const val COL_WORK_WIDTH = 50.75
 
 /**
- * Высота строки с хотя бы одним фото, в пунктах. Эталонный журнал держит фото как крошечную
- * иконку в строке по умолчанию (15pt) — то же самое было бы нечитаемо; здесь фото сознательно
- * крупнее (см. отчёт M6), высоту строки под них выбираем сами.
- */
-internal const val PHOTO_ROW_HEIGHT_PT = 90.0
-
-/**
- * Рендерит `xl/worksheets/sheet1.xml`: шапка (имена подрядчиков — merge по 3 колонки в строке 1,
- * Ф/Л/ВИД РАБОТ — в строке 2), freeze-панель B3, данные (одна физическая строка листа = одна
+ * Рендерит `xl/worksheets/sheet1.xml`: шапка (имена подрядчиков — merge по всей группе в строке 1,
+ * Ф и подписи полей — в строке 2), freeze-панель B3, данные (одна физическая строка листа = одна
  * [ru.papasheets.exportkit.model.SnapshotRow]; колонка Ф всегда пустым текстом — туда, если есть,
- * ложится фото поверх ячейки). Не трогает ZIP и байты фото — только геометрию и текст листа;
- * [hasDrawing] решает, ссылаться ли на drawing1.xml и утолщать ли строки с фото (вариант «без фото»
- * игнорирует photoId в ячейках полностью, даже если он проставлен).
+ * ложится фото поверх ячейки) и настройки печати. Не трогает ZIP и байты фото — только геометрию и
+ * текст листа; [hasDrawing] решает, ссылаться ли на drawing1.xml и задавать ли высоту строк с фото
+ * (вариант «без фото» игнорирует photoId в ячейках полностью, даже если он проставлен).
+ *
+ * Группа подрядчика = Ф плюс по колонке на каждое поле снимка; ширина группы считается один раз
+ * (`groupCols`) и передаётся дальше, чтобы шаг колонок нельзя было задать в двух местах по-разному.
  */
 internal object SheetXml {
     fun build(snapshot: JournalSnapshot, hasDrawing: Boolean): String {
         val contractorCount = snapshot.contractors.size
-        val colCount = 1 + 3 * contractorCount
+        val groupCols = 1 + snapshot.fields.size
+        val colCount = 1 + groupCols * contractorCount
         val lastRow = 2 + snapshot.days.sumOf { it.rows.size }
 
         return buildString {
@@ -37,31 +32,35 @@ internal object SheetXml {
                 """<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" """ +
                     """xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">""",
             )
+            // Порядок элементов внутри <worksheet> задан схемой SpreadsheetML, и Excel отвергает файл
+            // при его нарушении: sheetPr → dimension → sheetViews → sheetFormatPr → cols → sheetData →
+            // mergeCells → printOptions → pageMargins → pageSetup → drawing.
+            append("""<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>""")
             append("""<dimension ref="A1:${columnLetter(colCount)}$lastRow"/>""")
             append("<sheetViews><sheetView workbookViewId=\"0\">")
             append("""<pane xSplit="1" ySplit="2" topLeftCell="B3" state="frozen"/>""")
             append("</sheetView></sheetViews>")
             append("""<sheetFormatPr defaultRowHeight="15.0"/>""")
-            appendCols(contractorCount)
+            appendCols(snapshot, groupCols)
             append("<sheetData>")
-            appendHeaderRows(snapshot)
-            appendDataRows(snapshot, hasDrawing)
+            appendHeaderRows(snapshot, groupCols)
+            appendDataRows(snapshot, hasDrawing, groupCols)
             append("</sheetData>")
-            appendMergeCells(contractorCount)
+            appendMergeCells(contractorCount, groupCols)
+            appendPrintSetup()
             if (hasDrawing) append("""<drawing r:id="rId1"/>""")
             append("</worksheet>")
         }
     }
 
-    private fun StringBuilder.appendCols(contractorCount: Int) {
+    private fun StringBuilder.appendCols(snapshot: JournalSnapshot, groupCols: Int) {
         append("<cols>")
         append(col(1, COL_DATE_WIDTH))
         var col = 2
-        repeat(contractorCount) {
+        repeat(snapshot.contractors.size) {
             append(col(col, COL_PHOTO_WIDTH))
-            append(col(col + 1, COL_LOCATION_WIDTH))
-            append(col(col + 2, COL_WORK_WIDTH))
-            col += 3
+            snapshot.fields.forEachIndexed { index, field -> append(col(col + 1 + index, field.widthChars)) }
+            col += groupCols
         }
         append("</cols>")
     }
@@ -69,52 +68,56 @@ internal object SheetXml {
     private fun col(index: Int, width: Double): String =
         """<col min="$index" max="$index" width="$width" customWidth="1"/>"""
 
-    private fun StringBuilder.appendHeaderRows(snapshot: JournalSnapshot) {
-        // Строка 1: «ДАТА» (merge A1:A2) + имя подрядчика на группу (merge 3 колонки, см. appendMergeCells).
+    private fun StringBuilder.appendHeaderRows(snapshot: JournalSnapshot, groupCols: Int) {
+        // Строка 1: «ДАТА» (merge A1:A2) + имя подрядчика на группу (merge всей группы, см. appendMergeCells).
         append("<row r=\"1\">")
         append(cell(ref(1, 1), STYLE_HEADER_BOLD, "ДАТА"))
         var col = 2
         for (contractor in snapshot.contractors) {
             append(cell(ref(col, 1), STYLE_HEADER_BOLD, contractor.name))
-            append(emptyCell(ref(col + 1, 1), STYLE_DEFAULT))
-            append(emptyCell(ref(col + 2, 1), STYLE_DEFAULT))
-            col += 3
+            for (index in snapshot.fields.indices) append(emptyCell(ref(col + 1 + index, 1), STYLE_DEFAULT))
+            col += groupCols
         }
         append("</row>")
 
-        // Строка 2: Ф / Л / ВИД РАБОТ на группу; A2 пустая — вторая половина merge A1:A2.
+        // Строка 2: Ф и подписи полей на группу; A2 пустая — вторая половина merge A1:A2.
         append("<row r=\"2\" ht=\"19.5\" customHeight=\"1\">")
         append(emptyCell(ref(1, 2), STYLE_DEFAULT))
         col = 2
         repeat(snapshot.contractors.size) {
             append(cell(ref(col, 2), STYLE_HEADER_LABEL, "Ф"))
-            append(cell(ref(col + 1, 2), STYLE_HEADER_LABEL, "Л"))
-            append(cell(ref(col + 2, 2), STYLE_HEADER_LABEL, "ВИД РАБОТ"))
-            col += 3
+            snapshot.fields.forEachIndexed { index, field ->
+                append(cell(ref(col + 1 + index, 2), STYLE_HEADER_LABEL, field.title))
+            }
+            col += groupCols
         }
         append("</row>")
     }
 
-    private fun StringBuilder.appendDataRows(snapshot: JournalSnapshot, hasDrawing: Boolean) {
+    private fun StringBuilder.appendDataRows(snapshot: JournalSnapshot, hasDrawing: Boolean, groupCols: Int) {
+        val fields = snapshot.fields
         var rowNum = 3
         for (day in snapshot.days) {
             for (row in day.rows) {
                 val rowHasPhoto = hasDrawing && row.cells.any { it?.photoId != null }
-                append(if (rowHasPhoto) "<row r=\"$rowNum\" ht=\"$PHOTO_ROW_HEIGHT_PT\" customHeight=\"1\">" else "<row r=\"$rowNum\">")
+                if (rowHasPhoto) {
+                    append("<row r=\"$rowNum\" ht=\"${RowHeight.forPhotoRow(row, fields)}\" customHeight=\"1\">")
+                } else {
+                    // Без customHeight Excel сам подгоняет высоту под перенесённый текст — точнее нашей оценки.
+                    append("<row r=\"$rowNum\">")
+                }
                 append(cell(ref(1, rowNum), STYLE_DEFAULT, day.dateLabel))
                 var col = 2
-                for (value in row.cells) {
-                    if (value == null) {
-                        append(emptyCell(ref(col, rowNum), STYLE_DEFAULT))
-                        append(emptyCell(ref(col + 1, rowNum), STYLE_DEFAULT))
-                        append(emptyCell(ref(col + 2, rowNum), STYLE_WRAP))
-                    } else {
-                        // Ф — только якорь фото (см. drawing), без собственного текста.
-                        append(emptyCell(ref(col, rowNum), STYLE_DEFAULT))
-                        append(cell(ref(col + 1, rowNum), STYLE_DEFAULT, value.locationCode))
-                        append(cell(ref(col + 2, rowNum), STYLE_WRAP, value.workText))
+                for (cellValue in row.cells) {
+                    // Ф — только якорь фото (см. drawing), без собственного текста.
+                    append(emptyCell(ref(col, rowNum), STYLE_DEFAULT))
+                    fields.forEachIndexed { index, field ->
+                        val style = if (field.wrap) STYLE_WRAP else STYLE_DEFAULT
+                        val cellRef = ref(col + 1 + index, rowNum)
+                        val text = cellValue?.values?.getOrElse(index) { "" }
+                        append(if (text == null) emptyCell(cellRef, style) else cell(cellRef, style, text))
                     }
-                    col += 3
+                    col += groupCols
                 }
                 append("</row>")
                 rowNum++
@@ -122,15 +125,31 @@ internal object SheetXml {
         }
     }
 
-    private fun StringBuilder.appendMergeCells(contractorCount: Int) {
-        append("""<mergeCells count="${1 + contractorCount}">""")
+    private fun StringBuilder.appendMergeCells(contractorCount: Int, groupCols: Int) {
+        // Merge из одной ячейки Excel считает повреждением файла, а count обязан совпадать с числом
+        // реально выведенных элементов — поэтому при пустом наборе полей (вся группа = одна колонка Ф)
+        // групповые merge не выводятся вовсе.
+        val groupMerges = if (groupCols > 1) contractorCount else 0
+        append("""<mergeCells count="${1 + groupMerges}">""")
         append("""<mergeCell ref="A1:A2"/>""")
         var col = 2
-        repeat(contractorCount) {
-            append("""<mergeCell ref="${ref(col, 1)}:${ref(col + 2, 1)}"/>""")
-            col += 3
+        repeat(groupMerges) {
+            append("""<mergeCell ref="${ref(col, 1)}:${ref(col + groupCols - 1, 1)}"/>""")
+            col += groupCols
         }
         append("</mergeCells>")
+    }
+
+    /**
+     * Печать: альбомная ориентация и вписывание по ширине (в высоту — сколько выйдет страниц).
+     * `fitToWidth` без `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>` Excel молча игнорирует,
+     * печатая в масштабе 100%. Повтор шапки на каждой странице задаётся не здесь, а defined name
+     * `_xlnm.Print_Titles` в `xl/workbook.xml` (см. [XlsxWriter]).
+     */
+    private fun StringBuilder.appendPrintSetup() {
+        append("""<printOptions/>""")
+        append("""<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>""")
+        append("""<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>""")
     }
 
     private fun cell(ref: String, style: Int, text: String): String =

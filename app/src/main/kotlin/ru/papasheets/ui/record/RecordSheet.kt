@@ -53,16 +53,14 @@ import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import ru.papasheets.R
 import ru.papasheets.domain.ContinueYesterday
+import ru.papasheets.domain.JournalDates
 import ru.papasheets.domain.contractorDisplayName
 import ru.papasheets.photos.CameraCapture
 import ru.papasheets.photos.GalleryPick
 import ru.papasheets.ui.LocalAppGraph
-
-private val dateButtonFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,7 +151,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
 
             var showDatePicker by remember { mutableStateOf(false) }
             OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(state.date.format(dateButtonFormatter))
+                Text(JournalDates.numeric(state.date))
             }
             if (showDatePicker) {
                 val datePickerState = rememberDatePickerState(

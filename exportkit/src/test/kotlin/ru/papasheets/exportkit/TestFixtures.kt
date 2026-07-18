@@ -8,13 +8,18 @@ import ru.papasheets.exportkit.model.PhotoBytesProvider
 import ru.papasheets.exportkit.model.SnapshotCell
 import ru.papasheets.exportkit.model.SnapshotContractor
 import ru.papasheets.exportkit.model.SnapshotDay
+import ru.papasheets.exportkit.model.SnapshotField
 import ru.papasheets.exportkit.model.SnapshotRow
 
 /**
- * Общий снимок для xlsx- и csv-тестов: 2 подрядчика × 2 дня × 3 записи, 2 из них с фото.
+ * Общий снимок для xlsx- и csv-тестов: 2 подрядчика × 2 поля × 2 дня × 3 записи, 2 из них с фото.
  * Нарочно содержит кириллицу и `& < > " ; \n` — экранирование обеих форматов проверяется на одних
  * и тех же строках. Использует [javax.imageio.ImageIO] (доступен на JVM тестов, но не на Android —
  * поэтому только здесь, не в main-коде exportkit) для генерации настоящих JPEG разных пропорций.
+ *
+ * Набор полей повторяет тот, что был захардкожен до перехода экспорта на произвольное их число
+ * (ширины — из эталона docs/reference/iyun-xlsx), поэтому тесты на нём остаются регресс-сверкой
+ * формата: если раскладка «поехала», это видно по неизменным ожиданиям.
  */
 object TestFixtures {
     const val PHOTO_A = "photo-a"
@@ -24,31 +29,60 @@ object TestFixtures {
     val photoASize = 40 to 30
     val photoBSize = 24 to 40
 
+    val legacyFields = listOf(
+        SnapshotField(title = "Л", widthChars = 7.75, wrap = false),
+        SnapshotField(title = "ВИД РАБОТ", widthChars = 50.75, wrap = true),
+    )
+
     fun snapshot(): JournalSnapshot = JournalSnapshot(
         title = "Июль 2026",
         contractors = listOf(
             SnapshotContractor(name = "Иванов"),
             SnapshotContractor(name = "Петров & \"Сыновья\""),
         ),
+        fields = legacyFields,
         days = listOf(
             SnapshotDay(
-                dateLabel = "01.07.2026",
+                dateLabel = "01.07",
                 rows = listOf(
                     SnapshotRow(
                         cells = listOf(
-                            SnapshotCell(locationCode = "1-01", workText = "Штукатурка <потолок>\nвторая строка", photoId = PHOTO_A),
+                            SnapshotCell(listOf("1-01", "Штукатурка <потолок>\nвторая строка"), photoId = PHOTO_A),
                             null,
                         ),
                     ),
                 ),
             ),
             SnapshotDay(
-                dateLabel = "02.07.2026",
+                dateLabel = "02.07",
                 rows = listOf(
                     SnapshotRow(
                         cells = listOf(
-                            SnapshotCell(locationCode = "1-02", workText = "Заливка пола", photoId = null),
-                            SnapshotCell(locationCode = "2-05; доп", workText = "Кладка \"кирпич\" & раствор", photoId = PHOTO_B),
+                            SnapshotCell(listOf("1-02", "Заливка пола"), photoId = null),
+                            SnapshotCell(listOf("2-05; доп", "Кладка \"кирпич\" & раствор"), photoId = PHOTO_B),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    /**
+     * Снимок с произвольным числом полей: 2 подрядчика, один день, одна строка, фото у второго
+     * подрядчика — минимум, на котором видно и шаг колонок, и колонку якоря фото.
+     */
+    fun snapshotWithFields(fields: List<SnapshotField>): JournalSnapshot = JournalSnapshot(
+        title = "Июль 2026",
+        contractors = listOf(SnapshotContractor(name = "Иванов"), SnapshotContractor(name = "Петров")),
+        fields = fields,
+        days = listOf(
+            SnapshotDay(
+                dateLabel = "01.07",
+                rows = listOf(
+                    SnapshotRow(
+                        cells = listOf(
+                            SnapshotCell(fields.indices.map { "a$it" }, photoId = null),
+                            SnapshotCell(fields.indices.map { "b$it" }, photoId = PHOTO_B),
                         ),
                     ),
                 ),
