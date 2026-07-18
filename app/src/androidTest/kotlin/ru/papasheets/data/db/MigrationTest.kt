@@ -204,6 +204,26 @@ class MigrationTest {
             val opened = room.openHelper.writableDatabase
             assertEquals(CURRENT_VERSION, opened.version)
             assertEquals(2L, opened.queryLong("SELECT COUNT(*) FROM field_defs"))
+
+            // Значения обязаны пережить путь целиком ИМЕННО на продакшн-пути открытия.
+            // MIGRATION_2_3 сносит `records` через DROP TABLE, а `record_values.recordId` объявлен
+            // с ON DELETE CASCADE: при включённых внешних ключах DROP выполняет неявный DELETE и
+            // каскад унёс бы всё содержимое журнала. `defer_foreign_keys` откладывает проверку
+            // НАРУШЕНИЙ, но каскадные действия не отменяет — так что вопрос решает только то, в
+            // каком состоянии внешние ключи на самом деле находятся во время onUpgrade.
+            // MigrationTestHelper это не докажет: у него своя настройка соединения.
+            assertEquals(
+                setOf(
+                    Triple("r-full", BuiltInFields.LOCATION_ID, "К1"),
+                    Triple("r-full", BuiltInFields.WORK_ID, "Штукатурка"),
+                    Triple("r-no-location", BuiltInFields.WORK_ID, "Плитка"),
+                    Triple("r-blank-location", BuiltInFields.WORK_ID, "Плинтус"),
+                    Triple("r-padded", BuiltInFields.LOCATION_ID, "К2"),
+                    Triple("r-padded", BuiltInFields.WORK_ID, "Стяжка"),
+                ),
+                opened.queryValueTriples(),
+            )
+            assertEquals(5L, opened.queryLong("SELECT COUNT(*) FROM records"))
         } finally {
             room.close()
         }
