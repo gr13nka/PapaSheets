@@ -10,8 +10,17 @@ package ru.papasheets.exportkit.backup
  * Функция чистая: ни Android, ни ввода-вывода, ни времени — вход целиком определяет выход.
  */
 internal object BackupUpgrade {
-    fun toCurrent(formatVersion: Int, data: BackupData): BackupData =
-        if (formatVersion >= BackupManifest.CURRENT_FORMAT_VERSION) data else v1ToV2(data)
+    /**
+     * Шаги применяются цепочкой, а не выбором одного «нужного»: файл v1 обязан доехать до текущей
+     * формы через все промежуточные версии, иначе первая же вторая версия формата превратила бы
+     * старые бэкапы в нечитаемые — ровно в тот момент, когда они и нужны.
+     */
+    fun toCurrent(formatVersion: Int, data: BackupData): BackupData {
+        var result = data
+        if (formatVersion < 2) result = v1ToV2(result)
+        if (formatVersion < 3) result = v2ToV3(result)
+        return result
+    }
 
     /**
      * v1 → v2: содержимое записи переезжает из колонок в значения полей.
@@ -33,6 +42,20 @@ internal object BackupUpgrade {
                 valueOrNull(record.id, BuiltInFields.LOCATION_ID, record.locationCode),
                 valueOrNull(record.id, BuiltInFields.WORK_ID, record.workText),
             )
+        },
+    )
+
+    /**
+     * v2 → v3: пресеты автодополнения переезжают с локации на поле.
+     *
+     * Все старые пресеты принадлежали единственной колонке «Локация», поэтому владелец известен
+     * без догадок — [BuiltInFields.LOCATION_ID]. Старый список очищается, чтобы ниже по течению не
+     * осталось второго места, где пресеты можно прочитать.
+     */
+    private fun v2ToV3(data: BackupData): BackupData = data.copy(
+        locationPresets = emptyList(),
+        fieldPresets = data.locationPresets.map {
+            BackupFieldPreset(it.id, BuiltInFields.LOCATION_ID, it.code, it.orderIndex)
         },
     )
 

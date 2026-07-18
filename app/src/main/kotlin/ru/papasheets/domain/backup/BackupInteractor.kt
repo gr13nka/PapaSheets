@@ -8,10 +8,11 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.papasheets.BuildConfig
+import ru.papasheets.data.db.APP_DATABASE_VERSION
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
-import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.exportkit.backup.BackupData
 import ru.papasheets.exportkit.backup.BackupManifest
@@ -21,9 +22,6 @@ import ru.papasheets.exportkit.backup.BackupWriter
 import ru.papasheets.photos.PhotoStore
 
 private val BACKUP_FILE_DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-
-/** Справочная пометка в манифесте: версия схемы Room, из которой снят слепок (см. [ru.papasheets.data.db.AppDatabase]). */
-private const val DB_SCHEMA_VERSION = 2
 
 /**
  * Собирает полный слепок Room — все журналы/подрядчики/поля/записи/значения/фото-метаданные/пресеты,
@@ -35,7 +33,7 @@ class BackupInteractor(
     private val journalRepository: JournalRepository,
     private val contractorRepository: ContractorRepository,
     private val recordRepository: RecordRepository,
-    private val locationRepository: LocationRepository,
+    private val fieldPresetRepository: FieldPresetRepository,
     private val fieldRepository: FieldRepository,
     private val photoStore: PhotoStore,
     private val context: Context,
@@ -46,14 +44,16 @@ class BackupInteractor(
             contractors = contractorRepository.getAll().map { it.toBackup() },
             records = recordRepository.getAll().map { it.toBackup() },
             photos = photoStore.getAllMeta().map { it.toBackup() },
-            locationPresets = locationRepository.getAll().map { it.toBackup() },
+            fieldPresets = fieldPresetRepository.getAll().map { it.toBackup() },
             // Определения полей — вместе со значениями и всегда: без них значения нечем истолковать.
             fieldDefs = fieldRepository.getAll().map { it.toBackup() },
             recordValues = recordRepository.getAllValues().map { it.toBackup() },
         )
         val manifest = BackupManifest(
             formatVersion = BackupManifest.CURRENT_FORMAT_VERSION,
-            dbSchemaVersion = DB_SCHEMA_VERSION,
+            // Справочная пометка: из какой версии схемы Room снят слепок. Берётся из продакшн-кода —
+            // вписанная числом, она бы отстала от следующего же bump'а и молча врала о содержимом файла.
+            dbSchemaVersion = APP_DATABASE_VERSION,
             appVersionName = BuildConfig.VERSION_NAME,
             exportedAtMillis = System.currentTimeMillis(),
         )

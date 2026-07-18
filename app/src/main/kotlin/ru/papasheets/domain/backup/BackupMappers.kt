@@ -2,14 +2,14 @@ package ru.papasheets.domain.backup
 
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.data.db.entity.FieldDefEntity
+import ru.papasheets.data.db.entity.FieldPresetEntity
 import ru.papasheets.data.db.entity.JournalEntity
-import ru.papasheets.data.db.entity.LocationPresetEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.data.db.entity.RecordValueEntity
 import ru.papasheets.exportkit.backup.BackupContractor
 import ru.papasheets.exportkit.backup.BackupFieldDef
+import ru.papasheets.exportkit.backup.BackupFieldPreset
 import ru.papasheets.exportkit.backup.BackupJournal
-import ru.papasheets.exportkit.backup.BackupLocationPreset
 import ru.papasheets.exportkit.backup.BackupPhoto
 import ru.papasheets.exportkit.backup.BackupRecord
 import ru.papasheets.exportkit.backup.BackupRecordValue
@@ -40,8 +40,12 @@ fun BackupRecord.toEntity() = RecordEntity(id, journalId, dateEpochDay, contract
 fun PhotoMeta.toBackup() = BackupPhoto(id, width, height, sizeBytes, originUri, createdAt)
 fun BackupPhoto.toMeta() = PhotoMeta(id, width, height, sizeBytes, originUri, createdAt)
 
-fun LocationPresetEntity.toBackup() = BackupLocationPreset(id, code, orderIndex)
-fun BackupLocationPreset.toEntity() = LocationPresetEntity(id, code, orderIndex)
+/**
+ * `BackupLocationPreset` парой сюда не входит: пресеты без поля бывают только в файлах ≤ v2, и к
+ * этому моменту `BackupUpgrade` уже привязал их к «Локации» и переложил в `fieldPresets`.
+ */
+fun FieldPresetEntity.toBackup() = BackupFieldPreset(id, fieldId, code, orderIndex)
+fun BackupFieldPreset.toEntity() = FieldPresetEntity(id, fieldId, code, orderIndex)
 
 fun FieldDefEntity.toBackup() = BackupFieldDef(
     id, key, title, label, orderIndex, isArchived, isBuiltIn, isRequired,

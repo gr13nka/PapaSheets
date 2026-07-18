@@ -8,9 +8,9 @@ import kotlinx.serialization.Serializable
  * в эти DTO и обратно (см. `BackupMappers.kt` в app). Поля — один в один с entity (UUID, epochDay,
  * millis, orderIndex, isArchived как есть), чтобы маппинг был тривиальным в обе стороны.
  *
- * У списков, появившихся в v2, есть значения по умолчанию, и это не украшение: благодаря им
- * data.json версии 1 разбирается тем же кодом, без второго набора DTO и без ветки «а если старый».
- * Разобранное затем приводится к текущей форме — [BackupUpgrade].
+ * У списков, появившихся не в первой версии, есть значения по умолчанию, и это не украшение:
+ * благодаря им data.json любой прошлой версии разбирается тем же кодом, без второго набора DTO и без
+ * ветки «а если старый». Разобранное затем приводится к текущей форме — [BackupUpgrade].
  */
 @Serializable
 data class BackupData(
@@ -18,7 +18,12 @@ data class BackupData(
     val contractors: List<BackupContractor>,
     val records: List<BackupRecord>,
     val photos: List<BackupPhoto>,
-    val locationPresets: List<BackupLocationPreset>,
+    /**
+     * Только для чтения бэкапов ≤ v2, где пресеты были привязкой к одной локации, а не к полю.
+     * v3 их не пишет (всегда пусто): пресеты живут в [fieldPresets].
+     */
+    val locationPresets: List<BackupLocationPreset> = emptyList(),
+    val fieldPresets: List<BackupFieldPreset> = emptyList(),
     val fieldDefs: List<BackupFieldDef> = emptyList(),
     val recordValues: List<BackupRecordValue> = emptyList(),
 )
@@ -72,9 +77,19 @@ data class BackupPhoto(
     val createdAt: Long,
 )
 
+/** См. [BackupData.locationPresets]: форма пресета в форматах ≤ v2, только для чтения старых файлов. */
 @Serializable
 data class BackupLocationPreset(
     val id: String,
+    val code: String,
+    val orderIndex: Int,
+)
+
+/** Готовое значение поля — поле в поле с `FieldPresetEntity`. */
+@Serializable
+data class BackupFieldPreset(
+    val id: String,
+    val fieldId: String,
     val code: String,
     val orderIndex: Int,
 )

@@ -1,5 +1,6 @@
 package ru.papasheets.data.db
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -7,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -97,6 +99,58 @@ class MigrationTest {
     }
 
     /**
+     * Пресеты переезжают с локации на поле, не потеряв ни строки и не потеряв порядок.
+     *
+     * `location_presets` не знала владельца — у неё был ровно один, встроенная «Локация», — поэтому
+     * миграция обязана проставить `fieldId` всем строкам разом. Внешний ключ на `field_defs` здесь
+     * же и проверяется: под несуществующим полем строки остаться не должно.
+     */
+    @Test
+    fun migration3To4_movesPresetsUnderTheBuiltInLocationField() {
+        helper.createDatabase(TEST_DB, 3).use { it.seedV3Fixtures() }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, Migrations.MIGRATION_3_4)
+
+        assertEquals(
+            listOf(
+                Triple("p-1", BuiltInFields.LOCATION_ID, "К1"),
+                Triple("p-2", BuiltInFields.LOCATION_ID, "К2"),
+            ),
+            db.queryPresets(),
+        )
+        assertTrue(db.queryStrings("PRAGMA foreign_key_check").isEmpty())
+    }
+
+    /**
+     * Удаление поля уносит его пресеты (`ON DELETE CASCADE`), но не значения записей (`RESTRICT`).
+     *
+     * Разное поведение двух ссылок на `field_defs` — сознательное решение, а не случайность: пресеты
+     * это настройка автодополнения, а `record_values` — содержимое журнала прораба. Проверяется
+     * именно на мигрировавшей БД: `ON DELETE` живёт в DDL, и потерять его при переносе таблицы
+     * было бы незаметно вплоть до первого удаления поля.
+     */
+    @Test
+    fun migratedSchema_dropsPresetsWithTheirFieldButGuardsRecordValues() {
+        helper.createDatabase(TEST_DB, 3).use { it.seedV3Fixtures() }
+        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, Migrations.MIGRATION_3_4)
+        db.execSQL("PRAGMA foreign_keys = ON")
+
+        // «Локация» пуста в записях — удаляется, унося свои пресеты.
+        db.execSQL("DELETE FROM field_defs WHERE id = ?", arrayOf(BuiltInFields.LOCATION_ID))
+        assertTrue(db.queryPresets().isEmpty())
+
+        // «Вид работ» заполнен — SQLite не даст его удалить, и это та самая защита данных прораба,
+        // ради которой FieldRepository отказывает раньше, внятным ответом вместо исключения.
+        try {
+            db.execSQL("DELETE FROM field_defs WHERE id = ?", arrayOf(BuiltInFields.WORK_ID))
+            fail("ожидался отказ по внешнему ключу record_values → field_defs")
+        } catch (e: SQLiteConstraintException) {
+            assertTrue(e.message!!.isNotBlank())
+        }
+        assertEquals(1L, db.queryLong("SELECT COUNT(*) FROM field_defs"))
+    }
+
+    /**
      * Путь с самой первой версии до текущей одним прогоном.
      *
      * Отдельные тесты шагов не покрывают именно этот сценарий: у прораба может стоять сборка,
@@ -122,6 +176,8 @@ class MigrationTest {
             ),
             db.queryValueTriples(),
         )
+        // Пресет, заведённый ещё в v1, доезжает до текущей версии и обретает поле-владельца.
+        assertEquals(listOf(Triple("p-1", BuiltInFields.LOCATION_ID, "К1")), db.queryPresets())
         assertNoOrphanValues(db)
         assertTrue(db.queryStrings("PRAGMA foreign_key_check").isEmpty())
     }
@@ -171,6 +227,7 @@ class MigrationTest {
         insertV1Record("r-blank-location", location = "   ", work = "Плинтус")
         insertV1Record("r-padded", location = "  К2  ", work = " Стяжка ")
         insertV1Record("r-empty", location = "", work = "")
+        execSQL("INSERT INTO location_presets VALUES ('p-1', 'К1', 0)")
     }
 
     /** Состояние после v2: содержимое уже в `record_values`, старые колонки пустые, но ещё есть. */
@@ -184,6 +241,22 @@ class MigrationTest {
         insertValue("r-1", BuiltInFields.LOCATION_ID, "К1")
         insertValue("r-1", BuiltInFields.WORK_ID, "Штукатурка")
         insertValue("r-2", BuiltInFields.WORK_ID, "Плитка")
+    }
+
+    /**
+     * Состояние после v3: записи без мёртвых колонок, пресеты — ещё в `location_presets` и без
+     * владельца. У «Вида работ» есть значение, у «Локации» нет: на этой разнице проверяется, что
+     * CASCADE и RESTRICT после миграции ведут себя по-разному.
+     */
+    private fun SupportSQLiteDatabase.seedV3Fixtures() {
+        execSQL("INSERT INTO journals VALUES ('j1', 2026, 7, 'Июль', 0)")
+        execSQL("INSERT INTO contractors VALUES ('c1', 'Г.П.', 'ГП', 0, 0, 0, 0)")
+        execSQL("INSERT INTO records VALUES ('r-1', 'j1', 20000, 'c1', NULL, 0, 0)")
+        insertFieldDef(BuiltInFields.LOCATION_ID, key = "location", orderIndex = 0)
+        insertFieldDef(BuiltInFields.WORK_ID, key = "work", orderIndex = 1)
+        insertValue("r-1", BuiltInFields.WORK_ID, "Штукатурка")
+        execSQL("INSERT INTO location_presets VALUES ('p-1', 'К1', 0)")
+        execSQL("INSERT INTO location_presets VALUES ('p-2', 'К2', 1)")
     }
 
     private fun SupportSQLiteDatabase.insertV1Record(id: String, location: String, work: String) {
@@ -203,6 +276,16 @@ class MigrationTest {
     private fun SupportSQLiteDatabase.insertValue(recordId: String, fieldId: String, value: String) {
         execSQL("INSERT INTO record_values VALUES (?, ?, ?)", arrayOf(recordId, fieldId, value))
     }
+
+    /** Пресеты в порядке `orderIndex`: id, поле-владелец, значение. */
+    private fun SupportSQLiteDatabase.queryPresets(): List<Triple<String, String, String>> =
+        query("SELECT id, fieldId, code FROM field_presets ORDER BY orderIndex").use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(Triple(cursor.getString(0), cursor.getString(1), cursor.getString(2)))
+                }
+            }
+        }
 
     private fun SupportSQLiteDatabase.recordsColumns(): List<String> =
         query("PRAGMA table_info(records)").use { cursor ->

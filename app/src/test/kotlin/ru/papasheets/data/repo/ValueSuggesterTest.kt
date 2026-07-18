@@ -5,11 +5,13 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import ru.papasheets.data.db.dao.LocationDao
+import ru.papasheets.data.db.dao.FieldPresetDao
 import ru.papasheets.data.db.dao.RecordValueDao
-import ru.papasheets.data.db.entity.LocationPresetEntity
+import ru.papasheets.data.db.entity.FieldPresetEntity
 import ru.papasheets.data.db.entity.RecordValueEntity
 import ru.papasheets.exportkit.backup.BuiltInFields
+
+private const val VOLUME_FIELD = "f-volume"
 
 class ValueSuggesterTest {
 
@@ -22,30 +24,37 @@ class ValueSuggesterTest {
             history[fieldId].orEmpty().filter { it.startsWith(prefix, ignoreCase = true) }
     }
 
-    private class FakeLocationDao(private val codes: List<String>) : LocationDao {
-        override fun observePresets(): Flow<List<LocationPresetEntity>> =
-            flowOf(codes.mapIndexed { index, code -> LocationPresetEntity(id = "p$index", code = code, orderIndex = index) })
+    private class FakePresetDao(private val byField: Map<String, List<String>>) : FieldPresetDao {
+        private fun rowsOf(fieldId: String): List<FieldPresetEntity> =
+            byField[fieldId].orEmpty().mapIndexed { index, code ->
+                FieldPresetEntity(id = "$fieldId-$index", fieldId = fieldId, code = code, orderIndex = index)
+            }
 
-        override suspend fun insert(preset: LocationPresetEntity) = Unit
-        override suspend fun delete(preset: LocationPresetEntity) = Unit
-        override suspend fun upsertFromBackup(preset: LocationPresetEntity) = Unit
+        override fun observeFor(fieldId: String): Flow<List<FieldPresetEntity>> = flowOf(rowsOf(fieldId))
+        override suspend fun presetsFor(fieldId: String): List<FieldPresetEntity> = rowsOf(fieldId)
+        override suspend fun getAll(): List<FieldPresetEntity> = byField.keys.flatMap { rowsOf(it) }
+        override suspend fun insert(preset: FieldPresetEntity) = Unit
+        override suspend fun delete(preset: FieldPresetEntity) = Unit
+        override suspend fun upsertFromBackup(preset: FieldPresetEntity) = Unit
     }
 
-    private fun suggester(history: Map<String, List<String>> = emptyMap(), presets: List<String> = emptyList()) =
-        ValueSuggester(FakeValueDao(history), FakeLocationDao(presets))
+    private fun suggester(
+        history: Map<String, List<String>> = emptyMap(),
+        presets: Map<String, List<String>> = emptyMap(),
+    ) = ValueSuggester(FakeValueDao(history), FakePresetDao(presets))
 
     @Test
     fun `history of any field feeds its suggestions`() {
-        val suggester = suggester(history = mapOf("volume" to listOf("12 м²", "12 шт")))
+        val suggester = suggester(history = mapOf(VOLUME_FIELD to listOf("12 м²", "12 шт")))
 
-        assertEquals(listOf("12 м²", "12 шт"), runBlocking { suggester.suggest("volume", "12") })
+        assertEquals(listOf("12 м²", "12 шт"), runBlocking { suggester.suggest(VOLUME_FIELD, "12") })
     }
 
     @Test
     fun `presets go first and history follows`() {
         val suggester = suggester(
             history = mapOf(BuiltInFields.LOCATION_ID to listOf("1-77")),
-            presets = listOf("1-01", "1-02"),
+            presets = mapOf(BuiltInFields.LOCATION_ID to listOf("1-01", "1-02")),
         )
 
         val result = runBlocking { suggester.suggest(BuiltInFields.LOCATION_ID, "1-") }
@@ -57,7 +66,7 @@ class ValueSuggesterTest {
     fun `a value present both as a preset and in history appears once`() {
         val suggester = suggester(
             history = mapOf(BuiltInFields.LOCATION_ID to listOf("1-01", "1-77")),
-            presets = listOf("1-01"),
+            presets = mapOf(BuiltInFields.LOCATION_ID to listOf("1-01")),
         )
 
         val result = runBlocking { suggester.suggest(BuiltInFields.LOCATION_ID, "1-") }
@@ -65,17 +74,36 @@ class ValueSuggesterTest {
         assertEquals(listOf("1-01", "1-77"), result)
     }
 
+    /**
+     * Своё поле прораба получает пресеты на тех же правах, что и встроенная «Локация».
+     *
+     * До v4 пресеты были привязаны к локации, и «Объём» довольствовался только историей ввода. Это
+     * и была та асимметрия, ради снятия которой заведён `field_presets.fieldId`.
+     */
     @Test
-    fun `presets are mixed into the location field only`() {
-        // ВРЕМЕННАЯ АСИММЕТРИЯ: пресеты пока привязаны к локации, а не к полю (см. ValueSuggester).
-        val suggester = suggester(history = mapOf("volume" to listOf("1-99")), presets = listOf("1-01"))
+    fun `presets of a custom field are mixed in the same way`() {
+        val suggester = suggester(
+            history = mapOf(VOLUME_FIELD to listOf("12 шт")),
+            presets = mapOf(VOLUME_FIELD to listOf("12 м²")),
+        )
 
-        assertEquals(listOf("1-99"), runBlocking { suggester.suggest("volume", "1-") })
+        assertEquals(listOf("12 м²", "12 шт"), runBlocking { suggester.suggest(VOLUME_FIELD, "12") })
+    }
+
+    /** Пресеты не протекают между полями: каждое поле видит только свои. */
+    @Test
+    fun `presets of another field are not offered`() {
+        val suggester = suggester(
+            history = mapOf(VOLUME_FIELD to listOf("1-99")),
+            presets = mapOf(BuiltInFields.LOCATION_ID to listOf("1-01")),
+        )
+
+        assertEquals(listOf("1-99"), runBlocking { suggester.suggest(VOLUME_FIELD, "1-") })
     }
 
     @Test
     fun `presets are filtered by the typed prefix`() {
-        val suggester = suggester(presets = listOf("1-01", "2-03"))
+        val suggester = suggester(presets = mapOf(BuiltInFields.LOCATION_ID to listOf("1-01", "2-03")))
 
         assertEquals(listOf("2-03"), runBlocking { suggester.suggest(BuiltInFields.LOCATION_ID, "2") })
     }

@@ -31,7 +31,7 @@
     <string name="export_success">Сохранено</string>
 
     <string name="settings_contractors">Подрядчики</string>
-    <string name="settings_locations">Локации</string>
+    <string name="settings_fields">Поля</string>
 
     <string name="backup_menu_save">Сохранить бэкап</string>
     <string name="backup_menu_import">Импорт бэкапа</string>
@@ -43,7 +43,7 @@
     <string name="import_result_journals">Журналы</string>
     <string name="import_result_contractors">Подрядчики</string>
     <string name="import_result_fields">Поля</string>
-    <string name="import_result_presets">Локации</string>
+    <string name="import_result_presets">Готовые значения</string>
     <string name="import_result_records">Записи</string>
     <string name="import_result_values">Значения полей</string>
     <string name="import_result_photos">Фото</string>
@@ -81,10 +81,34 @@
     <string name="contractors_short_name_label">Короткое имя (до 4 символов)</string>
     <string name="contractors_empty">Пока нет подрядчиков</string>
 
-    <string name="locations_title">Локации</string>
-    <string name="locations_add_title">Новая локация</string>
-    <string name="locations_code_label">Код локации</string>
-    <string name="locations_empty">Пока нет пресетов локаций</string>
+    <string name="fields_title">Поля</string>
+    <string name="fields_archived_section">Архив (%d)</string>
+    <string name="fields_archive_action">В архив</string>
+    <string name="fields_unarchive_action">Вернуть</string>
+    <string name="fields_add_title">Новое поле</string>
+    <string name="fields_edit_title">Изменить поле</string>
+    <string name="fields_label_label">Название в форме записи</string>
+    <string name="fields_title_label">Подпись в шапке (коротко)</string>
+    <string name="fields_width_label">Ширина, dp</string>
+    <string name="fields_max_lines_label">Строк (0 — без ограничения)</string>
+    <string name="fields_required_label">Обязательное</string>
+    <string name="fields_suggest_label">Подсказывать при вводе</string>
+    <string name="fields_compact_label">Показывать в сжатом виде</string>
+    <string name="fields_compact_hint">В сжатом виде («картина месяца») колонки узкие: там разборчивы одна-две, остальные только съедят место.</string>
+    <string name="fields_presets_section">Готовые значения</string>
+    <string name="fields_presets_disabled_hint">Подсказки выключены — эти значения предлагаться не будут.</string>
+    <string name="fields_preset_new_label">Новое значение</string>
+    <string name="fields_delete_action">Удалить поле</string>
+    <string name="fields_delete_refused_title">Поле нельзя удалить</string>
+    <string name="fields_delete_refused_built_in">«%1$s» — встроенное поле, его можно только убрать в архив.</string>
+    <string name="fields_delete_refused_in_use">«%1$s» заполнено в записях (%2$d) — удаление стёрло бы их содержимое. Поле можно убрать в архив: записи сохранятся, а колонка исчезнет.</string>
+    <string name="fields_lines_unlimited">без ограничения</string>
+    <string name="fields_lines_limit">%d стр.</string>
+    <string name="fields_summary_head">«%1$s» · %2$d dp · %3$s</string>
+    <string name="fields_flag_required">обязательное</string>
+    <string name="fields_flag_suggest">подсказки</string>
+    <string name="fields_flag_compact">в сжатом виде</string>
+    <string name="fields_no_active">Все поля в архиве: в журнале останутся только даты, подрядчики и фото.</string>
 
     <string-array name="month_names_nominative">
         <item>Январь</item>

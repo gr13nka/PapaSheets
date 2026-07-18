@@ -29,6 +29,11 @@ data class FieldDefEntity(
     /** Встроенное поле: нельзя удалить и нельзя менять `key`. */
     val isBuiltIn: Boolean,
     val isRequired: Boolean,
+    /**
+     * Включает автодополнение поля в форме. Название отстало от смысла: с v4 подсказки — это не
+     * только история ввода, но и пресеты поля (`field_presets`), и один выключатель гасит оба
+     * источника сразу (см. [ru.papasheets.data.repo.ValueSuggester]).
+     */
     val suggestFromHistory: Boolean,
     val columnWidthDp: Int,
     /** Потолок строк текста в ячейке; 0 = без ограничения. */

@@ -116,25 +116,54 @@ class BackupUpgradeTest {
     }
 
     @Test
-    fun `v2 archive is read as is`() {
+    fun `v2 archive keeps its record values and only gets the preset step`() {
         val contents = BackupReader.read(
             ByteArrayInputStream(archive(v1ManifestJson(formatVersion = 2), v1DataJson)),
         ) { _, _, _ -> }
 
-        // Манифест объявил v2 — значит колонок для разворачивания там нет и трогать данные нечем.
+        // Манифест объявил v2 — значит колонки записей разворачивать не нужно, они уже развёрнуты.
         assertTrue(contents.data.fieldDefs.isEmpty())
         assertTrue(contents.data.recordValues.isEmpty())
+        // А вот шаг v2 → v3 применяется: пресеты v2 ещё не знали своего поля.
+        assertEquals(
+            listOf(BackupFieldPreset("l1", BuiltInFields.LOCATION_ID, "1-01", 0)),
+            contents.data.fieldPresets,
+        )
+    }
+
+    /**
+     * Главное свойство апгрейда: шаги складываются в цепочку.
+     *
+     * Файл v1 обязан доехать до текущей формы через все промежуточные версии — иначе появление
+     * второй версии формата превратило бы самые старые бэкапы в нечитаемые ровно тогда, когда до
+     * них дошло дело. Здесь это видно на одном файле: пресет v1 доезжает до v3 через шаг, который
+     * его вообще не касался, и получает поле-владельца.
+     */
+    @Test
+    fun `v1 archive is upgraded through every step up to the current format`() {
+        val data = readV1().data
+
+        assertEquals(
+            listOf(BackupFieldPreset("l1", BuiltInFields.LOCATION_ID, "1-01", 0)),
+            data.fieldPresets,
+        )
+        // Форма ≤ v2 после апгрейда пуста: второго места, где лежат пресеты, остаться не должно.
+        assertTrue(data.locationPresets.isEmpty())
+        // И шаг v1 → v2 при этом отработал, а не потерялся за более поздним.
+        assertEquals(listOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID), data.fieldDefs.map { it.id })
+        assertEquals(3, data.recordValues.size)
     }
 
     @Test
     fun `format version newer than current is rejected`() {
+        val tooNew = BackupManifest.CURRENT_FORMAT_VERSION + 1
         try {
             BackupReader.read(
-                ByteArrayInputStream(archive(v1ManifestJson(formatVersion = 3), v1DataJson)),
+                ByteArrayInputStream(archive(v1ManifestJson(formatVersion = tooNew), v1DataJson)),
             ) { _, _, _ -> }
             fail("expected BackupFormatException")
         } catch (e: BackupFormatException) {
-            assertTrue(e.message!!.contains("3"))
+            assertTrue(e.message!!.contains(tooNew.toString()))
         }
     }
 }

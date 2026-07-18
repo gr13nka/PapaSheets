@@ -63,7 +63,7 @@ private const val MIME_BACKUP = "application/octet-stream"
 fun JournalListScreen(
     onOpenJournal: (String) -> Unit,
     onOpenContractors: () -> Unit,
-    onOpenLocations: () -> Unit,
+    onOpenFields: () -> Unit,
 ) {
     val graph = LocalAppGraph.current
     val viewModel: JournalListViewModel = viewModel(
@@ -140,8 +140,8 @@ fun JournalListScreen(
                             onClick = { menuExpanded = false; onOpenContractors() },
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.settings_locations)) },
-                            onClick = { menuExpanded = false; onOpenLocations() },
+                            text = { Text(stringResource(R.string.settings_fields)) },
+                            onClick = { menuExpanded = false; onOpenFields() },
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.backup_menu_save)) },
@@ -253,7 +253,7 @@ private fun ImportResultDialog(result: BackupImportResult, onDismiss: () -> Unit
                 ImportResultRow(R.string.import_result_journals, result.journals)
                 ImportResultRow(R.string.import_result_contractors, result.contractors)
                 ImportResultRow(R.string.import_result_fields, result.fieldDefs)
-                ImportResultRow(R.string.import_result_presets, result.locationPresets)
+                ImportResultRow(R.string.import_result_presets, result.fieldPresets)
                 ImportResultRow(R.string.import_result_records, result.records)
                 ImportResultRow(R.string.import_result_values, result.recordValues)
                 ImportResultRow(R.string.import_result_photos, result.photos)

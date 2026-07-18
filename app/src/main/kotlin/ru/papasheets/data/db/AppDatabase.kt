@@ -7,15 +7,15 @@ import androidx.room.RoomDatabase
 import ru.papasheets.data.DefaultSeed
 import ru.papasheets.data.db.dao.ContractorDao
 import ru.papasheets.data.db.dao.FieldDefDao
+import ru.papasheets.data.db.dao.FieldPresetDao
 import ru.papasheets.data.db.dao.JournalDao
-import ru.papasheets.data.db.dao.LocationDao
 import ru.papasheets.data.db.dao.PhotoDao
 import ru.papasheets.data.db.dao.RecordDao
 import ru.papasheets.data.db.dao.RecordValueDao
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.data.db.entity.FieldDefEntity
+import ru.papasheets.data.db.entity.FieldPresetEntity
 import ru.papasheets.data.db.entity.JournalEntity
-import ru.papasheets.data.db.entity.LocationPresetEntity
 import ru.papasheets.data.db.entity.PhotoEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.data.db.entity.RecordValueEntity
@@ -27,14 +27,14 @@ import ru.papasheets.data.db.entity.RecordValueEntity
  *
  * Поднимать её можно только вместе с новой [Migration] в [Migrations.ALL] — см. docs/evolution.md.
  */
-const val APP_DATABASE_VERSION = 3
+const val APP_DATABASE_VERSION = 4
 
 @Database(
     entities = [
         JournalEntity::class,
         ContractorEntity::class,
         RecordEntity::class,
-        LocationPresetEntity::class,
+        FieldPresetEntity::class,
         PhotoEntity::class,
         FieldDefEntity::class,
         RecordValueEntity::class,
@@ -46,7 +46,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun journalDao(): JournalDao
     abstract fun recordDao(): RecordDao
     abstract fun contractorDao(): ContractorDao
-    abstract fun locationDao(): LocationDao
+    abstract fun fieldPresetDao(): FieldPresetDao
     abstract fun photoDao(): PhotoDao
     abstract fun fieldDefDao(): FieldDefDao
     abstract fun recordValueDao(): RecordValueDao

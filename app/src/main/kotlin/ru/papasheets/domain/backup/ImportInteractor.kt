@@ -7,9 +7,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
-import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.exportkit.backup.BackupPhotoKind
 import ru.papasheets.exportkit.backup.BackupReader
@@ -33,7 +33,7 @@ class ImportInteractor(
     private val journalRepository: JournalRepository,
     private val contractorRepository: ContractorRepository,
     private val recordRepository: RecordRepository,
-    private val locationRepository: LocationRepository,
+    private val fieldPresetRepository: FieldPresetRepository,
     private val fieldRepository: FieldRepository,
     private val photoStore: PhotoStore,
     private val transactionRunner: TransactionRunner,
@@ -49,7 +49,7 @@ class ImportInteractor(
 
         transactionRunner.run {
             val existingJournalIds = journalRepository.getAll().mapTo(HashSet()) { it.id }
-            val existingPresetIds = locationRepository.getAll().mapTo(HashSet()) { it.id }
+            val existingPresetIds = fieldPresetRepository.getAll().mapTo(HashSet()) { it.id }
             val existingFieldIds = fieldRepository.getAll().mapTo(HashSet()) { it.id }
             val existingPhotoIds = photoStore.getAllMeta().mapTo(HashSet()) { it.id }
             val existingRecordUpdatedAt = recordRepository.getAll().associate { it.id to it.updatedAt }
@@ -81,9 +81,10 @@ class ImportInteractor(
                 fieldRepository.upsertFromBackup(field.toEntity())
                 acc + action
             }
-            val presetStats = contents.data.locationPresets.fold(MergeStats()) { acc, preset ->
+            // Пресеты — после определений полей: field_presets ссылается на field_defs по внешнему ключу.
+            val presetStats = contents.data.fieldPresets.fold(MergeStats()) { acc, preset ->
                 val action = MergeRules.forReplaceable(preset.id in existingPresetIds)
-                locationRepository.upsertFromBackup(preset.toEntity())
+                fieldPresetRepository.upsertFromBackup(preset.toEntity())
                 acc + action
             }
             // Фото-строки — до записей: RecordEntity.photoId ссылается на них по внешнему ключу.
@@ -114,7 +115,7 @@ class ImportInteractor(
                 journals = journalStats,
                 contractors = contractorStats,
                 fieldDefs = fieldStats,
-                locationPresets = presetStats,
+                fieldPresets = presetStats,
                 records = recordStats,
                 recordValues = valueStats,
                 photos = photoStats,

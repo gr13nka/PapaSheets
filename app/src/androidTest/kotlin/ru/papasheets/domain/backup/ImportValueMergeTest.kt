@@ -24,7 +24,7 @@ import ru.papasheets.data.db.entity.RecordValueEntity
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
-import ru.papasheets.data.repo.LocationRepository
+import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.exportkit.backup.BackupContractor
 import ru.papasheets.exportkit.backup.BackupData
@@ -67,11 +67,11 @@ class ImportValueMergeTest {
         }
         val journalRepository = JournalRepository(db.journalDao(), MonthTitleFormatter(context))
         val contractorRepository = ContractorRepository(db.contractorDao())
-        val locationRepository = LocationRepository(db.locationDao())
+        val fieldPresetRepository = FieldPresetRepository(db.fieldPresetDao())
         val fieldRepository = FieldRepository(db.fieldDefDao())
         recordRepository = RecordRepository(db.recordDao(), db.recordValueDao(), transactionRunner)
         importInteractor = ImportInteractor(
-            journalRepository, contractorRepository, recordRepository, locationRepository,
+            journalRepository, contractorRepository, recordRepository, fieldPresetRepository,
             fieldRepository, PhotoStore(context, db.photoDao()), transactionRunner, context,
         )
 
@@ -163,7 +163,6 @@ class ImportValueMergeTest {
                 ),
             ),
             photos = emptyList(),
-            locationPresets = emptyList(),
             fieldDefs = runBlocking { db.fieldDefDao().getAll() }.map { it.toBackup() },
             recordValues = values.map { (fieldId, value) -> BackupRecordValue(RECORD_ID, fieldId, value) },
         )

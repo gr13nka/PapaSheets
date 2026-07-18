@@ -45,7 +45,7 @@ class BackupRoundTripTest {
             BackupPhoto(id = PHOTO_A, width = 1280, height = 720, sizeBytes = 12345, originUri = "content://a", createdAt = 1),
             BackupPhoto(id = PHOTO_B, width = 720, height = 1280, sizeBytes = 543, originUri = null, createdAt = 2),
         ),
-        locationPresets = listOf(BackupLocationPreset(id = "l1", code = "1-01", orderIndex = 0)),
+        fieldPresets = listOf(BackupFieldPreset(id = "l1", fieldId = BuiltInFields.LOCATION_ID, code = "1-01", orderIndex = 0)),
         fieldDefs = listOf(
             BackupFieldDef(
                 id = BuiltInFields.LOCATION_ID, key = BuiltInFields.LOCATION_KEY, title = "Л", label = "Локация",

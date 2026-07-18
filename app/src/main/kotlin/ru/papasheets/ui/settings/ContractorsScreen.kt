@@ -2,7 +2,6 @@ package ru.papasheets.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,24 +28,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import kotlin.math.roundToInt
 import ru.papasheets.R
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.matrixgrid.ContractorPalette
@@ -99,12 +91,21 @@ fun ContractorsScreen(onBack: () -> Unit) {
                     .padding(padding)
                     .verticalScroll(rememberScrollState()),
             ) {
-                DraggableContractorList(
-                    contractors = active,
+                DragReorderColumn(
+                    items = active,
+                    key = ContractorEntity::id,
+                    rowHeight = ContractorRowHeight,
                     onReorder = viewModel::reorder,
-                    onRename = { editing = it },
-                    onArchive = { viewModel.setArchived(it, true) },
-                )
+                ) { contractor, dragHandle ->
+                    ContractorRow(
+                        contractor = contractor,
+                        dimmed = false,
+                        onClick = { editing = contractor },
+                        trailingLabel = stringResource(R.string.contractors_archive_action),
+                        onTrailingClick = { viewModel.setArchived(contractor, true) },
+                        dragHandle = dragHandle,
+                    )
+                }
                 if (archived.isNotEmpty()) {
                     TextButton(
                         onClick = { archivedExpanded = !archivedExpanded },
@@ -153,82 +154,6 @@ fun ContractorsScreen(onBack: () -> Unit) {
                 editing = null
             },
         )
-    }
-}
-
-/**
- * Активный список с drag-reorder: долгое нажатие на ручку "≡" начинает перетаскивание, порядок в
- * [order] обновляется по мере прохождения половины высоты соседней строки (стандартный паттерн без
- * сторонних библиотек), на отпускании — persist через [onReorder].
- */
-@Composable
-private fun DraggableContractorList(
-    contractors: List<ContractorEntity>,
-    onReorder: (List<ContractorEntity>) -> Unit,
-    onRename: (ContractorEntity) -> Unit,
-    onArchive: (ContractorEntity) -> Unit,
-) {
-    val itemHeightPx = with(LocalDensity.current) { ContractorRowHeight.toPx() }
-    // Переключается на новый список подрядчиков извне (после persist Room эхом пришлёт тот же порядок).
-    var order by remember(contractors) { mutableStateOf(contractors) }
-    var draggingId by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-
-    Column {
-        // key(contractor.id) закрепляет composable (и его pointerInput-корутину) за identity строки, а не
-        // за позицией в дереве: без него свап позиций в onDrag ниже пересоздал бы узел на месте
-        // перетаскиваемой строки (Compose увидел бы там "новые" данные) и оборвал бы жест onDragCancel'ом
-        // ДО onDragEnd — свап был бы виден на экране, но onReorder (persist) так и не вызвался бы.
-        order.forEach { contractor ->
-            key(contractor.id) {
-                val isDragging = contractor.id == draggingId
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .zIndex(if (isDragging) 1f else 0f)
-                        .graphicsLayer { translationY = if (isDragging) dragOffset else 0f },
-                ) {
-                    ContractorRow(
-                        contractor = contractor,
-                        dimmed = false,
-                        onClick = { onRename(contractor) },
-                        trailingLabel = stringResource(R.string.contractors_archive_action),
-                        onTrailingClick = { onArchive(contractor) },
-                        dragHandle = {
-                            Text(
-                                text = "≡",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .pointerInput(contractor.id) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = { draggingId = contractor.id; dragOffset = 0f },
-                                            onDragEnd = {
-                                                draggingId = null
-                                                dragOffset = 0f
-                                                onReorder(order)
-                                            },
-                                            onDragCancel = { draggingId = null; dragOffset = 0f },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                dragOffset += dragAmount.y
-                                                val from = order.indexOf(contractor)
-                                                val to = (from + (dragOffset / itemHeightPx).roundToInt())
-                                                    .coerceIn(0, order.lastIndex)
-                                                if (to != from) {
-                                                    order = order.toMutableList().apply { add(to, removeAt(from)) }
-                                                    dragOffset -= (to - from) * itemHeightPx
-                                                }
-                                            },
-                                        )
-                                    },
-                            )
-                        },
-                    )
-                }
-                HorizontalDivider()
-            }
-        }
     }
 }
 

@@ -15,9 +15,9 @@ import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
 import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
+import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
-import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.data.repo.ValueSuggester
 import ru.papasheets.domain.DeleteJournalInteractor
@@ -78,8 +78,8 @@ class AppGraph(context: Context) {
     val deleteJournalInteractor: DeleteJournalInteractor by lazy {
         DeleteJournalInteractor(journalRepository, recordRepository, photoStore)
     }
-    val valueSuggester: ValueSuggester by lazy { ValueSuggester(database.recordValueDao(), database.locationDao()) }
-    val locationRepository: LocationRepository by lazy { LocationRepository(database.locationDao()) }
+    val valueSuggester: ValueSuggester by lazy { ValueSuggester(database.recordValueDao(), database.fieldPresetDao()) }
+    val fieldPresetRepository: FieldPresetRepository by lazy { FieldPresetRepository(database.fieldPresetDao()) }
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
     val exportInteractor: ExportInteractor by lazy {
         ExportInteractor(journalRepository, recordRepository, contractorRepository, fieldRepository, photoStore, appContext)
@@ -96,13 +96,13 @@ class AppGraph(context: Context) {
     }
     val backupInteractor: BackupInteractor by lazy {
         BackupInteractor(
-            journalRepository, contractorRepository, recordRepository, locationRepository,
+            journalRepository, contractorRepository, recordRepository, fieldPresetRepository,
             fieldRepository, photoStore, appContext,
         )
     }
     val importInteractor: ImportInteractor by lazy {
         ImportInteractor(
-            journalRepository, contractorRepository, recordRepository, locationRepository,
+            journalRepository, contractorRepository, recordRepository, fieldPresetRepository,
             fieldRepository, photoStore, transactionRunner, appContext,
         )
     }

@@ -54,11 +54,31 @@ object Migrations {
     }
 
     /**
+     * v3 → v4: пресеты автодополнения перестают быть привязкой к одной «Локации» и переезжают на поле.
+     *
+     * `location_presets` знала ровно одно поле — встроенную локацию, — и своё поле прораба («Объём»)
+     * получало только историю ввода. `field_presets.fieldId` снимает асимметрию: список готовых
+     * значений появляется у любого поля, а «Локация» становится просто первым его пользователем.
+     * Поэтому все существующие строки переносятся под [BuiltInFields.LOCATION_ID] — id встроенного
+     * поля константен на любом устройстве, так что владелец находится без поиска.
+     *
+     * Новая таблица заводится рядом со старой, а не переименовывается: `location_presets` не имела
+     * ни `fieldId`, ни внешнего ключа, и добавить их `ALTER TABLE` нельзя. Отложенная проверка FK
+     * здесь не нужна (в отличие от [MIGRATION_2_3]): на `location_presets` никто не ссылается, а
+     * `field_defs` со строкой «Локация» уже на месте с v2.
+     */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            MIGRATION_3_4_DDL.forEach(db::execSQL)
+        }
+    }
+
+    /**
      * Полная цепочка в порядке версий. Существует затем, чтобы список миграций был ровно один:
      * [AppDatabase] и тест цепочки берут его отсюда, поэтому забытая в сборке миграция валит тест,
      * а не телефон прораба, пропустившего пару версий.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }
 
 /**
@@ -121,4 +141,21 @@ internal val MIGRATION_2_3_DDL: List<String> = listOf(
     "CREATE INDEX IF NOT EXISTS `index_records_journalId_dateEpochDay` ON `records` (`journalId`, `dateEpochDay`)",
     "CREATE INDEX IF NOT EXISTS `index_records_contractorId` ON `records` (`contractorId`)",
     "CREATE UNIQUE INDEX IF NOT EXISTS `index_records_photoId` ON `records` (`photoId`)",
+)
+
+/**
+ * Перенос пресетов под их поле. `CREATE TABLE` и индекс скопированы дословно из
+ * `app/schemas/.../4.json` — по тем же причинам, что и DDL выше: Room сверяет схему по хешу.
+ *
+ * Индекс по `fieldId` не украшение: автодополнение спрашивает пресеты по нему на каждое нажатие
+ * клавиши, а Room всё равно потребовал бы его наличия под внешним ключом.
+ */
+internal val MIGRATION_3_4_DDL: List<String> = listOf(
+    "CREATE TABLE IF NOT EXISTS `field_presets` (`id` TEXT NOT NULL, `fieldId` TEXT NOT NULL, " +
+        "`code` TEXT NOT NULL, `orderIndex` INTEGER NOT NULL, PRIMARY KEY(`id`), " +
+        "FOREIGN KEY(`fieldId`) REFERENCES `field_defs`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+    "CREATE INDEX IF NOT EXISTS `index_field_presets_fieldId` ON `field_presets` (`fieldId`)",
+    "INSERT INTO field_presets (`id`, `fieldId`, `code`, `orderIndex`) " +
+        "SELECT `id`, '${BuiltInFields.LOCATION_ID}', `code`, `orderIndex` FROM location_presets",
+    "DROP TABLE location_presets",
 )
