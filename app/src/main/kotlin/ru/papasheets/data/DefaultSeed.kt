@@ -4,9 +4,18 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import ru.papasheets.data.db.BuiltInFieldSeed
 import java.util.UUID
 
-/** Пять реальных подрядчиков из бумажного журнала — заводятся один раз при создании БД. */
+/**
+ * Начальное содержимое БД, создаваемой с нуля: пять реальных подрядчиков из бумажного журнала
+ * и встроенные определения полей.
+ *
+ * `onCreate` вызывается только при создании БД и никогда при обновлении, поэтому устройство,
+ * пришедшее с v1, получает те же поля из `Migrations.MIGRATION_1_2`. Чтобы обе ветки давали
+ * одинаковый результат не по дисциплине, а структурно, поля в обеих заводит общий
+ * `BuiltInFieldSeed` — здесь их значения не дублируются.
+ */
 object DefaultSeed {
     private data class SeedContractor(val name: String, val shortName: String)
 
@@ -34,6 +43,7 @@ object DefaultSeed {
                 }
                 db.insert("contractors", SQLiteDatabase.CONFLICT_ABORT, values)
             }
+            BuiltInFieldSeed.insertInto(db, now)
         }
     }
 }

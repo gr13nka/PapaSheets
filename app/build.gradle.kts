@@ -25,6 +25,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -59,6 +60,12 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+
+    // MigrationTestHelper читает экспортированные схемы с устройства, а не из исходников —
+    // без этого каталога в assets тест миграции не найдёт 1.json и упадёт на старте.
+    sourceSets.getByName("androidTest") {
+        assets.srcDir("$projectDir/schemas")
     }
 }
 
@@ -95,4 +102,11 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
+
+    // Миграцию нельзя проверить на JVM: MigrationTestHelper прогоняет её на настоящем SQLite
+    // и сверяет результат с экспортированной схемой — только так ловится расхождение по identityHash.
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.room.testing)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

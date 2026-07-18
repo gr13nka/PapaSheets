@@ -12,6 +12,8 @@ coil = "2.7.0"
 exifinterface = "1.3.7"
 coreKtx = "1.13.1"
 junit = "4.13.2"
+androidxTestJunit = "1.2.1"
+androidxTestRunner = "1.6.2"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -34,6 +36,9 @@ androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", vers
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 junit = { module = "junit:junit", version.ref = "junit" }
+room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
+androidx-test-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestJunit" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

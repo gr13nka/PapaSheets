@@ -43,6 +43,12 @@ data class RecordEntity(
     val journalId: String,
     val dateEpochDay: Long,
     val contractorId: String,
+    /**
+     * Заморожено с v2: содержимое переехало в `record_values`, читать эти две колонки напрямую
+     * больше нельзя — они уже не обновляются и разойдутся с реальными значениями. Оставлены как
+     * страховка на время обкатки миграции; удалит их отдельная Migration(2, 3), когда станет
+     * видно, что данные перенеслись без потерь.
+     */
     val locationCode: String,
     val workText: String,
     val photoId: String?,
