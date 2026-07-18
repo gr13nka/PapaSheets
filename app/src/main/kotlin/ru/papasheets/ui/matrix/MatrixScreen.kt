@@ -1,12 +1,19 @@
 package ru.papasheets.ui.matrix
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -14,6 +21,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -36,6 +45,7 @@ import ru.papasheets.matrixgrid.MatrixCallbacks
 import ru.papasheets.matrixgrid.MatrixView
 import ru.papasheets.matrixgrid.rememberMatrixState
 import ru.papasheets.ui.LocalAppGraph
+import ru.papasheets.ui.export.ExportDialog
 import ru.papasheets.ui.record.RecordSheet
 import ru.papasheets.ui.record.RecordSheetMode
 import ru.papasheets.ui.record.RecordSheetModeSaver
@@ -58,6 +68,7 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
                     recordRepository = graph.recordRepository,
                     contractorRepository = graph.contractorRepository,
                     photoStore = graph.photoStore,
+                    exportInteractor = graph.exportInteractor,
                 )
             }
         },
@@ -65,11 +76,26 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
     val journal by viewModel.journal.collectAsState()
     val gridModel by viewModel.gridModel.collectAsState()
     val sortDesc by viewModel.sortDesc.collectAsState()
+    val exporting by viewModel.exporting.collectAsState()
     val matrixState = rememberMatrixState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var sheetMode by rememberSaveable(stateSaver = RecordSheetModeSaver) { mutableStateOf<RecordSheetMode?>(null) }
     var recordPendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var showExportDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(viewModel) {
+        viewModel.exportEvents.collect { event ->
+            showExportDialog = false
+            val message = when (event) {
+                is ExportEvent.Success -> context.getString(R.string.export_success)
+                is ExportEvent.Failure -> event.message
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
 
     // Стабильный экземпляр колбэков: детектор жестов в MatrixView не пересоздаётся на рекомпозиции,
     // поэтому его нельзя «кормить» новым объектом каждый кадр — иначе он держал бы устаревшие лямбды.
@@ -131,6 +157,19 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
                                 ),
                             )
                         }
+                    }
+
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.matrix_menu_action))
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.matrix_menu_export)) },
+                            onClick = {
+                                menuExpanded = false
+                                showExportDialog = true
+                            },
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),
@@ -194,6 +233,15 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
                     Text(stringResource(R.string.action_cancel))
                 }
             },
+        )
+    }
+
+    if (showExportDialog) {
+        ExportDialog(
+            defaultFileName = viewModel::defaultExportFileName,
+            exporting = exporting,
+            onExport = { format, uri -> viewModel.exportTo(uri, format) },
+            onDismiss = { showExportDialog = false },
         )
     }
 }

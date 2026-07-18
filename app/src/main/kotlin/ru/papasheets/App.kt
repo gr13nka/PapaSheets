@@ -14,6 +14,7 @@ import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.LocationSuggester
 import ru.papasheets.data.repo.RecordRepository
+import ru.papasheets.domain.export.ExportInteractor
 import ru.papasheets.photos.PhotoStore
 
 /** Задержка перед первым GC — даёт форме записи время доимпортировать и сохранить свежее фото. */
@@ -49,4 +50,7 @@ class AppGraph(context: Context) {
     val locationSuggester: LocationSuggester by lazy { LocationSuggester(database.locationDao()) }
     val locationRepository: LocationRepository by lazy { LocationRepository(database.locationDao()) }
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
+    val exportInteractor: ExportInteractor by lazy {
+        ExportInteractor(journalRepository, recordRepository, contractorRepository, photoStore, appContext)
+    }
 }

@@ -20,6 +20,15 @@
     <string name="matrix_zoom_detail">1:1</string>
     <string name="matrix_sort_desc">↓ даты</string>
     <string name="matrix_sort_asc">↑ даты</string>
+    <string name="matrix_menu_action">Ещё</string>
+    <string name="matrix_menu_export">Экспорт</string>
+
+    <string name="export_dialog_title">Экспорт журнала</string>
+    <string name="export_option_xlsx_photos">Excel (.xlsx) с фото</string>
+    <string name="export_option_xlsx_no_photos">Excel (.xlsx) без фото</string>
+    <string name="export_option_csv">Таблица CSV</string>
+    <string name="export_in_progress">Экспортируем…</string>
+    <string name="export_success">Сохранено</string>
 
     <string name="settings_contractors">Подрядчики</string>
     <string name="settings_locations">Локации</string>

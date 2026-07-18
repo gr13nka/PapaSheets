@@ -29,6 +29,11 @@ class PhotoStore(context: Context, private val photoDao: PhotoDao) {
 
     fun thumbFile(id: String): File = File(thumbDir, "$id.jpg")
 
+    /** Метаданные фото по id — размеры нужны xlsx-экспорту (M6) для EMU без декодирования JPEG. */
+    suspend fun getMeta(id: String): PhotoMeta? = withContext(Dispatchers.IO) {
+        photoDao.getById(id)?.let { PhotoMeta(it.id, it.width, it.height, it.sizeBytes) }
+    }
+
     /** Декодирует+сжимает [source] и заводит строку в БД. Файлы пишутся первыми: при сбое — подчищаются. */
     suspend fun import(source: PhotoSource): PhotoMeta = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString()
