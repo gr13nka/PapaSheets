@@ -70,8 +70,6 @@ fun testRecord(
         journalId = journalId,
         dateEpochDay = dateEpochDay,
         contractorId = contractorId,
-        locationCode = "",
-        workText = "",
         photoId = photoId,
         createdAt = createdAt,
         updatedAt = createdAt,

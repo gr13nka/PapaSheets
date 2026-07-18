@@ -20,6 +20,15 @@ import ru.papasheets.data.db.entity.PhotoEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.data.db.entity.RecordValueEntity
 
+/**
+ * Версия схемы отдельной константой, а не числом внутри `@Database`: её должны видеть тесты
+ * миграций, чтобы «текущая версия» была одна на весь проект. Само значение `@Database` прочитать
+ * рефлексией нельзя — аннотации Room не доживают до рантайма.
+ *
+ * Поднимать её можно только вместе с новой [Migration] в [Migrations.ALL] — см. docs/evolution.md.
+ */
+const val APP_DATABASE_VERSION = 3
+
 @Database(
     entities = [
         JournalEntity::class,
@@ -30,7 +39,7 @@ import ru.papasheets.data.db.entity.RecordValueEntity
         FieldDefEntity::class,
         RecordValueEntity::class,
     ],
-    version = 2,
+    version = APP_DATABASE_VERSION,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -48,7 +57,9 @@ abstract class AppDatabase : RoomDatabase() {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, DB_NAME)
                 .addCallback(DefaultSeed.callback())
-                .addMigrations(Migrations.MIGRATION_1_2)
+                // Вся цепочка, а не только последний шаг: на устройстве может стоять сборка любой
+                // давности, и Room должен уметь довести её до текущей версии через все промежуточные.
+                .addMigrations(*Migrations.ALL)
                 // Никакого destructive-fallback: в релизе это была бы молчаливая потеря данных при
                 // первом же расхождении. Любое изменение схемы = bump version + настоящий Migration
                 // (иначе Room упадёт на несовпадении hash — и это правильно, лучше явный отказ,

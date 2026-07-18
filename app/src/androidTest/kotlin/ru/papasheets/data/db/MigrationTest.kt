@@ -13,11 +13,15 @@ import org.junit.runner.RunWith
 import ru.papasheets.exportkit.backup.BuiltInFields
 
 /**
- * Миграция v1 → v2 на настоящем SQLite.
+ * Миграции схемы на настоящем SQLite.
  *
- * Единственный необратимый шаг в проекте: на телефоне лежит рабочий журнал прораба без второй
+ * Единственный необратимый участок проекта: на телефоне лежит рабочий журнал прораба без второй
  * копии, и ошибка здесь означает молча испорченные данные. На JVM это не проверяется — нужен
  * реальный SQLite и сверка результата с экспортированной схемой.
+ *
+ * Проверяются и отдельные шаги, и цепочка целиком: на устройстве может стоять сборка любой
+ * давности, поэтому путь «с версии N сразу до текущей» — такой же рабочий сценарий, как последний
+ * шаг, и ломается он ровно так же незаметно.
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
@@ -52,10 +56,73 @@ class MigrationTest {
             ),
             db.queryValueTriples(),
         )
-        // Старые колонки не тронуты: если перенос окажется неполным, чинить будем по ним.
+        // На этом шаге старые колонки ещё на месте: страховка на случай неполного переноса.
         assertEquals(5L, db.queryLong("SELECT COUNT(*) FROM records"))
         assertEquals("  К2  ", db.queryStrings("SELECT locationCode FROM records WHERE id = 'r-padded'").single())
         assertEquals("К1", db.queryStrings("SELECT locationCode FROM records WHERE id = 'r-full'").single())
+        assertTrue(db.queryStrings("PRAGMA foreign_key_check").isEmpty())
+    }
+
+    /**
+     * Пересоздание `records` не теряет записи и не сиротит их значения.
+     *
+     * Единственная миграция проекта, которая сносит таблицу с данными: `DROP`/`RENAME` рвут ссылку
+     * `record_values.recordId` на время подмены, поэтому проверяется не только целость строк, но и
+     * то, что отложенная проверка внешних ключей после коммита чиста.
+     */
+    @Test
+    fun migration2To3_dropsDeadColumnsKeepingRecordsAndValues() {
+        helper.createDatabase(TEST_DB, 2).use { it.seedV2Fixtures() }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, Migrations.MIGRATION_2_3)
+
+        assertEquals(
+            listOf("id", "journalId", "dateEpochDay", "contractorId", "photoId", "createdAt", "updatedAt"),
+            db.recordsColumns(),
+        )
+        assertEquals(
+            setOf("r-1" to "c1", "r-2" to "c1"),
+            db.queryPairs("SELECT id, contractorId FROM records"),
+        )
+        assertEquals(
+            setOf(
+                Triple("r-1", BuiltInFields.LOCATION_ID, "К1"),
+                Triple("r-1", BuiltInFields.WORK_ID, "Штукатурка"),
+                Triple("r-2", BuiltInFields.WORK_ID, "Плитка"),
+            ),
+            db.queryValueTriples(),
+        )
+        assertNoOrphanValues(db)
+        assertTrue(db.queryStrings("PRAGMA foreign_key_check").isEmpty())
+    }
+
+    /**
+     * Путь с самой первой версии до текущей одним прогоном.
+     *
+     * Отдельные тесты шагов не покрывают именно этот сценарий: у прораба может стоять сборка,
+     * отставшая на несколько версий, и сломаться способна как раз стыковка шагов, а не шаг сам по
+     * себе. Версия и список миграций берутся из продакшн-кода, поэтому очередной bump ничего здесь
+     * править не требует — но и пропустить миграцию в [Migrations.ALL] не даёт.
+     */
+    @Test
+    fun migrationChain_fromFirstVersionToCurrent_keepsData() {
+        helper.createDatabase(TEST_DB, 1).use { it.seedV1Fixtures() }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, CURRENT_VERSION, true, *Migrations.ALL)
+
+        assertEquals(5L, db.queryLong("SELECT COUNT(*) FROM records"))
+        assertEquals(
+            setOf(
+                Triple("r-full", BuiltInFields.LOCATION_ID, "К1"),
+                Triple("r-full", BuiltInFields.WORK_ID, "Штукатурка"),
+                Triple("r-no-location", BuiltInFields.WORK_ID, "Плитка"),
+                Triple("r-blank-location", BuiltInFields.WORK_ID, "Плинтус"),
+                Triple("r-padded", BuiltInFields.LOCATION_ID, "К2"),
+                Triple("r-padded", BuiltInFields.WORK_ID, "Стяжка"),
+            ),
+            db.queryValueTriples(),
+        )
+        assertNoOrphanValues(db)
         assertTrue(db.queryStrings("PRAGMA foreign_key_check").isEmpty())
     }
 
@@ -74,16 +141,26 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             AppDatabase::class.java,
             TEST_DB,
-        ).addMigrations(Migrations.MIGRATION_1_2).build()
+        ).addMigrations(*Migrations.ALL).build()
 
         try {
             // Открытие БД ленивое: миграция и сверка хеша происходят на первом обращении.
             val opened = room.openHelper.writableDatabase
-            assertEquals(2, opened.version)
+            assertEquals(CURRENT_VERSION, opened.version)
             assertEquals(2L, opened.queryLong("SELECT COUNT(*) FROM field_defs"))
         } finally {
             room.close()
         }
+    }
+
+    private fun assertNoOrphanValues(db: SupportSQLiteDatabase) {
+        assertEquals(
+            0L,
+            db.queryLong(
+                "SELECT COUNT(*) FROM record_values v " +
+                    "LEFT JOIN records r ON r.id = v.recordId WHERE r.id IS NULL",
+            ),
+        )
     }
 
     private fun SupportSQLiteDatabase.seedV1Fixtures() {
@@ -96,12 +173,42 @@ class MigrationTest {
         insertV1Record("r-empty", location = "", work = "")
     }
 
+    /** Состояние после v2: содержимое уже в `record_values`, старые колонки пустые, но ещё есть. */
+    private fun SupportSQLiteDatabase.seedV2Fixtures() {
+        execSQL("INSERT INTO journals VALUES ('j1', 2026, 7, 'Июль', 0)")
+        execSQL("INSERT INTO contractors VALUES ('c1', 'Г.П.', 'ГП', 0, 0, 0, 0)")
+        insertV1Record("r-1", location = "", work = "")
+        insertV1Record("r-2", location = "", work = "")
+        insertFieldDef(BuiltInFields.LOCATION_ID, key = "location", orderIndex = 0)
+        insertFieldDef(BuiltInFields.WORK_ID, key = "work", orderIndex = 1)
+        insertValue("r-1", BuiltInFields.LOCATION_ID, "К1")
+        insertValue("r-1", BuiltInFields.WORK_ID, "Штукатурка")
+        insertValue("r-2", BuiltInFields.WORK_ID, "Плитка")
+    }
+
     private fun SupportSQLiteDatabase.insertV1Record(id: String, location: String, work: String) {
         execSQL(
             "INSERT INTO records VALUES (?, 'j1', 20000, 'c1', ?, ?, NULL, 0, 0)",
             arrayOf(id, location, work),
         )
     }
+
+    private fun SupportSQLiteDatabase.insertFieldDef(id: String, key: String, orderIndex: Long) {
+        execSQL(
+            "INSERT INTO field_defs VALUES (?, ?, ?, ?, ?, 0, 1, 0, 1, 100, 3, 1, 0)",
+            arrayOf(id, key, key, key, orderIndex),
+        )
+    }
+
+    private fun SupportSQLiteDatabase.insertValue(recordId: String, fieldId: String, value: String) {
+        execSQL("INSERT INTO record_values VALUES (?, ?, ?)", arrayOf(recordId, fieldId, value))
+    }
+
+    private fun SupportSQLiteDatabase.recordsColumns(): List<String> =
+        query("PRAGMA table_info(records)").use { cursor ->
+            val nameColumn = cursor.getColumnIndexOrThrow("name")
+            buildList { while (cursor.moveToNext()) add(cursor.getString(nameColumn)) }
+        }
 
     private fun SupportSQLiteDatabase.queryStrings(sql: String): List<String> =
         query(sql).use { cursor ->
@@ -112,6 +219,11 @@ class MigrationTest {
         query(sql).use { cursor ->
             cursor.moveToFirst()
             cursor.getLong(0)
+        }
+
+    private fun SupportSQLiteDatabase.queryPairs(sql: String): Set<Pair<String, String>> =
+        query(sql).use { cursor ->
+            buildSet { while (cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1)) }
         }
 
     private fun SupportSQLiteDatabase.queryValueTriples(): Set<Triple<String, String, String>> =
@@ -125,5 +237,11 @@ class MigrationTest {
 
     private companion object {
         const val TEST_DB = "migration-test.db"
+
+        /**
+         * Берётся из продакшн-кода, а не вписана числом: иначе следующий bump версии пришлось бы
+         * помнить и повторить здесь, а забытый — оставил бы тесты зелёными на старой версии.
+         */
+        const val CURRENT_VERSION = APP_DATABASE_VERSION
     }
 }

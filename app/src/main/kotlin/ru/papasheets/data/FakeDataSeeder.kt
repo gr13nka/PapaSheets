@@ -126,9 +126,6 @@ class FakeDataSeeder(
         journalId = journalId,
         dateEpochDay = epochDay,
         contractorId = contractorId,
-        // Колонки заморожены с v2 — содержимое пишется отдельно, в record_values.
-        locationCode = "",
-        workText = "",
         photoId = null,
         createdAt = createdAt,
         updatedAt = createdAt,

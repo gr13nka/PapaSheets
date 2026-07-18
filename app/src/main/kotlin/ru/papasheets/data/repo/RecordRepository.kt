@@ -65,9 +65,6 @@ class RecordRepository(
                 journalId = journalId,
                 dateEpochDay = dateEpochDay,
                 contractorId = contractorId,
-                // Колонки заморожены с v2: содержимое живёт в record_values, читать их больше нельзя.
-                locationCode = "",
-                workText = "",
                 photoId = photoId,
                 createdAt = now,
                 updatedAt = now,

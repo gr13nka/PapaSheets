@@ -29,13 +29,13 @@ fun ContractorEntity.toBackup() = BackupContractor(id, name, shortName, colorInd
 fun BackupContractor.toEntity() = ContractorEntity(id, name, shortName, colorIndex, orderIndex, isArchived, createdAt)
 
 /**
- * Замороженные `locationCode`/`workText` в обе стороны игнорируются: содержимое записи ездит в
- * `record_values`. При экспорте в них пишется `null` (формат v2 их не заполняет), при импорте — `""`,
- * ровно как их заводит `RecordRepository.createRecord`. Значения бэкапа v1 к этому моменту уже
- * развёрнуты в `recordValues` — этим занимается `BackupUpgrade` внутри `BackupReader`.
+ * `BackupRecord.locationCode`/`workText` живут только в формате v1 и здесь не участвуют ни в одну
+ * сторону: при экспорте остаются `null`, при импорте их содержимое к этому моменту уже развёрнуто
+ * в `recordValues` — этим занимается `BackupUpgrade` внутри `BackupReader`. В таблице `records`
+ * соответствующих колонок нет с v3.
  */
-fun RecordEntity.toBackup() = BackupRecord(id, journalId, dateEpochDay, contractorId, null, null, photoId, createdAt, updatedAt)
-fun BackupRecord.toEntity() = RecordEntity(id, journalId, dateEpochDay, contractorId, "", "", photoId, createdAt, updatedAt)
+fun RecordEntity.toBackup() = BackupRecord(id, journalId, dateEpochDay, contractorId, photoId = photoId, createdAt = createdAt, updatedAt = updatedAt)
+fun BackupRecord.toEntity() = RecordEntity(id, journalId, dateEpochDay, contractorId, photoId, createdAt, updatedAt)
 
 fun PhotoMeta.toBackup() = BackupPhoto(id, width, height, sizeBytes, originUri, createdAt)
 fun BackupPhoto.toMeta() = PhotoMeta(id, width, height, sizeBytes, originUri, createdAt)
