@@ -97,6 +97,16 @@ class MatrixState {
     /** Сдвиг pan на дельту пальца при неизменном zoom: контент следует за пальцем, поэтому pan уменьшается. */
     internal fun panBy(dx: Float, dy: Float) = setTransform(zoom, panX - dx, panY - dy)
 
+    /**
+     * Сбрасывает pan к началу мира на текущем зуме, отменяя любую текущую инерцию/анимацию. Нужен
+     * после перестройки раскладки, где старая позиция теряет смысл (например, разворот сортировки
+     * дат меняет порядок строк местами) — публичный вход для UI, в отличие от [setTransform].
+     */
+    fun jumpToStart() {
+        motionJob?.cancel()
+        setTransform(zoom, 0f, 0f)
+    }
+
     /** Клампит zoom по текущему контексту — нужен пивот-математике пинча, чтобы pan считался под тот же zoom, что запишется. */
     internal fun clampedZoom(zoom: Float): Float =
         geometry?.clampZoom(zoom, viewportW, viewportH) ?: zoom

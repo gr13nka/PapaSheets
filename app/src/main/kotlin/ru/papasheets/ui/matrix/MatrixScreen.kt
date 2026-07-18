@@ -64,6 +64,7 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
     )
     val journal by viewModel.journal.collectAsState()
     val gridModel by viewModel.gridModel.collectAsState()
+    val sortDesc by viewModel.sortDesc.collectAsState()
     val matrixState = rememberMatrixState()
     val scope = rememberCoroutineScope()
 
@@ -106,6 +107,18 @@ fun MatrixScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String)
                     TextButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
                 },
                 actions = {
+                    // Метка — текущий порядок дат сверху вниз (не целевой, в отличие от кнопки обзора
+                    // ниже): «↓» — новые сверху, «↑» — старые сверху. Перестройка раскладки меняет
+                    // порядок строк местами, поэтому pan сбрасывается к началу мира.
+                    TextButton(
+                        onClick = {
+                            viewModel.toggleSortDesc()
+                            matrixState.jumpToStart()
+                        },
+                    ) {
+                        Text(stringResource(if (sortDesc) R.string.matrix_sort_desc else R.string.matrix_sort_asc))
+                    }
+
                     // Кнопка обзора: тот же код-путь, что double-tap. «Месяц» уводит в fit («вся картина
                     // месяца»), «1:1» возвращает к детальному зуму. Метка следит за текущим ярусом зума.
                     val model = gridModel

@@ -11,6 +11,7 @@ import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.JournalRepository
+import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.LocationSuggester
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.photos.PhotoStore
@@ -46,5 +47,6 @@ class AppGraph(context: Context) {
     val recordRepository: RecordRepository by lazy { RecordRepository(database.recordDao()) }
     val contractorRepository: ContractorRepository by lazy { ContractorRepository(database.contractorDao()) }
     val locationSuggester: LocationSuggester by lazy { LocationSuggester(database.locationDao()) }
+    val locationRepository: LocationRepository by lazy { LocationRepository(database.locationDao()) }
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
 }

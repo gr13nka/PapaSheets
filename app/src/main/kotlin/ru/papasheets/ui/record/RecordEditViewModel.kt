@@ -9,12 +9,16 @@ import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.papasheets.data.db.entity.ContractorEntity
+import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.LocationSuggester
 import ru.papasheets.data.repo.RecordRepository
+import ru.papasheets.domain.ContinueYesterday
+import ru.papasheets.domain.buildContractorOptions
 import ru.papasheets.photos.PhotoSource
 import ru.papasheets.photos.PhotoStore
 
@@ -32,7 +36,13 @@ data class RecordEditUiState(
     val showPhotoError: Boolean = false,
     val showPhotoImportError: Boolean = false,
     val isLoaded: Boolean = false,
-)
+    /** Записи выбранного подрядчика за (дата формы − 1 день) в этом журнале; пусто вне режима создания. */
+    val yesterdayRecords: List<RecordEntity> = emptyList(),
+    val showContinuationPicker: Boolean = false,
+) {
+    /** Кнопка «Продолжить вчерашнее» активна, только когда есть из чего выбирать. */
+    val canContinueYesterday: Boolean get() = yesterdayRecords.isNotEmpty()
+}
 
 /**
  * Данные и валидация формы записи. Режим (создание/редактирование) задаётся один раз при
@@ -67,6 +77,13 @@ class RecordEditViewModel(
     /** Фото уже сохранённой записи (null для новой) — раньше этого момента "заменить"/"убрать" не удаляют файлы. */
     private var originalPhotoId: String? = null
 
+    /**
+     * Подрядчик редактируемой записи (null в режиме создания) — держит его в дропдауне через
+     * [buildContractorOptions], даже если он тем временем архивирован. Не переезжает при выборе
+     * пользователем другого подрядчика в форме — это личность ИСХОДНОЙ записи, а не текущий выбор.
+     */
+    private val currentContractorId = MutableStateFlow<String?>(null)
+
     private var pendingCameraUri: String?
         get() = savedStateHandle[KEY_PENDING_CAMERA_URI]
         set(value) {
@@ -75,14 +92,17 @@ class RecordEditViewModel(
 
     init {
         viewModelScope.launch {
-            contractorRepository.observeActive().collect { contractors ->
-                _uiState.update { it.copy(contractors = contractors) }
+            combine(contractorRepository.observeAll(), currentContractorId) { all, currentId ->
+                buildContractorOptions(all, currentId)
+            }.collect { options ->
+                _uiState.update { it.copy(contractors = options) }
             }
         }
         if (recordId != null) {
             viewModelScope.launch {
                 recordRepository.getById(recordId)?.let { existing ->
                     originalPhotoId = existing.photoId
+                    currentContractorId.value = existing.contractorId
                     _uiState.update {
                         it.copy(
                             date = LocalDate.ofEpochDay(existing.dateEpochDay),
@@ -95,15 +115,62 @@ class RecordEditViewModel(
                     }
                 }
             }
+        } else {
+            refreshContinuationCandidates()
         }
     }
 
     fun onDateSelected(date: LocalDate) {
         _uiState.update { it.copy(date = date) }
+        refreshContinuationCandidates()
     }
 
     fun onContractorSelected(contractorId: String) {
         _uiState.update { it.copy(selectedContractorId = contractorId, showContractorError = false) }
+        refreshContinuationCandidates()
+    }
+
+    /**
+     * «Продолжить вчерашнее»: одна вчерашняя запись подставляется сразу, несколько — открывают
+     * диалог выбора ([showContinuationPicker]); фото никогда не копируется (спец — новое фото
+     * каждый раз), дата формы не меняется.
+     */
+    fun onContinueYesterdayClicked() {
+        val records = _uiState.value.yesterdayRecords
+        val single = ContinueYesterday.singleCandidate(records)
+        when {
+            single != null -> applyContinuation(single)
+            records.isNotEmpty() -> _uiState.update { it.copy(showContinuationPicker = true) }
+        }
+    }
+
+    fun onContinuationPicked(record: RecordEntity) {
+        applyContinuation(record)
+        _uiState.update { it.copy(showContinuationPicker = false) }
+    }
+
+    fun onContinuationPickerDismissed() {
+        _uiState.update { it.copy(showContinuationPicker = false) }
+    }
+
+    private fun applyContinuation(record: RecordEntity) {
+        _uiState.update { it.copy(locationCode = record.locationCode, workText = record.workText) }
+    }
+
+    /** Только для создания новой записи — у редактируемой уже есть неизменные подрядчик/дата. */
+    private fun refreshContinuationCandidates() {
+        if (recordId != null) return
+        val jid = journalId ?: return
+        val contractorId = _uiState.value.selectedContractorId
+        if (contractorId == null) {
+            _uiState.update { it.copy(yesterdayRecords = emptyList()) }
+            return
+        }
+        val yesterday = ContinueYesterday.yesterday(_uiState.value.date.toEpochDay())
+        viewModelScope.launch {
+            val records = recordRepository.listByContractorAndDate(jid, contractorId, yesterday)
+            _uiState.update { it.copy(yesterdayRecords = records) }
+        }
     }
 
     fun onLocationChanged(text: String) {

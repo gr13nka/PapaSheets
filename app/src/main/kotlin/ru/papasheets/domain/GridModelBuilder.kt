@@ -18,6 +18,9 @@ private val SHORT_MONTHS = arrayOf(
  *
  * Правила (см. spec, «несколько строк на дату»):
  * - активные подрядчики по `orderIndex` становятся колонками слева направо;
+ * - архивный подрядчик с записями в этом журнале остаётся колонкой в конце (иначе его записи молча
+ *   исчезли бы из уже сведённого месяца) — колонка помечена [ContractorColumn.isArchived], архивный
+ *   без записей в колонки не попадает;
  * - записи группируются по дню; дни сортируются по [sortDesc];
  * - строк в дне = max(1, максимум записей одного подрядчика за этот день);
  * - записи подрядчика раскладываются сверху вниз по `createdAt` ASC;
@@ -30,7 +33,12 @@ fun buildGridModel(
     contractors: List<ContractorEntity>,
     sortDesc: Boolean,
 ): GridModel {
-    val columns = contractors.filter { !it.isArchived }.sortedBy { it.orderIndex }
+    val active = contractors.filter { !it.isArchived }.sortedBy { it.orderIndex }
+    val recordedContractorIds = records.map { it.contractorId }.toSet()
+    val archivedWithRecords = contractors
+        .filter { it.isArchived && it.id in recordedContractorIds }
+        .sortedBy { it.orderIndex }
+    val columns = active + archivedWithRecords
     val columnIndex = HashMap<String, Int>(columns.size)
     columns.forEachIndexed { index, contractor -> columnIndex[contractor.id] = index }
 
@@ -71,7 +79,7 @@ fun buildGridModel(
     }
 
     return GridModel(
-        contractors = columns.map { ContractorColumn(it.id, it.name, it.shortName, it.colorIndex) },
+        contractors = columns.map { ContractorColumn(it.id, it.name, it.shortName, it.colorIndex, it.isArchived) },
         rows = rows,
     )
 }

@@ -23,4 +23,8 @@ interface ContractorDao {
 
     @Update
     suspend fun update(contractor: ContractorEntity)
+
+    /** Пакетное обновление одной транзакцией — путь reorder'а (drag-n-drop меняет orderIndex у многих сразу). */
+    @Update
+    suspend fun updateAll(contractors: List<ContractorEntity>)
 }

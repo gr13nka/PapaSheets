@@ -303,13 +303,16 @@ internal class MatrixRenderer(
             val contractor = model.contractors[g]
             // Каждая шапка группы клипится своей колонкой: имя/подписи не должны затекать в соседа,
             // когда на слабом зуме кегль клампится, а колонка узкая.
+            // Архивный подрядчик остался колонкой только из-за записей в этом журнале — имя приглушено
+            // (secondaryText вместо headerText), чтобы шапка отличала его от активных без лишних меток.
+            val nameColor = if (contractor.isArchived) colors.secondaryText else colors.headerText
             clipRect(left, 0f, left + cellW, headerH) {
                 if (lod == Lod.LOD2) {
                     val short = cache.static(measurer, "s:" + contractor.id, contractor.shortName, styles.contractorName, nameWidth, 1)
-                    drawScaledLabel(short, colors.headerText, hs, left, cellW, 0f, headerH, center = true)
+                    drawScaledLabel(short, nameColor, hs, left, cellW, 0f, headerH, center = true)
                 } else {
                     val name = cache.static(measurer, contractor.id, contractor.name, styles.contractorName, nameWidth, 1)
-                    drawScaledLabel(name, colors.headerText, hs, left + geometry.cellPad * hs, cellW, 0f, nameRowH, center = false)
+                    drawScaledLabel(name, nameColor, hs, left + geometry.cellPad * hs, cellW, 0f, nameRowH, center = false)
                     val photoW = geometry.photoColW * zoom
                     val locW = geometry.locColW * zoom
                     val workW = geometry.workColW * zoom

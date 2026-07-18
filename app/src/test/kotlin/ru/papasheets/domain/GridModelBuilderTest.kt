@@ -73,18 +73,38 @@ class GridModelBuilderTest {
     }
 
     @Test
-    fun `archived contractors and their records are excluded`() {
+    fun `archived contractor without records in this journal is excluded`() {
         val contractors = listOf(contractor("A", 0), contractor("B", 1, archived = true))
-        val records = listOf(
-            record("a1", day1, "A", createdAt = 100),
-            record("b1", day1, "B", createdAt = 150),
-        )
+        val records = listOf(record("a1", day1, "A", createdAt = 100))
 
         val model = buildGridModel(records, contractors, sortDesc = false)
 
         assertEquals(listOf("A"), model.contractors.map { it.id })
-        assertEquals(1, model.rows.size)
         assertEquals(1, model.rows[0].cells.size)
-        assertEquals("a1", model.rows[0].cells[0]?.recordId)
+    }
+
+    @Test
+    fun `archived contractor with records stays as a trailing flagged column`() {
+        // B архивирован ПОСЛЕ того, как на нём появились записи в этом журнале — его колонка не должна
+        // молча пропасть из уже сведённого месяца (см. GridModelBuilder).
+        val contractors = listOf(contractor("A", 0), contractor("B", 1, archived = true), contractor("C", 2))
+        val records = listOf(
+            record("a1", day1, "A", createdAt = 100),
+            record("b1", day1, "B", createdAt = 150),
+            record("c1", day1, "C", createdAt = 200),
+        )
+
+        val model = buildGridModel(records, contractors, sortDesc = false)
+
+        // Активные (A, C) по orderIndex первыми, архивный с записями (B) — в конце.
+        assertEquals(listOf("A", "C", "B"), model.contractors.map { it.id })
+        assertFalse(model.contractors[0].isArchived)
+        assertFalse(model.contractors[1].isArchived)
+        assertTrue(model.contractors[2].isArchived)
+
+        val row = model.rows[0]
+        assertEquals("a1", row.cells[0]?.recordId)
+        assertEquals("c1", row.cells[1]?.recordId)
+        assertEquals("b1", row.cells[2]?.recordId)
     }
 }

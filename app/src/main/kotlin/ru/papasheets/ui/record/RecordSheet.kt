@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -55,6 +56,8 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import ru.papasheets.R
+import ru.papasheets.domain.ContinueYesterday
+import ru.papasheets.domain.contractorDisplayName
 import ru.papasheets.photos.CameraCapture
 import ru.papasheets.photos.GalleryPick
 import ru.papasheets.ui.LocalAppGraph
@@ -175,6 +178,17 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 }
             }
 
+            // Только при создании: редактируемая запись уже имеет свои дату/подрядчика/текст.
+            if (mode is RecordSheetMode.Create) {
+                OutlinedButton(
+                    onClick = viewModel::onContinueYesterdayClicked,
+                    enabled = state.canContinueYesterday,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.record_continue_yesterday))
+                }
+            }
+
             var contractorExpanded by remember { mutableStateOf(false) }
             val selectedContractor = state.contractors.find { it.id == state.selectedContractorId }
             ExposedDropdownMenuBox(
@@ -182,7 +196,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 onExpandedChange = { contractorExpanded = it },
             ) {
                 OutlinedTextField(
-                    value = selectedContractor?.name ?: "",
+                    value = selectedContractor?.let(::contractorDisplayName) ?: "",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text(stringResource(R.string.record_contractor_label)) },
@@ -203,7 +217,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 ) {
                     state.contractors.forEach { contractor ->
                         DropdownMenuItem(
-                            text = { Text(contractor.name) },
+                            text = { Text(contractorDisplayName(contractor)) },
                             onClick = {
                                 viewModel.onContractorSelected(contractor.id)
                                 contractorExpanded = false
@@ -286,6 +300,30 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 }
             }
         }
+    }
+
+    if (state.showContinuationPicker) {
+        AlertDialog(
+            onDismissRequest = viewModel::onContinuationPickerDismissed,
+            title = { Text(stringResource(R.string.record_continue_yesterday_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    state.yesterdayRecords.forEach { record ->
+                        TextButton(
+                            onClick = { viewModel.onContinuationPicked(record) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(ContinueYesterday.preview(record), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::onContinuationPickerDismissed) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 

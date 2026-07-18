@@ -10,6 +10,10 @@ class RecordRepository(private val dao: RecordDao) {
 
     suspend fun getById(id: String): RecordEntity? = dao.getById(id)
 
+    /** Записи подрядчика за конкретный день этого журнала — источник для «продолжить вчерашнее» (M5). */
+    suspend fun listByContractorAndDate(journalId: String, contractorId: String, dateEpochDay: Long): List<RecordEntity> =
+        dao.listByContractorAndDate(journalId, contractorId, dateEpochDay)
+
     suspend fun createRecord(
         journalId: String,
         dateEpochDay: Long,

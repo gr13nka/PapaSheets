@@ -10,10 +10,14 @@ import ru.papasheets.ui.daylist.DayListScreen
 import ru.papasheets.ui.journals.JournalListScreen
 import ru.papasheets.ui.lightbox.LightboxScreen
 import ru.papasheets.ui.matrix.MatrixScreen
+import ru.papasheets.ui.settings.ContractorsScreen
+import ru.papasheets.ui.settings.LocationsScreen
 
 private const val ARG_JOURNAL_ID = "journalId"
 private const val ROUTE_JOURNALS = "journals"
 private const val ROUTE_JOURNAL = "journal/{$ARG_JOURNAL_ID}"
+private const val ROUTE_SETTINGS_CONTRACTORS = "settings/contractors"
+private const val ROUTE_SETTINGS_LOCATIONS = "settings/locations"
 
 /** Debug-маршрут: плоский список записей того же журнала. Кнопки на него из UI нет — только по URL. */
 private const val ROUTE_JOURNAL_LIST = "journal/{$ARG_JOURNAL_ID}/list"
@@ -27,7 +31,15 @@ fun AppNav() {
         composable(ROUTE_JOURNALS) {
             JournalListScreen(
                 onOpenJournal = { journalId -> navController.navigate("journal/$journalId") },
+                onOpenContractors = { navController.navigate(ROUTE_SETTINGS_CONTRACTORS) },
+                onOpenLocations = { navController.navigate(ROUTE_SETTINGS_LOCATIONS) },
             )
+        }
+        composable(ROUTE_SETTINGS_CONTRACTORS) {
+            ContractorsScreen(onBack = { navController.popBackStack() })
+        }
+        composable(ROUTE_SETTINGS_LOCATIONS) {
+            LocationsScreen(onBack = { navController.popBackStack() })
         }
         composable(
             route = ROUTE_JOURNAL,

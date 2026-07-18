@@ -18,6 +18,11 @@
 
     <string name="matrix_zoom_overview">Месяц</string>
     <string name="matrix_zoom_detail">1:1</string>
+    <string name="matrix_sort_desc">↓ даты</string>
+    <string name="matrix_sort_asc">↑ даты</string>
+
+    <string name="settings_contractors">Подрядчики</string>
+    <string name="settings_locations">Локации</string>
 
     <string name="record_delete_confirm_title">Удалить запись?</string>
     <string name="record_delete_confirm_message">Это действие нельзя отменить.</string>
@@ -35,8 +40,26 @@
     <string name="record_photo_processing">Обработка фото…</string>
     <string name="record_validation_photo_required">Добавьте фото</string>
     <string name="record_photo_import_error">Не удалось обработать фото, попробуйте ещё раз</string>
+    <string name="record_continue_yesterday">Продолжить вчерашнее</string>
+    <string name="record_continue_yesterday_dialog_title">Выберите запись</string>
 
     <string name="lightbox_close">Закрыть</string>
+
+    <string name="contractors_title">Подрядчики</string>
+    <string name="contractors_archived_section">Архив (%d)</string>
+    <string name="contractors_archive_action">В архив</string>
+    <string name="contractors_unarchive_action">Вернуть</string>
+    <string name="contractors_rename_action">Изменить</string>
+    <string name="contractors_add_title">Новый подрядчик</string>
+    <string name="contractors_edit_title">Изменить подрядчика</string>
+    <string name="contractors_name_label">Имя</string>
+    <string name="contractors_short_name_label">Короткое имя (до 4 символов)</string>
+    <string name="contractors_empty">Пока нет подрядчиков</string>
+
+    <string name="locations_title">Локации</string>
+    <string name="locations_add_title">Новая локация</string>
+    <string name="locations_code_label">Код локации</string>
+    <string name="locations_empty">Пока нет пресетов локаций</string>
 
     <string-array name="month_names_nominative">
         <item>Январь</item>

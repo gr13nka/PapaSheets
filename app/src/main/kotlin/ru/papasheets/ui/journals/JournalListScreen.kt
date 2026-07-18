@@ -14,12 +14,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -45,7 +48,11 @@ import ru.papasheets.ui.LocalAppGraph
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JournalListScreen(onOpenJournal: (String) -> Unit) {
+fun JournalListScreen(
+    onOpenJournal: (String) -> Unit,
+    onOpenContractors: () -> Unit,
+    onOpenLocations: () -> Unit,
+) {
     val graph = LocalAppGraph.current
     val viewModel: JournalListViewModel = viewModel(
         factory = viewModelFactory {
@@ -74,7 +81,23 @@ fun JournalListScreen(onOpenJournal: (String) -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.journals_title)) })
+            TopAppBar(
+                title = { Text(stringResource(R.string.journals_title)) },
+                actions = {
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    TextButton(onClick = { menuExpanded = true }) { Text("⋮") }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.settings_contractors)) },
+                            onClick = { menuExpanded = false; onOpenContractors() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.settings_locations)) },
+                            onClick = { menuExpanded = false; onOpenLocations() },
+                        )
+                    }
+                },
+            )
         },
         floatingActionButton = {
             NewJournalFab(onClick = { showMonthPicker = true }, onLongPress = seedFakeData)

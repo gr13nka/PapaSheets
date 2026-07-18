@@ -23,6 +23,8 @@ class ContractorColumn(
     val shortName: String,
     /** Индекс в палитре модуля (см. [ContractorPalette]) — цвет блоков LOD2 и тонировки ячеек. */
     val colorIndex: Int,
+    /** Архивный подрядчик, оставленный колонкой только из-за записей в этом журнале — имя в шапке приглушено. */
+    val isArchived: Boolean = false,
 )
 
 class GridRow(
