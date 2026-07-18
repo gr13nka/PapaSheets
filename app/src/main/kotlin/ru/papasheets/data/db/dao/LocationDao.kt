@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import ru.papasheets.data.db.entity.LocationPresetEntity
 
@@ -17,6 +18,10 @@ interface LocationDao {
 
     @Delete
     suspend fun delete(preset: LocationPresetEntity)
+
+    /** Upsert — восстановление бэкапа (M7): это не двусторонний sync, импортируемая строка побеждает. */
+    @Upsert
+    suspend fun upsertFromBackup(preset: LocationPresetEntity)
 
     /** Самые недавно использованные коды локаций с заданным префиксом — история для автодополнения. */
     @Query(

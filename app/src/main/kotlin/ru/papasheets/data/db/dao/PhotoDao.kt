@@ -19,4 +19,8 @@ interface PhotoDao {
     /** Все id — основа для сверки с файлами на диске в PhotoStore.collectGarbage(). */
     @Query("SELECT id FROM photos")
     suspend fun listAllIds(): List<String>
+
+    /** Все строки как есть — источник данных для полного бэкапа (M7). Фото иммутабельны, upsert не нужен. */
+    @Query("SELECT * FROM photos")
+    suspend fun getAll(): List<PhotoEntity>
 }

@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import ru.papasheets.data.db.entity.RecordEntity
 
@@ -21,6 +22,10 @@ interface RecordDao {
     @Query("SELECT * FROM records WHERE journalId = :journalId AND contractorId = :contractorId AND dateEpochDay = :dateEpochDay")
     suspend fun listByContractorAndDate(journalId: String, contractorId: String, dateEpochDay: Long): List<RecordEntity>
 
+    /** Все записи всех журналов как есть — источник данных для полного бэкапа (M7). */
+    @Query("SELECT * FROM records")
+    suspend fun getAll(): List<RecordEntity>
+
     @Insert
     suspend fun insert(record: RecordEntity)
 
@@ -30,6 +35,10 @@ interface RecordDao {
 
     @Update
     suspend fun update(record: RecordEntity)
+
+    /** Upsert — восстановление бэкапа (M7): побеждает более свежий updatedAt, решение уже принято вызывающей стороной. */
+    @Upsert
+    suspend fun upsertFromBackup(record: RecordEntity)
 
     @Delete
     suspend fun delete(record: RecordEntity)

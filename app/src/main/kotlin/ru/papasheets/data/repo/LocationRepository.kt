@@ -13,6 +13,9 @@ import ru.papasheets.data.db.entity.LocationPresetEntity
 class LocationRepository(private val dao: LocationDao) {
     fun observePresets(): Flow<List<LocationPresetEntity>> = dao.observePresets()
 
+    /** Полный список пресетов — источник данных для бэкапа (M7). */
+    suspend fun getAll(): List<LocationPresetEntity> = dao.observePresets().first()
+
     /** Новый пресет в конец списка — reorder не нужен (spec: порядок = порядок добавления). */
     suspend fun add(code: String) {
         val trimmed = code.trim()
@@ -22,4 +25,7 @@ class LocationRepository(private val dao: LocationDao) {
     }
 
     suspend fun delete(preset: LocationPresetEntity) = dao.delete(preset)
+
+    /** Восстанавливает пресет из бэкапа как есть (id/поля уже решены [ru.papasheets.domain.backup.MergeRules]). */
+    suspend fun upsertFromBackup(preset: LocationPresetEntity) = dao.upsertFromBackup(preset)
 }

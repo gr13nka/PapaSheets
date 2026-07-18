@@ -34,6 +34,25 @@ class PhotoStore(context: Context, private val photoDao: PhotoDao) {
         photoDao.getById(id)?.let { PhotoMeta(it.id, it.width, it.height, it.sizeBytes) }
     }
 
+    /** Все строки метаданных как есть — источник данных для полного бэкапа (M7), больше нигде не используется. */
+    suspend fun getAllMeta(): List<PhotoMeta> = withContext(Dispatchers.IO) {
+        photoDao.getAll().map { PhotoMeta(it.id, it.width, it.height, it.sizeBytes, it.originUri, it.createdAt) }
+    }
+
+    /** Есть ли уже строка метаданных с этим id — восстановление бэкапа (M7) решает по этому флагу, писать файлы/строку или пропустить (фото иммутабельны). */
+    suspend fun exists(id: String): Boolean = withContext(Dispatchers.IO) { photoDao.getById(id) != null }
+
+    /**
+     * Вставляет строку метаданных из бэкапа, если её ещё нет — путь восстановления (M7). Байты файлов
+     * уже скопированы в [mediumFile]/[thumbFile] отдельно (см. [ImportInteractor][ru.papasheets.domain.backup.ImportInteractor]);
+     * здесь только регистрация в БД. Существующую строку не трогает — фото иммутабельны.
+     */
+    suspend fun insertMetaIfAbsent(meta: PhotoMeta): Boolean = withContext(Dispatchers.IO) {
+        if (photoDao.getById(meta.id) != null) return@withContext false
+        photoDao.insert(PhotoEntity(meta.id, meta.width, meta.height, meta.sizeBytes, meta.originUri, meta.createdAt))
+        true
+    }
+
     /** Декодирует+сжимает [source] и заводит строку в БД. Файлы пишутся первыми: при сбое — подчищаются. */
     suspend fun import(source: PhotoSource): PhotoMeta = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString()

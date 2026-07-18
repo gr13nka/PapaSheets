@@ -17,6 +17,9 @@ class ContractorRepository(private val dao: ContractorDao) {
 
     suspend fun getById(id: String): ContractorEntity? = dao.getById(id)
 
+    /** Полный список (включая архивных) — источник данных для бэкапа (M7). */
+    suspend fun getAll(): List<ContractorEntity> = dao.observeAll().first()
+
     suspend fun insert(contractor: ContractorEntity) = dao.insert(contractor)
 
     suspend fun update(contractor: ContractorEntity) = dao.update(contractor)
@@ -48,4 +51,16 @@ class ContractorRepository(private val dao: ContractorDao) {
     /** Персистит новый порядок drag-reorder'а: orderIndex = позиция в списке. */
     suspend fun reorder(ordered: List<ContractorEntity>) =
         dao.updateAll(ordered.mapIndexed { index, contractor -> contractor.copy(orderIndex = index) })
+
+    /** Восстанавливает подрядчика из бэкапа как есть (id/поля уже решены [ru.papasheets.domain.backup.MergeRules]). */
+    suspend fun upsertFromBackup(contractor: ContractorEntity) = dao.upsertFromBackup(contractor)
+
+    /**
+     * Стирает весь пул подрядчиков — узкий путь для [ru.papasheets.domain.backup.ImportInteractor]:
+     * восстановление бэкапа на нетронутом устройстве (ни одного журнала/записи) находит здесь только
+     * одноразовую заглушку [ru.papasheets.data.DefaultSeed], которую безопасно заменить целиком, а не
+     * сливать по id — иначе те же 5 подрядчиков задваивались бы под новыми UUID сида. Не для общего
+     * использования (не проверяет ссылки от записей).
+     */
+    suspend fun deleteAll() = dao.deleteAll()
 }

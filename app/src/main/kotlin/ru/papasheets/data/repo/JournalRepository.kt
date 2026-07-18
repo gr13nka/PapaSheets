@@ -17,6 +17,9 @@ class JournalRepository(
 
     suspend fun getById(id: String): JournalEntity? = dao.getById(id)
 
+    /** Полный список журналов — источник данных для бэкапа (M7). */
+    suspend fun getAll(): List<JournalEntity> = dao.getAll()
+
     /** Возвращает существующий журнал месяца, если он уже есть, иначе создаёт новый — never падает на unique(year,month). */
     suspend fun createOrGetJournal(year: Int, month: Int): JournalEntity {
         dao.getByYearMonth(year, month)?.let { return it }
@@ -30,4 +33,7 @@ class JournalRepository(
         dao.insert(journal)
         return journal
     }
+
+    /** Восстанавливает журнал из бэкапа как есть (id/поля уже решены [ru.papasheets.domain.backup.MergeRules]). */
+    suspend fun upsertFromBackup(journal: JournalEntity) = dao.upsertFromBackup(journal)
 }

@@ -2,6 +2,7 @@ package ru.papasheets
 
 import android.app.Application
 import android.content.Context
+import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -9,11 +10,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
+import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.LocationRepository
 import ru.papasheets.data.repo.LocationSuggester
 import ru.papasheets.data.repo.RecordRepository
+import ru.papasheets.domain.backup.BackupInteractor
+import ru.papasheets.domain.backup.ImportInteractor
 import ru.papasheets.domain.export.ExportInteractor
 import ru.papasheets.photos.PhotoStore
 
@@ -52,5 +56,21 @@ class AppGraph(context: Context) {
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
     val exportInteractor: ExportInteractor by lazy {
         ExportInteractor(journalRepository, recordRepository, contractorRepository, photoStore, appContext)
+    }
+
+    /** Единственное место, где виден [database] целиком — восстановлению бэкапа (M7) нужна одна транзакция сразу по нескольким репозиториям. */
+    private val transactionRunner: TransactionRunner by lazy {
+        object : TransactionRunner {
+            override suspend fun <T> run(block: suspend () -> T): T = database.withTransaction(block)
+        }
+    }
+    val backupInteractor: BackupInteractor by lazy {
+        BackupInteractor(journalRepository, contractorRepository, recordRepository, locationRepository, photoStore, appContext)
+    }
+    val importInteractor: ImportInteractor by lazy {
+        ImportInteractor(
+            journalRepository, contractorRepository, recordRepository, locationRepository,
+            photoStore, transactionRunner, appContext,
+        )
     }
 }

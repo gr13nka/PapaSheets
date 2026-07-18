@@ -3,6 +3,7 @@ package ru.papasheets.data.db.dao
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import ru.papasheets.data.db.entity.JournalEntity
 
@@ -39,6 +40,19 @@ interface JournalDao {
     @Query("SELECT * FROM journals WHERE year = :year AND month = :month LIMIT 1")
     suspend fun getByYearMonth(year: Int, month: Int): JournalEntity?
 
+    /** Все журналы как есть — источник данных для полного бэкапа (M7). */
+    @Query("SELECT * FROM journals")
+    suspend fun getAll(): List<JournalEntity>
+
     @Insert
     suspend fun insert(journal: JournalEntity)
+
+    /**
+     * Upsert, не `@Insert(onConflict = REPLACE)` — REPLACE в SQLite это DELETE+INSERT, а DELETE
+     * каскадно уносит все записи этого журнала ([ru.papasheets.data.db.entity.RecordEntity] — CASCADE
+     * по journalId). @Upsert делает UPDATE по конфликту, строку не трогая — что и нужно восстановлению
+     * бэкапа (M7): это не двусторонний sync, импортируемая версия побеждает, но её дети должны выжить.
+     */
+    @Upsert
+    suspend fun upsertFromBackup(journal: JournalEntity)
 }

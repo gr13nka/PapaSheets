@@ -14,6 +14,9 @@ class RecordRepository(private val dao: RecordDao) {
     suspend fun listByContractorAndDate(journalId: String, contractorId: String, dateEpochDay: Long): List<RecordEntity> =
         dao.listByContractorAndDate(journalId, contractorId, dateEpochDay)
 
+    /** Все записи всех журналов — источник данных для бэкапа (M7). */
+    suspend fun getAll(): List<RecordEntity> = dao.getAll()
+
     suspend fun createRecord(
         journalId: String,
         dateEpochDay: Long,
@@ -62,4 +65,7 @@ class RecordRepository(private val dao: RecordDao) {
 
     /** Пакетная вставка готовых записей одной транзакцией — используется генератором тестовых данных. */
     suspend fun insertAll(records: List<RecordEntity>) = dao.insertAll(records)
+
+    /** Восстанавливает запись из бэкапа как есть (побеждающая версия уже решена [ru.papasheets.domain.backup.MergeRules]). */
+    suspend fun upsertFromBackup(record: RecordEntity) = dao.upsertFromBackup(record)
 }
