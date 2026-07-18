@@ -16,15 +16,16 @@ private const val COL_PHOTO_WIDTH = 5.75
  * текст листа; [hasDrawing] решает, ссылаться ли на drawing1.xml и задавать ли высоту строк с фото
  * (вариант «без фото» игнорирует photoId в ячейках полностью, даже если он проставлен).
  *
- * Группа подрядчика = Ф плюс по колонке на каждое поле снимка; ширина группы считается один раз
- * (`groupCols`) и передаётся дальше, чтобы шаг колонок нельзя было задать в двух местах по-разному.
+ * Где что лежит — в [MatrixSheetLayout]: те же формулы читает
+ * [ru.papasheets.exportkit.xlsx.read.XlsxReader], поэтому задавать шаг колонок здесь заново нельзя.
+ * Ширина группы считается один раз (`groupCols`) и передаётся дальше по вызовам.
  */
 internal object SheetXml {
     fun build(snapshot: JournalSnapshot, hasDrawing: Boolean): String {
         val contractorCount = snapshot.contractors.size
-        val groupCols = 1 + snapshot.fields.size
-        val colCount = 1 + groupCols * contractorCount
-        val lastRow = 2 + snapshot.days.sumOf { it.rows.size }
+        val groupCols = MatrixSheetLayout.groupWidth(snapshot.fields.size)
+        val colCount = MatrixSheetLayout.totalColumns(contractorCount, groupCols)
+        val lastRow = MatrixSheetLayout.FIELD_HEADER_ROW + snapshot.days.sumOf { it.rows.size }
 
         return buildString {
             append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
@@ -55,12 +56,12 @@ internal object SheetXml {
 
     private fun StringBuilder.appendCols(snapshot: JournalSnapshot, groupCols: Int) {
         append("<cols>")
-        append(col(1, COL_DATE_WIDTH))
-        var col = 2
-        repeat(snapshot.contractors.size) {
-            append(col(col, COL_PHOTO_WIDTH))
-            snapshot.fields.forEachIndexed { index, field -> append(col(col + 1 + index, field.widthChars)) }
-            col += groupCols
+        append(col(MatrixSheetLayout.DATE_COLUMN, COL_DATE_WIDTH))
+        snapshot.contractors.indices.forEach { contractorIndex ->
+            append(col(MatrixSheetLayout.photoColumn(contractorIndex, groupCols), COL_PHOTO_WIDTH))
+            snapshot.fields.forEachIndexed { index, field ->
+                append(col(MatrixSheetLayout.fieldColumn(contractorIndex, index, groupCols), field.widthChars))
+            }
         }
         append("</cols>")
     }
@@ -70,33 +71,33 @@ internal object SheetXml {
 
     private fun StringBuilder.appendHeaderRows(snapshot: JournalSnapshot, groupCols: Int) {
         // Строка 1: «ДАТА» (merge A1:A2) + имя подрядчика на группу (merge всей группы, см. appendMergeCells).
-        append("<row r=\"1\">")
-        append(cell(ref(1, 1), STYLE_HEADER_BOLD, "ДАТА"))
-        var col = 2
-        for (contractor in snapshot.contractors) {
-            append(cell(ref(col, 1), STYLE_HEADER_BOLD, contractor.name))
-            for (index in snapshot.fields.indices) append(emptyCell(ref(col + 1 + index, 1), STYLE_DEFAULT))
-            col += groupCols
+        val contractorRow = MatrixSheetLayout.CONTRACTOR_HEADER_ROW
+        append("<row r=\"$contractorRow\">")
+        append(cell(ref(MatrixSheetLayout.DATE_COLUMN, contractorRow), STYLE_HEADER_BOLD, "ДАТА"))
+        snapshot.contractors.forEachIndexed { contractorIndex, contractor ->
+            append(cell(ref(MatrixSheetLayout.photoColumn(contractorIndex, groupCols), contractorRow), STYLE_HEADER_BOLD, contractor.name))
+            for (index in snapshot.fields.indices) {
+                append(emptyCell(ref(MatrixSheetLayout.fieldColumn(contractorIndex, index, groupCols), contractorRow), STYLE_DEFAULT))
+            }
         }
         append("</row>")
 
         // Строка 2: Ф и подписи полей на группу; A2 пустая — вторая половина merge A1:A2.
-        append("<row r=\"2\" ht=\"19.5\" customHeight=\"1\">")
-        append(emptyCell(ref(1, 2), STYLE_DEFAULT))
-        col = 2
-        repeat(snapshot.contractors.size) {
-            append(cell(ref(col, 2), STYLE_HEADER_LABEL, "Ф"))
+        val fieldRow = MatrixSheetLayout.FIELD_HEADER_ROW
+        append("<row r=\"$fieldRow\" ht=\"19.5\" customHeight=\"1\">")
+        append(emptyCell(ref(MatrixSheetLayout.DATE_COLUMN, fieldRow), STYLE_DEFAULT))
+        snapshot.contractors.indices.forEach { contractorIndex ->
+            append(cell(ref(MatrixSheetLayout.photoColumn(contractorIndex, groupCols), fieldRow), STYLE_HEADER_LABEL, MatrixSheetLayout.PHOTO_LABEL))
             snapshot.fields.forEachIndexed { index, field ->
-                append(cell(ref(col + 1 + index, 2), STYLE_HEADER_LABEL, field.title))
+                append(cell(ref(MatrixSheetLayout.fieldColumn(contractorIndex, index, groupCols), fieldRow), STYLE_HEADER_LABEL, field.title))
             }
-            col += groupCols
         }
         append("</row>")
     }
 
     private fun StringBuilder.appendDataRows(snapshot: JournalSnapshot, hasDrawing: Boolean, groupCols: Int) {
         val fields = snapshot.fields
-        var rowNum = 3
+        var rowNum = MatrixSheetLayout.FIRST_DATA_ROW
         for (day in snapshot.days) {
             for (row in day.rows) {
                 val rowHasPhoto = hasDrawing && row.cells.any { it?.photoId != null }
@@ -106,18 +107,16 @@ internal object SheetXml {
                     // Без customHeight Excel сам подгоняет высоту под перенесённый текст — точнее нашей оценки.
                     append("<row r=\"$rowNum\">")
                 }
-                append(cell(ref(1, rowNum), STYLE_DEFAULT, day.dateLabel))
-                var col = 2
-                for (cellValue in row.cells) {
+                append(cell(ref(MatrixSheetLayout.DATE_COLUMN, rowNum), STYLE_DEFAULT, day.dateLabel))
+                row.cells.forEachIndexed { contractorIndex, cellValue ->
                     // Ф — только якорь фото (см. drawing), без собственного текста.
-                    append(emptyCell(ref(col, rowNum), STYLE_DEFAULT))
+                    append(emptyCell(ref(MatrixSheetLayout.photoColumn(contractorIndex, groupCols), rowNum), STYLE_DEFAULT))
                     fields.forEachIndexed { index, field ->
                         val style = if (field.wrap) STYLE_WRAP else STYLE_DEFAULT
-                        val cellRef = ref(col + 1 + index, rowNum)
+                        val cellRef = ref(MatrixSheetLayout.fieldColumn(contractorIndex, index, groupCols), rowNum)
                         val text = cellValue?.values?.getOrElse(index) { "" }
                         append(if (text == null) emptyCell(cellRef, style) else cell(cellRef, style, text))
                     }
-                    col += groupCols
                 }
                 append("</row>")
                 rowNum++
@@ -130,12 +129,15 @@ internal object SheetXml {
         // реально выведенных элементов — поэтому при пустом наборе полей (вся группа = одна колонка Ф)
         // групповые merge не выводятся вовсе.
         val groupMerges = if (groupCols > 1) contractorCount else 0
+        val headerRow = MatrixSheetLayout.CONTRACTOR_HEADER_ROW
         append("""<mergeCells count="${1 + groupMerges}">""")
-        append("""<mergeCell ref="A1:A2"/>""")
-        var col = 2
-        repeat(groupMerges) {
-            append("""<mergeCell ref="${ref(col, 1)}:${ref(col + groupCols - 1, 1)}"/>""")
-            col += groupCols
+        append(
+            """<mergeCell ref="${ref(MatrixSheetLayout.DATE_COLUMN, headerRow)}:""" +
+                """${ref(MatrixSheetLayout.DATE_COLUMN, MatrixSheetLayout.FIELD_HEADER_ROW)}"/>""",
+        )
+        repeat(groupMerges) { contractorIndex ->
+            val first = MatrixSheetLayout.photoColumn(contractorIndex, groupCols)
+            append("""<mergeCell ref="${ref(first, headerRow)}:${ref(first + groupCols - 1, headerRow)}"/>""")
         }
         append("</mergeCells>")
     }
@@ -159,15 +161,5 @@ internal object SheetXml {
 
     private fun ref(col: Int, row: Int): String = "${columnLetter(col)}$row"
 
-    /** 1-based номер колонки → буквенная ссылка Excel (1→A, 27→AA, …). */
-    private fun columnLetter(oneIndexed: Int): String {
-        var n = oneIndexed
-        val sb = StringBuilder()
-        while (n > 0) {
-            val rem = (n - 1) % 26
-            sb.insert(0, 'A' + rem)
-            n = (n - 1) / 26
-        }
-        return sb.toString()
-    }
+    private fun columnLetter(oneIndexed: Int): String = MatrixSheetLayout.columnLetter(oneIndexed)
 }

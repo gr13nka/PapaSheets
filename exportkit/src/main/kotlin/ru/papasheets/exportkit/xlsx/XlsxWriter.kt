@@ -47,17 +47,16 @@ object XlsxWriter {
     }
 
     /**
-     * Один проход по снимку: якорь на Ф-ячейку каждой записи с фото (Ф-колонка группы =
-     * `1 + groupCols*colIndex`, первая строка данных = абсолютная строка листа 3 → 0-based 2,
-     * см. [SheetXml]), размер — из реальных пикселей фото ([PhotoBytesProvider.size]) с сохранением
-     * пропорций. Ширина группы обязана совпадать с той, по которой [SheetXml] раскладывает колонки,
-     * иначе фото окажутся в чужих колонках.
+     * Один проход по снимку: якорь на Ф-ячейку каждой записи с фото, размер — из реальных пикселей
+     * фото ([PhotoBytesProvider.size]) с сохранением пропорций. Координаты якоря (0-based, как их
+     * адресует DrawingML) считает [MatrixSheetLayout] — тот же, по которому [SheetXml] раскладывает
+     * колонки, иначе фото оказались бы в чужих.
      */
     private fun collectAnchors(snapshot: JournalSnapshot, photos: PhotoBytesProvider): List<PhotoAnchor> {
         val anchors = ArrayList<PhotoAnchor>()
         val cy = Emu.fromPoints(PHOTO_DISPLAY_HEIGHT_PT)
-        val groupCols = 1 + snapshot.fields.size
-        var rowIndex = 2
+        val groupCols = MatrixSheetLayout.groupWidth(snapshot.fields.size)
+        var dataRowIndex = 0
         for (day in snapshot.days) {
             for (row in day.rows) {
                 row.cells.forEachIndexed { colIndex, cellValue ->
@@ -66,8 +65,8 @@ object XlsxWriter {
                         val (width, height) = photos.size(photoId)
                         val cx = Math.round(cy * (width.toDouble() / height.toDouble()))
                         anchors += PhotoAnchor(
-                            col = 1 + groupCols * colIndex,
-                            row = rowIndex,
+                            col = MatrixSheetLayout.anchorColumn(colIndex, groupCols),
+                            row = MatrixSheetLayout.anchorRow(dataRowIndex),
                             rId = "rId${anchors.size + 1}",
                             extCx = cx,
                             extCy = cy,
@@ -75,7 +74,7 @@ object XlsxWriter {
                         )
                     }
                 }
-                rowIndex++
+                dataRowIndex++
             }
         }
         return anchors
