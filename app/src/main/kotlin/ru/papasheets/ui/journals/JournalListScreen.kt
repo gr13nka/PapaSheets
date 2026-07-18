@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +56,8 @@ import ru.papasheets.data.FakeDataSeeder
 import ru.papasheets.data.db.dao.JournalWithStats
 import ru.papasheets.domain.backup.BackupImportResult
 import ru.papasheets.domain.backup.MergeStats
+import ru.papasheets.domain.xlsx.ImportFileTypeDetector
+import ru.papasheets.domain.xlsx.XlsxImportPreview
 import ru.papasheets.ui.LocalAppGraph
 
 private const val MIME_BACKUP = "application/octet-stream"
@@ -71,7 +75,8 @@ fun JournalListScreen(
             initializer {
                 JournalListViewModel(
                     graph.journalRepository, graph.backupInteractor, graph.importInteractor,
-                    graph.deleteJournalInteractor,
+                    graph.xlsxImportInteractor, graph.deleteJournalInteractor,
+                    detectFileType = { uri -> ImportFileTypeDetector.detect(graph.appContext, uri) },
                 )
             }
         },
@@ -80,6 +85,7 @@ fun JournalListScreen(
     val busy by viewModel.busy.collectAsState()
     var showMonthPicker by remember { mutableStateOf(false) }
     var importResult by remember { mutableStateOf<BackupImportResult?>(null) }
+    var xlsxPreview by remember { mutableStateOf<XlsxImportPreview?>(null) }
     var journalPendingDelete by remember { mutableStateOf<JournalWithStats?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -106,6 +112,17 @@ fun JournalListScreen(
                 is BackupUiEvent.ImportDone -> importResult = event.result
                 is BackupUiEvent.ImportFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
                 is BackupUiEvent.DeleteFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
+                is BackupUiEvent.XlsxPreviewReady -> xlsxPreview = event.preview
+                is BackupUiEvent.XlsxImportDone -> Toast.makeText(
+                    context,
+                    context.getString(
+                        R.string.xlsx_import_done,
+                        event.result.journalTitle,
+                        event.result.importedRecords,
+                        event.result.importedPhotos,
+                    ),
+                    Toast.LENGTH_LONG,
+                ).show()
             }
         }
     }
@@ -218,6 +235,20 @@ fun JournalListScreen(
         ImportResultDialog(result = result, onDismiss = { importResult = null })
     }
 
+    xlsxPreview?.let { preview ->
+        XlsxImportPreviewDialog(
+            preview = preview,
+            onConfirm = {
+                viewModel.confirmXlsxImport(preview)
+                xlsxPreview = null
+            },
+            onCancel = {
+                viewModel.cancelXlsxImport(preview)
+                xlsxPreview = null
+            },
+        )
+    }
+
     journalPendingDelete?.let { journal ->
         AlertDialog(
             onDismissRequest = { journalPendingDelete = null },
@@ -268,6 +299,72 @@ private fun ImportResultDialog(result: BackupImportResult, onDismiss: () -> Unit
 @Composable
 private fun ImportResultRow(labelRes: Int, stats: MergeStats) {
     Text(stringResource(R.string.import_result_row, stringResource(labelRes), stats.added, stats.updated, stats.skipped))
+}
+
+/**
+ * Разбор выбранной таблицы до записи в БД. Обязательный шаг, а не подтверждение ради вежливости:
+ * файл выбран в системном диалоге и может оказаться чужим журналом, файлом за другой месяц или
+ * таблицей с двумя десятками незнакомых подрядчиков — а откатить импорт после нечем.
+ *
+ * Поэтому показываются именно те решения, которые изменят базу необратимо: в какой месяц лягут
+ * записи, кого и какие поля придётся завести, и что импорт пропустит.
+ */
+@Composable
+private fun XlsxImportPreviewDialog(preview: XlsxImportPreview, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.xlsx_preview_title)) },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    stringResource(
+                        if (preview.journalExists) R.string.xlsx_preview_journal_existing else R.string.xlsx_preview_journal_new,
+                        preview.journalTitle,
+                    ),
+                )
+                Text(stringResource(R.string.xlsx_preview_totals, preview.dayCount, preview.recordCount, preview.photoCount))
+                Text(stringResource(R.string.xlsx_preview_contractors_matched, preview.matchedContractorCount))
+                if (preview.newContractors.isNotEmpty()) {
+                    Text(
+                        stringResource(
+                            R.string.xlsx_preview_contractors_new,
+                            preview.newContractors.size,
+                            preview.newContractors.joinToString(", "),
+                        ),
+                    )
+                }
+                Text(stringResource(R.string.xlsx_preview_fields_matched, preview.matchedFieldCount))
+                if (preview.newFields.isNotEmpty()) {
+                    Text(
+                        stringResource(
+                            R.string.xlsx_preview_fields_new,
+                            preview.newFields.size,
+                            preview.newFields.joinToString(", "),
+                        ),
+                    )
+                }
+                // Безымянные колонки — верный признак, что файл прочитан не целиком; молчать об этом нельзя.
+                if (preview.skippedUnnamedContractors > 0 || preview.skippedUnnamedFields > 0) {
+                    Text(
+                        stringResource(
+                            R.string.xlsx_preview_skipped_unnamed,
+                            preview.skippedUnnamedContractors,
+                            preview.skippedUnnamedFields,
+                        ),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.xlsx_preview_confirm)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
 }
 
 /**

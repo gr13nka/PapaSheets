@@ -48,6 +48,19 @@
     <string name="import_result_values">Значения полей</string>
     <string name="import_result_photos">Фото</string>
 
+    <string name="xlsx_preview_title">Что будет импортировано</string>
+    <string name="xlsx_preview_journal_new">Будет создан журнал «%1$s»</string>
+    <string name="xlsx_preview_journal_existing">Записи добавятся в журнал «%1$s»</string>
+    <string name="xlsx_preview_totals">Дней: %1$d, записей: %2$d, фото: %3$d</string>
+    <string name="xlsx_preview_contractors_matched">Подрядчиков найдено среди существующих: %1$d</string>
+    <string name="xlsx_preview_contractors_new">Будет создано подрядчиков: %1$d (%2$s)</string>
+    <string name="xlsx_preview_fields_matched">Колонок легло на существующие поля: %1$d</string>
+    <string name="xlsx_preview_fields_new">Будет создано полей: %1$d (%2$s)</string>
+    <string name="xlsx_preview_skipped_unnamed">Пропущено без названия: подрядчиков %1$d, колонок %2$d</string>
+    <string name="xlsx_preview_confirm">Импортировать</string>
+    <string name="xlsx_import_done">Импортировано в «%1$s»: записей %2$d, фото %3$d</string>
+    <string name="backup_menu_import_any">Импорт бэкапа или таблицы</string>
+
     <string name="record_delete_confirm_title">Удалить запись?</string>
     <string name="record_delete_confirm_message">Это действие нельзя отменить.</string>
 

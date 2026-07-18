@@ -24,6 +24,7 @@ import ru.papasheets.domain.DeleteJournalInteractor
 import ru.papasheets.domain.backup.BackupInteractor
 import ru.papasheets.domain.backup.ImportInteractor
 import ru.papasheets.domain.export.ExportInteractor
+import ru.papasheets.domain.xlsx.XlsxImportInteractor
 import ru.papasheets.photos.PhotoStore
 
 /** GC сирот-фото гоняется при выходе приложения на передний план, но не чаще одного раза за этот период. */
@@ -103,6 +104,12 @@ class AppGraph(context: Context) {
     val importInteractor: ImportInteractor by lazy {
         ImportInteractor(
             journalRepository, contractorRepository, recordRepository, locationRepository,
+            fieldRepository, photoStore, transactionRunner, appContext,
+        )
+    }
+    val xlsxImportInteractor: XlsxImportInteractor by lazy {
+        XlsxImportInteractor(
+            journalRepository, contractorRepository, recordRepository,
             fieldRepository, photoStore, transactionRunner, appContext,
         )
     }

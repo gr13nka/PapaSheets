@@ -1,0 +1,86 @@
+package ru.papasheets.exportkit.xlsx.read
+
+import java.io.File
+import java.io.IOException
+import java.time.LocalDate
+import java.util.zip.ZipFile
+
+/**
+ * Прочитанный лист-матрица: подрядчики, подписи полей и записи по дням — без Room, Android и вообще
+ * какой-либо привязки к тому, куда это потом ляжет. Зеркало
+ * [ru.papasheets.exportkit.model.JournalSnapshot] со стороны чтения: снимок описывает «что писать»,
+ * [ParsedSheet] — «что нашлось», поэтому здесь всё, чего в чужом файле может не оказаться,
+ * необязательно (дата записи, байты фото, имя подрядчика).
+ *
+ * Байты фото наружу отдаются лениво, по [photoBytes]: в реальном журнале-месяце их сотни мегабайт,
+ * и держать их в модели значило бы гарантированный OOM на телефоне. Цена ленивости — [ParsedSheet]
+ * живёт ровно столько, сколько лежит на месте исходный файл.
+ */
+class ParsedSheet(
+    /** Имя листа из workbook.xml («Лист2») — единственная подсказка о месяце, если даты не разобрались. */
+    val sheetName: String,
+    /** Имена подрядчиков из merge-шапки строки 1, в порядке групп слева направо. */
+    val contractors: List<String>,
+    /** Подписи полей из строки 2 без «Ф», в порядке колонок внутри группы. */
+    val fieldTitles: List<String>,
+    /** Дни в порядке появления на листе; внутри дня — строки, каждая = одна запись. */
+    val days: List<ParsedDay>,
+    private val source: File,
+) {
+    /** Все строки листа подряд, без разбиения по дням — для подсчётов в предпросмотре. */
+    val rows: List<ParsedRow> get() = days.flatMap { it.rows }
+
+    /**
+     * Байты фото из `xl/media`, или `null`, если записи в архиве нет. Открывает архив заново на
+     * каждый вызов: так [ParsedSheet] остаётся неизменяемым значением без close()-контракта, а
+     * вызывающая сторона может прогонять фото по одному, не накапливая их в памяти. Центральный
+     * каталог ZIP читается из уже прогретого файла, так что повторное открытие дёшево.
+     */
+    fun photoBytes(ref: PhotoRef): ByteArray? = try {
+        ZipFile(source).use { zip ->
+            zip.getEntry(ref.entryName)?.let { entry -> zip.getInputStream(entry).use { it.readBytes() } }
+        }
+    } catch (e: IOException) {
+        throw XlsxFormatException("Не удалось прочитать фото «${ref.entryName}» из файла", e)
+    }
+}
+
+/** Один день журнала: дата и её записи. */
+class ParsedDay(
+    /**
+     * Дата дня. `null`, когда в колонке A стоял текст без года — так пишет наш собственный экспорт
+     * («01.06»), и год приходится брать снаружи, из [ParsedSheet.sheetName] или имени файла.
+     */
+    val date: LocalDate?,
+    /** Как дата выглядела в ячейке — то, что можно показать пользователю, даже если [date] не вышла. */
+    val dateLabel: String,
+    val rows: List<ParsedRow>,
+)
+
+/**
+ * Одна строка листа. Слоты соответствуют [ParsedSheet.contractors] по индексу; `null` — подрядчик
+ * в этой строке ничего не делал. Разреженность здесь норма, а не ошибка: в реальном журнале
+ * заполнено несколько групп из 28.
+ */
+class ParsedRow(
+    /** Номер строки на листе — только для сообщений об ошибках и отладки. */
+    val sheetRow: Int,
+    val cells: List<ParsedCell?>,
+)
+
+/** Значения полей одной записи; размер списка = [ParsedSheet.fieldTitles].size, пустое значение = `""`. */
+class ParsedCell(
+    val values: List<String>,
+    val photo: PhotoRef?,
+) {
+    /** Пустая ячейка — ни текста, ни фото; такие в журнал не переносятся. */
+    val isBlank: Boolean get() = photo == null && values.all { it.isBlank() }
+}
+
+/**
+ * Ссылка на фото внутри архива. [isPresent] отделяет «фото не было» от «фото объявлено, но байтов
+ * нет»: именно так выглядит наш эталон (docs/reference/iyun-xlsx — media вырезаны ради размера) и
+ * так же выглядит обрезанный чужой файл. Импорт из-за этого падать не должен — запись просто
+ * приедет без фото, а предпросмотр честно покажет, сколько фото реально доступно.
+ */
+class PhotoRef(val entryName: String, val isPresent: Boolean)
