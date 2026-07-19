@@ -11,3 +11,6 @@ captures/
 *.aab
 *.keystore
 !debug.keystore
+
+# Готовые APK для передачи людям — не в git (крупные, пересобираемые).
+dist/
