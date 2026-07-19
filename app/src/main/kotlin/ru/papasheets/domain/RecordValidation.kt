@@ -23,6 +23,11 @@ data class RecordValidation(
  *
  * Заполненность значения понимается так же, как при хранении ([ru.papasheets.data.repo.RecordRepository]):
  * пробелы значением не являются.
+ *
+ * «Пусто» решается по [values] целиком, а не по одним лишь [fields]. У существующей записи значения
+ * могут остаться в поле, которое с тех пор заархивировали: в форме такого поля уже нет, но в записи
+ * содержимое есть. Считая её пустой, форма отказалась бы сохранить правку записи, которая на самом
+ * деле не пуста, — и починить это прораб не смог бы ничем, кроме разархивирования поля.
  */
 fun validateRecord(
     contractorId: String?,
@@ -31,7 +36,7 @@ fun validateRecord(
     hasPhoto: Boolean,
 ): RecordValidation {
     val filledFieldIds = fields.filter { values[it.id]?.isNotBlank() == true }.mapTo(HashSet()) { it.id }
-    if (filledFieldIds.isEmpty() && !hasPhoto) {
+    if (values.values.none { it.isNotBlank() } && !hasPhoto) {
         return RecordValidation(contractorId == null, emptySet(), isBlankRecord = true)
     }
     return RecordValidation(

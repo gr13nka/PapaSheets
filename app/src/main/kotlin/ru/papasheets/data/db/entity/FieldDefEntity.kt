@@ -1,7 +1,6 @@
 package ru.papasheets.data.db.entity
 
 import androidx.room.Entity
-import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -15,18 +14,16 @@ import androidx.room.PrimaryKey
  * `type` в схеме намеренно нет: всё содержимое стройжурнала — текст. «Объём» здесь пишут как
  * «12 м²», и числовой тип только мешал бы вводу, ничего не давая взамен.
  */
-@Entity(tableName = "field_defs", indices = [Index(value = ["key"], unique = true)])
+@Entity(tableName = "field_defs")
 data class FieldDefEntity(
     @PrimaryKey val id: String,
-    /** Стабильный машинный ключ; у встроенных полей не меняется никогда. */
-    val key: String,
     /** Подпись подколонки в матрице: «Л», «ВИД РАБОТ», «Объём». */
     val title: String,
     /** Полное имя в форме записи: «Локация», «Вид работ». */
     val label: String,
     val orderIndex: Int,
     val isArchived: Boolean,
-    /** Встроенное поле: нельзя удалить и нельзя менять `key`. */
+    /** Встроенное поле: удалить нельзя — сид и бэкап с другого устройства всё равно вернут его обратно. */
     val isBuiltIn: Boolean,
     val isRequired: Boolean,
     /**

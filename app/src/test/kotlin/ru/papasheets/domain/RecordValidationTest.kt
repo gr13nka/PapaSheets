@@ -69,4 +69,34 @@ class RecordValidationTest {
 
         assertTrue(result.isValid)
     }
+
+    /**
+     * Поле заархивировали уже после того, как в нём что-то написали: в форме его больше нет, а в
+     * записи содержимое есть. Пустой такая запись не является, и отказать в сохранении правки
+     * значило бы запереть её — разархивировать поле ради этого прораба заставлять не за что.
+     */
+    @Test
+    fun `a record whose only value sits in an archived field is not blank`() {
+        val archived = testField("f-archived", orderIndex = 2)
+        // Форма показывает только активные поля, значения записи приходят все.
+        val result = validateRecord(
+            contractorId = "c",
+            fields = listOf(location),
+            values = mapOf(archived.id to "12 м²"),
+            hasPhoto = false,
+        )
+
+        assertFalse(result.isBlankRecord)
+        assertTrue(result.isValid)
+    }
+
+    /** Архивное значение спасает запись от «пусто», но обязательное активное поле всё равно требуется. */
+    @Test
+    fun `an archived value does not excuse an empty required field`() {
+        val result = validateRecord("c", fields, mapOf("f-archived" to "12 м²"), hasPhoto = false)
+
+        assertFalse(result.isBlankRecord)
+        assertEquals(setOf(work.id), result.emptyRequiredFieldIds)
+        assertFalse(result.isValid)
+    }
 }

@@ -19,13 +19,10 @@ package ru.papasheets.exportkit.backup
 object BuiltInFields {
     const val LOCATION_ID = "00000000-0000-4000-8000-000000000001"
     const val WORK_ID = "00000000-0000-4000-8000-000000000002"
-    const val LOCATION_KEY = "location"
-    const val WORK_KEY = "work"
 
     /**
      * Описание встроенного поля без привязки к Room и Android — общий источник для миграции и сида.
      *
-     * @param key стабильный машинный ключ; у встроенного поля не меняется никогда
      * @param title подпись подколонки в матрице: «Л», «ВИД РАБОТ»
      * @param label полное имя в форме записи: «Локация», «Вид работ»
      * @param maxLines потолок строк текста в ячейке; 0 = без ограничения
@@ -33,7 +30,6 @@ object BuiltInFields {
      */
     data class Spec(
         val id: String,
-        val key: String,
         val title: String,
         val label: String,
         val orderIndex: Int,
@@ -47,12 +43,12 @@ object BuiltInFields {
     /** Значения зеркалят поведение до появления гибких полей — колонки матрицы выглядят ровно так же. */
     val ALL: List<Spec> = listOf(
         Spec(
-            LOCATION_ID, LOCATION_KEY, "Л", "Локация", 0,
+            LOCATION_ID, "Л", "Локация", 0,
             isRequired = false, suggestFromHistory = true,
             columnWidthDp = 56, maxLines = 2, showAtCompactLod = true,
         ),
         Spec(
-            WORK_ID, WORK_KEY, "ВИД РАБОТ", "Вид работ", 1,
+            WORK_ID, "ВИД РАБОТ", "Вид работ", 1,
             isRequired = true, suggestFromHistory = true,
             columnWidthDp = 168, maxLines = 0, showAtCompactLod = false,
         ),

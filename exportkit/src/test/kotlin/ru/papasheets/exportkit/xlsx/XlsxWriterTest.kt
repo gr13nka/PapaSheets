@@ -66,7 +66,8 @@ class XlsxWriterTest {
 
         val cols = sheet.elements("col")
         assertEquals("10.5", cols[0].getAttribute("width"))
-        assertEquals("5.75", cols[1].getAttribute("width"))
+        // Ф считается от стороны фото-квадрата (PHOTO_BOX_PT); эталонные 5.75 были уже фото.
+        assertEquals("14.9", cols[1].getAttribute("width"))
         assertEquals("7.75", cols[2].getAttribute("width"))
         assertEquals("50.75", cols[3].getAttribute("width"))
 

@@ -80,7 +80,7 @@ class MigrationTest {
 
         assertEquals(
             listOf("id", "journalId", "dateEpochDay", "contractorId", "photoId", "createdAt", "updatedAt"),
-            db.recordsColumns(),
+            db.columnsOf("records"),
         )
         assertEquals(
             setOf("r-1" to "c1", "r-2" to "c1"),
@@ -151,6 +151,75 @@ class MigrationTest {
     }
 
     /**
+     * `field_defs` пересоздаётся без колонки `key`, не потеряв ни полей, ни всего, что на них висит.
+     *
+     * Вторая после [Migrations.MIGRATION_2_3] миграция, сносящая таблицу с данными, и здесь ставка
+     * выше: на `field_defs` ссылаются сразу двое — `field_presets` с `ON DELETE CASCADE` и
+     * `record_values` с `ON DELETE RESTRICT`. Будь внешние ключи во время миграции включены, неявный
+     * DELETE от `DROP TABLE` унёс бы каскадом все пресеты, а на значениях упёрся бы в RESTRICT.
+     * Поэтому проверяется не только то, что колонка ушла, но и что и пресеты, и значения на месте.
+     */
+    @Test
+    fun migration4To5_dropsTheFieldKeyKeepingFieldsPresetsAndValues() {
+        helper.createDatabase(TEST_DB, 4).use { it.seedV4Fixtures() }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, Migrations.MIGRATION_4_5)
+
+        assertEquals(
+            listOf(
+                "id", "title", "label", "orderIndex", "isArchived", "isBuiltIn", "isRequired",
+                "suggestFromHistory", "columnWidthDp", "maxLines", "showAtCompactLod", "createdAt",
+            ),
+            db.columnsOf("field_defs"),
+        )
+        // Поля целы и в прежнем порядке — вместе со своими настройками, а не сброшенные к заводским.
+        assertEquals(
+            listOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID, "f-custom"),
+            db.queryStrings("SELECT id FROM field_defs ORDER BY orderIndex"),
+        )
+        assertEquals(
+            listOf("Мои локации"),
+            db.queryStrings("SELECT title FROM field_defs WHERE id = '${BuiltInFields.LOCATION_ID}'"),
+        )
+        // Пресеты не унесло каскадом от DROP TABLE.
+        assertEquals(listOf(Triple("p-1", BuiltInFields.LOCATION_ID, "К1")), db.queryPresets())
+        // Значения записей — тоже; ради них вся осторожность и нужна.
+        assertEquals(
+            setOf(
+                Triple("r-1", BuiltInFields.WORK_ID, "Штукатурка"),
+                Triple("r-1", "f-custom", "12 м²"),
+            ),
+            db.queryValueTriples(),
+        )
+        assertTrue(db.queryStrings("PRAGMA foreign_key_check").isEmpty())
+    }
+
+    /**
+     * После пересоздания `field_defs` обе ссылки на неё ведут себя по-прежнему.
+     *
+     * `ON DELETE` живёт в DDL таблиц-ссылающихся, но пересоздание цели — ровно тот момент, когда
+     * ссылка может тихо перестать существовать: имя таблицы на время пропадает из схемы. Потеря
+     * RESTRICT обнаружилась бы только первым удалением заполненного поля — то есть стёртыми данными.
+     */
+    @Test
+    fun migration4To5_keepsCascadeAndRestrictOnTheRecreatedTable() {
+        helper.createDatabase(TEST_DB, 4).use { it.seedV4Fixtures() }
+        val db = helper.runMigrationsAndValidate(TEST_DB, 5, true, Migrations.MIGRATION_4_5)
+        db.execSQL("PRAGMA foreign_keys = ON")
+
+        // «Локация» в записях пуста — удаляется, унося свои пресеты.
+        db.execSQL("DELETE FROM field_defs WHERE id = ?", arrayOf(BuiltInFields.LOCATION_ID))
+        assertTrue(db.queryPresets().isEmpty())
+
+        try {
+            db.execSQL("DELETE FROM field_defs WHERE id = ?", arrayOf(BuiltInFields.WORK_ID))
+            fail("ожидался отказ по внешнему ключу record_values → field_defs")
+        } catch (e: SQLiteConstraintException) {
+            assertTrue(e.message!!.isNotBlank())
+        }
+    }
+
+    /**
      * Путь с самой первой версии до текущей одним прогоном.
      *
      * Отдельные тесты шагов не покрывают именно этот сценарий: у прораба может стоять сборка,
@@ -178,6 +247,13 @@ class MigrationTest {
         )
         // Пресет, заведённый ещё в v1, доезжает до текущей версии и обретает поле-владельца.
         assertEquals(listOf(Triple("p-1", BuiltInFields.LOCATION_ID, "К1")), db.queryPresets())
+        // И последний шаг тоже отработал, а не потерялся за более ранними: машинного ключа у поля
+        // больше нет, а сами поля, заведённые ещё миграцией 1 → 2, на месте.
+        assertTrue("key" !in db.columnsOf("field_defs"))
+        assertEquals(
+            listOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID),
+            db.queryStrings("SELECT id FROM field_defs ORDER BY orderIndex"),
+        )
         assertNoOrphanValues(db)
         assertTrue(db.queryStrings("PRAGMA foreign_key_check").isEmpty())
     }
@@ -279,6 +355,28 @@ class MigrationTest {
         execSQL("INSERT INTO location_presets VALUES ('p-2', 'К2', 1)")
     }
 
+    /**
+     * Состояние после v4: у полей ещё есть `key`, у пресетов уже есть владелец. «Локация»
+     * переименована прорабом, и на ней видно, что миграция переносит настройки, а не заводские
+     * значения; у «Вида работ» и своего поля есть значения — на них проверяются CASCADE и RESTRICT.
+     */
+    private fun SupportSQLiteDatabase.seedV4Fixtures() {
+        execSQL("INSERT INTO journals VALUES ('j1', 2026, 7, 'Июль', 0)")
+        execSQL("INSERT INTO contractors VALUES ('c1', 'Г.П.', 'ГП', 0, 0, 0, 0)")
+        execSQL("INSERT INTO records VALUES ('r-1', 'j1', 20000, 'c1', NULL, 0, 0)")
+        insertFieldDef(BuiltInFields.LOCATION_ID, key = "location", orderIndex = 0, title = "Мои локации")
+        insertFieldDef(BuiltInFields.WORK_ID, key = "work", orderIndex = 1)
+        // Русское название давало один и тот же ключ `field` — та самая коллизия, из-за которой
+        // колонка и убрана; здесь она нужна лишь как реалистичное содержимое строки.
+        insertFieldDef("f-custom", key = "field", orderIndex = 2, title = "Объём")
+        insertValue("r-1", BuiltInFields.WORK_ID, "Штукатурка")
+        insertValue("r-1", "f-custom", "12 м²")
+        execSQL(
+            "INSERT INTO field_presets VALUES ('p-1', ?, 'К1', 0)",
+            arrayOf(BuiltInFields.LOCATION_ID),
+        )
+    }
+
     private fun SupportSQLiteDatabase.insertV1Record(id: String, location: String, work: String) {
         execSQL(
             "INSERT INTO records VALUES (?, 'j1', 20000, 'c1', ?, ?, NULL, 0, 0)",
@@ -286,10 +384,16 @@ class MigrationTest {
         )
     }
 
-    private fun SupportSQLiteDatabase.insertFieldDef(id: String, key: String, orderIndex: Long) {
+    /** Вставка в схему ≤ v4, где у поля ещё была колонка `key`. */
+    private fun SupportSQLiteDatabase.insertFieldDef(
+        id: String,
+        key: String,
+        orderIndex: Long,
+        title: String = key,
+    ) {
         execSQL(
             "INSERT INTO field_defs VALUES (?, ?, ?, ?, ?, 0, 1, 0, 1, 100, 3, 1, 0)",
-            arrayOf(id, key, key, key, orderIndex),
+            arrayOf(id, key, title, title, orderIndex),
         )
     }
 
@@ -307,8 +411,8 @@ class MigrationTest {
             }
         }
 
-    private fun SupportSQLiteDatabase.recordsColumns(): List<String> =
-        query("PRAGMA table_info(records)").use { cursor ->
+    private fun SupportSQLiteDatabase.columnsOf(table: String): List<String> =
+        query("PRAGMA table_info($table)").use { cursor ->
             val nameColumn = cursor.getColumnIndexOrThrow("name")
             buildList { while (cursor.moveToNext()) add(cursor.getString(nameColumn)) }
         }

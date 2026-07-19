@@ -6,8 +6,6 @@ import java.util.zip.ZipOutputStream
 import ru.papasheets.exportkit.model.JournalSnapshot
 import ru.papasheets.exportkit.model.PhotoBytesProvider
 
-/** Отступ от высоты фото-строки до самого фото (см. [PHOTO_ROW_HEIGHT_PT]) — небольшое поле сверху/снизу для читаемости. */
-private const val PHOTO_DISPLAY_HEIGHT_PT = PHOTO_ROW_HEIGHT_PT - 8.0
 
 /**
  * Стриминговая генерация xlsx в формате «матрица дата×подрядчик» (эталон — реальный рабочий журнал,
@@ -48,13 +46,15 @@ object XlsxWriter {
 
     /**
      * Один проход по снимку: якорь на Ф-ячейку каждой записи с фото, размер — из реальных пикселей
-     * фото ([PhotoBytesProvider.size]) с сохранением пропорций. Координаты якоря (0-based, как их
-     * адресует DrawingML) считает [MatrixSheetLayout] — тот же, по которому [SheetXml] раскладывает
-     * колонки, иначе фото оказались бы в чужих.
+     * фото ([PhotoBytesProvider.size]), вписанных в квадрат [PHOTO_BOX_PT] с сохранением пропорций.
+     * Ограничены обе стороны, а не одна высота: `oneCellAnchor` рисует картинку ровно заданного
+     * размера и за границы ячейки её не подрезает, так что альбомный кадр, растянутый по высоте
+     * строки, наехал бы на соседнюю колонку. Координаты якоря (0-based, как их адресует DrawingML)
+     * считает [MatrixSheetLayout] — тот же, по которому [SheetXml] раскладывает колонки, иначе фото
+     * оказались бы в чужих.
      */
     private fun collectAnchors(snapshot: JournalSnapshot, photos: PhotoBytesProvider): List<PhotoAnchor> {
         val anchors = ArrayList<PhotoAnchor>()
-        val cy = Emu.fromPoints(PHOTO_DISPLAY_HEIGHT_PT)
         val groupCols = MatrixSheetLayout.groupWidth(snapshot.fields.size)
         var dataRowIndex = 0
         for (day in snapshot.days) {
@@ -63,7 +63,9 @@ object XlsxWriter {
                     val photoId = cellValue?.photoId
                     if (photoId != null) {
                         val (width, height) = photos.size(photoId)
-                        val cx = Math.round(cy * (width.toDouble() / height.toDouble()))
+                        val scale = PHOTO_BOX_PT / maxOf(width, height).toDouble()
+                        val cx = Emu.fromPoints(width * scale)
+                        val cy = Emu.fromPoints(height * scale)
                         anchors += PhotoAnchor(
                             col = MatrixSheetLayout.anchorColumn(colIndex, groupCols),
                             row = MatrixSheetLayout.anchorRow(dataRowIndex),

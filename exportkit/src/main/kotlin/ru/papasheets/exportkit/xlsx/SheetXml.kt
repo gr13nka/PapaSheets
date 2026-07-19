@@ -2,11 +2,15 @@ package ru.papasheets.exportkit.xlsx
 
 import ru.papasheets.exportkit.model.JournalSnapshot
 
-// Ширины двух служебных колонок (символьные единицы Excel) — как в эталонном журнале
-// (docs/reference/iyun-xlsx/xl/worksheets/sheet1.xml, <cols>): Ф≈5.75. Ширины подколонок полей
-// приходят из их dp через [Widths]. Колонка A шире эталонной (5.75) с запасом под дату.
+// Ширины двух служебных колонок в символьных единицах Excel; ширины подколонок полей приходят из
+// их dp через [Widths]. Колонка A шире эталонной (docs/reference/iyun-xlsx, <cols>: 5.75) с запасом
+// под дату.
+//
+// Колонка Ф эталонную ширину, наоборот, переросла, и намеренно: в эталоне фото — иконка в строке
+// высотой по умолчанию, а здесь оно сознательно крупное (см. [PHOTO_BOX_PT]). Ширина считается от
+// стороны фото-квадрата, а не подбирается на глаз, — иначе картинка накрывала бы первую колонку поля.
 private const val COL_DATE_WIDTH = 10.5
-private const val COL_PHOTO_WIDTH = 5.75
+private val COL_PHOTO_WIDTH = Widths.ptToChars(PHOTO_BOX_PT)
 
 /**
  * Рендерит `xl/worksheets/sheet1.xml`: шапка (имена подрядчиков — merge по всей группе в строке 1,

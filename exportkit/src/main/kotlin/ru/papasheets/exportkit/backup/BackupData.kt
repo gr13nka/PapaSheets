@@ -98,7 +98,6 @@ data class BackupFieldPreset(
 @Serializable
 data class BackupFieldDef(
     val id: String,
-    val key: String,
     val title: String,
     val label: String,
     val orderIndex: Int,

@@ -20,6 +20,11 @@ import ru.papasheets.exportkit.backup.BuiltInFields
  * расхождение между ними ничем себя не проявило бы до первого бэкапа с одного устройства на другое:
  * там встроенное поле узнаётся по id, и разошедшиеся строки дали бы две колонки «Локация» рядом.
  * Тест сравнивает результат обеих веток целиком, а не только id.
+ *
+ * Сравнение идёт на ТЕКУЩЕЙ версии схемы, а не на v2, где миграция эти строки создаёт: с v5 обе
+ * ветки пишут разные формы строки (у миграции есть колонка `key`, у сида её уже нет), и сойтись
+ * они обязаны на выходе, пройдя цепочку целиком. Так проверяется то, что важно на самом деле, —
+ * что у прораба, обновившегося с v1, и у прораба с чистой установки поля в итоге одинаковые.
  */
 @RunWith(AndroidJUnit4::class)
 class BuiltInFieldSeedTest {
@@ -32,8 +37,8 @@ class BuiltInFieldSeedTest {
 
     @Test
     fun freshInstallAndMigration_produceIdenticalFieldDefs() {
-        val fromMigration = migratedDatabase().use { it.readFieldDefs() }
-        val fromSeed = freshlyCreatedDatabase().use { it.readFieldDefs() }
+        val fromMigration = migratedFieldDefs()
+        val fromSeed = freshlyCreatedFieldDefs()
 
         assertEquals(fromMigration, fromSeed)
         assertEquals(
@@ -42,27 +47,44 @@ class BuiltInFieldSeedTest {
         )
     }
 
-    private fun migratedDatabase(): SupportSQLiteDatabase {
+    /**
+     * Путь обновившегося устройства: с самой первой версии до текущей, всеми миграциями подряд.
+     *
+     * Возвращённую БД закрывать нельзя: ею владеет [MigrationTestHelper] и закрывает сам при
+     * разборе правила. Закрыть её здесь значит освободить нативный хендл дважды — процесс падает
+     * целиком, без java-стектрейса, и роняет весь прогон инструментации, а не один тест.
+     */
+    private fun migratedFieldDefs(): List<Pair<String, List<String>>> {
         helper.createDatabase(MIGRATED_DB, 1).close()
-        return helper.runMigrationsAndValidate(MIGRATED_DB, 2, true, Migrations.MIGRATION_1_2)
+        return helper.runMigrationsAndValidate(MIGRATED_DB, APP_DATABASE_VERSION, true, *Migrations.ALL)
+            .readFieldDefs()
     }
 
-    /** БД, созданная с нуля: путь чистой установки, вместе с колбэком `DefaultSeed`. */
-    private fun freshlyCreatedDatabase(): SupportSQLiteDatabase {
+    /**
+     * БД, созданная с нуля: путь чистой установки, вместе с колбэком `DefaultSeed`.
+     *
+     * Закрывается сам Room, а не выданное им соединение: соединением владеет он, и закрытие в обход
+     * оставило бы Room с уже недействительным хендлом.
+     */
+    private fun freshlyCreatedFieldDefs(): List<Pair<String, List<String>>> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(FRESH_DB)
         val room = Room.databaseBuilder(context, AppDatabase::class.java, FRESH_DB)
             .addCallback(DefaultSeed.callback())
-            .addMigrations(Migrations.MIGRATION_1_2)
+            .addMigrations(*Migrations.ALL)
             .build()
-        return room.openHelper.writableDatabase
+        return try {
+            room.openHelper.writableDatabase.readFieldDefs()
+        } finally {
+            room.close()
+        }
     }
 
     /** Все колонки, кроме `createdAt`: отметка времени у веток заведомо разная и ни на что не влияет. */
     private fun SupportSQLiteDatabase.readFieldDefs(): List<Pair<String, List<String>>> =
         query(
             """
-            SELECT id, key, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
+            SELECT id, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
                    suggestFromHistory, columnWidthDp, maxLines, showAtCompactLod
             FROM field_defs ORDER BY orderIndex
             """,

@@ -328,7 +328,6 @@ private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>)
 
     init {
         val byTitle = existing.associateBy { it.title.trim().lowercase() }
-        val usedKeys = existing.mapTo(HashSet()) { it.key }
         var nextOrder = (existing.maxOfOrNull { it.orderIndex } ?: -1) + 1
         titles.forEachIndexed { index, rawTitle ->
             val title = rawTitle.trim()
@@ -344,7 +343,6 @@ private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>)
             }
             val entity = FieldDefEntity(
                 id = UUID.randomUUID().toString(),
-                key = uniqueKey(title, usedKeys),
                 title = title,
                 label = title,
                 orderIndex = nextOrder++,
@@ -372,18 +370,6 @@ private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>)
             if (trimmed.isNotEmpty()) result[fieldId] = trimmed
         }
         return result
-    }
-
-    /** Ключ поля уникален по схеме; из подписи он читается лучше, чем из случайного UUID. */
-    private fun uniqueKey(title: String, used: MutableSet<String>): String {
-        val base = title.lowercase().map { if (it.isLetterOrDigit()) it else '_' }.joinToString("").trim('_')
-            .ifEmpty { "field" }
-        var candidate = base
-        var suffix = 2
-        while (!used.add(candidate)) {
-            candidate = "${base}_${suffix++}"
-        }
-        return candidate
     }
 
     private companion object {

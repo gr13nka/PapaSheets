@@ -19,7 +19,6 @@ fun testField(
     showAtCompactLod: Boolean = true,
 ): FieldDefEntity = FieldDefEntity(
     id = id,
-    key = id,
     title = title,
     label = label,
     orderIndex = orderIndex,
@@ -40,7 +39,6 @@ fun testField(
 val builtInFields: List<FieldDefEntity> = BuiltInFields.ALL.map { spec ->
     FieldDefEntity(
         id = spec.id,
-        key = spec.key,
         title = spec.title,
         label = spec.label,
         orderIndex = spec.orderIndex,

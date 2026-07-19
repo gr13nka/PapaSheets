@@ -19,16 +19,27 @@ internal object BackupUpgrade {
         var result = data
         if (formatVersion < 2) result = v1ToV2(result)
         if (formatVersion < 3) result = v2ToV3(result)
+        // Шага v3 → v4 нет намеренно, а не по забывчивости: v4 отличается от v3 только тем, что у
+        // определения поля не стало машинного ключа. Лишний `key` в старом файле отбрасывает сам
+        // разбор (`ignoreUnknownKeys`), а восстанавливать в памяти нечего — поле было и осталось
+        // ненужным. Ступенька без работы здесь была бы шумом, а не страховкой.
         return result
     }
 
     /**
      * v1 → v2: содержимое записи переезжает из колонок в значения полей.
      *
-     * Встроенные определения заводятся из [BuiltInFields] **с их константными id** — ровно теми же,
-     * что и на устройстве (миграция БД и сид берут их оттуда же). Благодаря этому «Локация» из
-     * бэкапа и «Локация» на телефоне при слиянии оказываются одной строкой, а не двумя колонками
-     * с одинаковым названием.
+     * Значения адресуются константными id из [BuiltInFields] — ровно теми же, что и на устройстве
+     * (миграция БД и сид берут их оттуда же). Благодаря этому «Локация» из бэкапа и «Локация» на
+     * телефоне оказываются одним полем, а не двумя колонками с одинаковым названием.
+     *
+     * **Определения полей при этом не заводятся, и список остаётся пустым.** Взять их можно было бы
+     * только из заводских значений, но файл v1 про поля ничего не знал: их настройки (заголовок,
+     * ширина, `maxLines`) в нём не хранились, а значит и восстанавливать из него нечего. Импорт же
+     * заменяет совпавшее по id поле целиком (правило слияния `MergeRules.forReplaceable` в app),
+     * так что заводские значения
+     * молча стёрли бы то, что прораб настроил у себя. Строки встроенных полей на устройстве есть
+     * всегда — их заводит сид или миграция, — поэтому внешнему ключу значений они не нужны.
      *
      * Пустые и пробельные значения строк не порождают, значения обрезаются — тот же инвариант, что
      * в `Migrations.MIGRATION_1_2_COPY` и в `RecordRepository`: «пусто» существует в одном виде —
@@ -36,7 +47,6 @@ internal object BackupUpgrade {
      */
     private fun v1ToV2(data: BackupData): BackupData = data.copy(
         records = data.records.map { it.copy(locationCode = null, workText = null) },
-        fieldDefs = BuiltInFields.ALL.map(::toBackupFieldDef),
         recordValues = data.records.flatMap { record ->
             listOfNotNull(
                 valueOrNull(record.id, BuiltInFields.LOCATION_ID, record.locationCode),
@@ -63,24 +73,4 @@ internal object BackupUpgrade {
         val value = raw?.trim().orEmpty()
         return if (value.isEmpty()) null else BackupRecordValue(recordId, fieldId, value)
     }
-
-    /**
-     * `createdAt = 0`: в v1 у полей не было ни строк в БД, ни отметки времени, и взять её неоткуда.
-     * Ни на что не влияет — порядок колонок задаёт `orderIndex`, а узнаётся встроенное поле по id.
-     */
-    private fun toBackupFieldDef(spec: BuiltInFields.Spec) = BackupFieldDef(
-        id = spec.id,
-        key = spec.key,
-        title = spec.title,
-        label = spec.label,
-        orderIndex = spec.orderIndex,
-        isArchived = false,
-        isBuiltIn = true,
-        isRequired = spec.isRequired,
-        suggestFromHistory = spec.suggestFromHistory,
-        columnWidthDp = spec.columnWidthDp,
-        maxLines = spec.maxLines,
-        showAtCompactLod = spec.showAtCompactLod,
-        createdAt = 0L,
-    )
 }

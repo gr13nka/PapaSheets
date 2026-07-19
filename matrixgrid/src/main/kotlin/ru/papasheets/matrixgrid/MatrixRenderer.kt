@@ -125,7 +125,9 @@ internal class MatrixRenderer(
                         topLeft = Offset(left, top),
                         size = Size(cellW, cellH),
                     )
-                    if (cell != null) drawFilledCell(model.fields, cell, left, top, colorIndex, zoom, lod, thumbnails)
+                    if (cell != null) {
+                        drawFilledCell(model.fields, cell, left, top, geometry.rowHeight(r, zoom), colorIndex, zoom, lod, thumbnails)
+                    }
                     drawLine(
                         color = colors.gridLine,
                         start = Offset(left + cellW, top),
@@ -158,12 +160,20 @@ internal class MatrixRenderer(
      * Фото и текст выровнены по ВЕРХУ ячейки (общий отступ [MatrixGeometry.cellPad]). При базовой
      * высоте строки это ровно прежнее вертикальное центрирование плитки, а в выросшей под длинный
      * текст строке фото остаётся у своей подписи, а не уползает в середину пустоты.
+     *
+     * Содержимое подрезается по [rowHeight] — высоте строки на ТЕКУЩЕМ ярусе. Замер текста от яруса
+     * не зависит (так устроен [CellTextCache]: один результат на ячейку, ключ — recordId), и на LOD0
+     * строка сама растянута под этот замер, так что подрезка там ничего не отсекает. А на LOD1/LOD2
+     * строка фиксирована базовой высотой, и без подрезки многострочный текст рисовался бы во всю
+     * измеренную высоту — поверх строк ниже. Ограничение общее, а не ветка по ярусу: содержимое
+     * ячейки не выходит за свою строку никогда, и проверять это отдельно для каждого яруса не нужно.
      */
     private fun DrawScope.drawFilledCell(
         fields: List<GridField>,
         cell: GridCell,
         left: Float,
         top: Float,
+        rowHeight: Float,
         colorIndex: Int,
         zoom: Float,
         lod: Lod,
@@ -171,51 +181,53 @@ internal class MatrixRenderer(
     ) {
         translate(left = left, top = top) {
             scale(scale = zoom, pivot = Offset.Zero) {
-                val box = geometry.photoBoxPx
-                val boxLeft = geometry.photoPadX
-                val boxTop = geometry.cellPad
-                val key = cell.thumbKey
-                when {
-                    key == null -> drawRect(
-                        color = colors.contractor(colorIndex).copy(alpha = colors.emptyPhotoAlpha),
-                        topLeft = Offset(boxLeft, boxTop),
-                        size = Size(box, box),
-                    )
-                    else -> {
-                        val bitmap = thumbnails.peek(key)
-                        if (bitmap != null) {
-                            drawThumb(bitmap, boxLeft, boxTop, box)
-                        } else {
-                            drawRect(
-                                color = colors.contractor(colorIndex).copy(alpha = colors.placeholderAlpha),
-                                topLeft = Offset(boxLeft, boxTop),
-                                size = Size(box, box),
-                            )
-                            thumbnails.request(key, (box * zoom).roundToInt())
+                clipRect(left = 0f, top = 0f, right = geometry.groupW, bottom = rowHeight) {
+                    val box = geometry.photoBoxPx
+                    val boxLeft = geometry.photoPadX
+                    val boxTop = geometry.cellPad
+                    val key = cell.thumbKey
+                    when {
+                        key == null -> drawRect(
+                            color = colors.contractor(colorIndex).copy(alpha = colors.emptyPhotoAlpha),
+                            topLeft = Offset(boxLeft, boxTop),
+                            size = Size(box, box),
+                        )
+                        else -> {
+                            val bitmap = thumbnails.peek(key)
+                            if (bitmap != null) {
+                                drawThumb(bitmap, boxLeft, boxTop, box)
+                            } else {
+                                drawRect(
+                                    color = colors.contractor(colorIndex).copy(alpha = colors.placeholderAlpha),
+                                    topLeft = Offset(boxLeft, boxTop),
+                                    size = Size(box, box),
+                                )
+                                thumbnails.request(key, (box * zoom).roundToInt())
+                            }
                         }
                     }
-                }
 
-                val pad = geometry.cellPad
-                for (i in fields.indices) {
-                    val field = fields[i]
-                    if (lod == Lod.LOD1 && !field.showAtCompactLod) continue
-                    val text = cell.values.getOrNull(i) ?: continue
-                    if (text.isEmpty()) continue
-                    val layout = cache.field(
-                        measurer = measurer,
-                        fieldIndex = i,
-                        recordId = cell.recordId,
-                        text = text,
-                        style = styles.cell(i),
-                        widthPx = (geometry.fieldWidth(i) - 2 * pad).roundToInt(),
-                        maxLines = field.lineCap(),
-                    )
-                    drawText(
-                        textLayoutResult = layout,
-                        color = if (i == 0) colors.primaryText else colors.secondaryText,
-                        topLeft = Offset(geometry.fieldLeft(i) + pad, pad),
-                    )
+                    val pad = geometry.cellPad
+                    for (i in fields.indices) {
+                        val field = fields[i]
+                        if (lod == Lod.LOD1 && !field.showAtCompactLod) continue
+                        val text = cell.values.getOrNull(i) ?: continue
+                        if (text.isEmpty()) continue
+                        val layout = cache.field(
+                            measurer = measurer,
+                            fieldIndex = i,
+                            recordId = cell.recordId,
+                            text = text,
+                            style = styles.cell(i),
+                            widthPx = (geometry.fieldWidth(i) - 2 * pad).roundToInt(),
+                            maxLines = field.lineCap(),
+                        )
+                        drawText(
+                            textLayoutResult = layout,
+                            color = if (i == 0) colors.primaryText else colors.secondaryText,
+                            topLeft = Offset(geometry.fieldLeft(i) + pad, pad),
+                        )
+                    }
                 }
             }
         }

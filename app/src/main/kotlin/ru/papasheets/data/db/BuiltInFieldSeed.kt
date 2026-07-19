@@ -4,14 +4,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import ru.papasheets.exportkit.backup.BuiltInFields
 
 /**
- * Заводит встроенные определения полей в `field_defs`.
+ * Заводит встроенные определения полей в `field_defs` при создании БД с нуля
+ * (`DefaultSeed.onCreate`) — то есть в ТЕКУЩЕЙ схеме.
  *
- * Существует ровно одна такая функция, и это существенно: строки должны появляться одинаковыми на
- * обоих путях — при создании БД с нуля (`DefaultSeed.onCreate`) и при обновлении с v1
- * (`Migrations.MIGRATION_1_2`). Ветки не пересекаются (`onCreate` не вызывается при апгрейде,
- * миграция — при создании), поэтому расхождение между ними ничем бы себя не проявило до первого
- * бэкапа с одного устройства на другое. Общий вызов делает совпадение структурным свойством,
- * а не тем, что кто-то не забыл поправить второе место.
+ * Обновившееся с v1 устройство получает те же поля другим путём — из `Migrations.MIGRATION_1_2`,
+ * которая пишет их в схему v2, с давно уже убранной колонкой `key`. Ветки не пересекаются
+ * (`onCreate` не вызывается при апгрейде, миграция — при создании), и сойтись обязаны на выходе:
+ * встроенное поле узнаётся по id, и разошедшиеся строки дали бы на другом устройстве две колонки
+ * «Локация» рядом. Значения обе ветки берут из общего [BuiltInFields], а совпадение результата
+ * проверяет `BuiltInFieldSeedTest` — на текущей версии, после всей цепочки миграций.
  *
  * `createdAt` приходит параметром, а не берётся внутри: у обеих строк должна быть одна отметка
  * времени, и тесту нужен воспроизводимый результат.
@@ -19,9 +20,9 @@ import ru.papasheets.exportkit.backup.BuiltInFields
 internal object BuiltInFieldSeed {
     private const val INSERT_SQL =
         "INSERT INTO field_defs " +
-            "(`id`, `key`, `title`, `label`, `orderIndex`, `isArchived`, `isBuiltIn`, `isRequired`, " +
+            "(`id`, `title`, `label`, `orderIndex`, `isArchived`, `isBuiltIn`, `isRequired`, " +
             "`suggestFromHistory`, `columnWidthDp`, `maxLines`, `showAtCompactLod`, `createdAt`) " +
-            "VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, ?)"
+            "VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, ?)"
 
     fun insertInto(db: SupportSQLiteDatabase, createdAt: Long) {
         BuiltInFields.ALL.forEach { spec ->
@@ -29,7 +30,6 @@ internal object BuiltInFieldSeed {
                 INSERT_SQL,
                 arrayOf<Any>(
                     spec.id,
-                    spec.key,
                     spec.title,
                     spec.label,
                     spec.orderIndex,

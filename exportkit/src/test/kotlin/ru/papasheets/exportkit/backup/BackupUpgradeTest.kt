@@ -74,13 +74,18 @@ class BackupUpgradeTest {
         assertEquals(1, contents.data.journals.size)
     }
 
+    /**
+     * Архив v1 определений полей не приносит — и это ровно то, чего от него нужно.
+     *
+     * Подставить сюда заводские [BuiltInFields] было бы соблазнительно: значения записей ссылаются на
+     * встроенные поля, и «пусть будут» выглядит безобиднее, чем пустой список. Но импорт заменяет
+     * совпавшее по id поле целиком, а файл v1 про настройки полей ничего не знал — заводские значения
+     * стёрли бы прорабу его собственные заголовки, ширины и `maxLines`. Строки встроенных полей на
+     * устройстве и так есть всегда (сид или миграция), поэтому значениям есть на что сослаться.
+     */
     @Test
-    fun `upgrade adds built-in field defs under their constant ids`() {
-        val fields = readV1().data.fieldDefs
-
-        assertEquals(listOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID), fields.map { it.id })
-        assertEquals(listOf(BuiltInFields.LOCATION_KEY, BuiltInFields.WORK_KEY), fields.map { it.key })
-        assertTrue(fields.all { it.isBuiltIn && !it.isArchived })
+    fun `upgrade brings no field defs from an archive that never had them`() {
+        assertTrue(readV1().data.fieldDefs.isEmpty())
     }
 
     @Test
@@ -149,9 +154,50 @@ class BackupUpgradeTest {
         )
         // Форма ≤ v2 после апгрейда пуста: второго места, где лежат пресеты, остаться не должно.
         assertTrue(data.locationPresets.isEmpty())
-        // И шаг v1 → v2 при этом отработал, а не потерялся за более поздним.
-        assertEquals(listOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID), data.fieldDefs.map { it.id })
+        // И шаг v1 → v2 при этом отработал, а не потерялся за более поздним: колонки записей
+        // развёрнуты в значения под константными id встроенных полей.
         assertEquals(3, data.recordValues.size)
+        assertEquals(
+            setOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID),
+            data.recordValues.map { it.fieldId }.toSet(),
+        )
+    }
+
+    /**
+     * Снимок data.json из .psbackup формата 3 — с колонкой `key`, которой у поля больше нет.
+     *
+     * Ступеньки v3 → v4 нет намеренно: лишний ключ отбрасывает сам разбор (`ignoreUnknownKeys`).
+     * Тест держит это обещание — без него молчаливое падение на неизвестном поле обнаружилось бы
+     * только на устройстве прораба, восстанавливающего бэкап после неудачного обновления.
+     */
+    private val v3DataJson = """
+        {
+          "journals": [],
+          "contractors": [],
+          "records": [],
+          "photos": [],
+          "fieldDefs": [
+            {"id":"${BuiltInFields.LOCATION_ID}","key":"location","title":"Локации мои","label":"Локация",
+             "orderIndex":0,"isArchived":false,"isBuiltIn":true,"isRequired":false,
+             "suggestFromHistory":true,"columnWidthDp":72,"maxLines":3,"showAtCompactLod":true,"createdAt":7}
+          ],
+          "fieldPresets": [],
+          "recordValues": []
+        }
+    """.trimIndent()
+
+    @Test
+    fun `v3 archive is read despite the field key it still carries`() {
+        val contents = BackupReader.read(
+            ByteArrayInputStream(archive(v1ManifestJson(formatVersion = 3), v3DataJson)),
+        ) { _, _, _ -> }
+
+        val field = contents.data.fieldDefs.single()
+        assertEquals(BuiltInFields.LOCATION_ID, field.id)
+        // Настройки поля из файла доезжают нетронутыми — ради них бэкап и хранит определения.
+        assertEquals("Локации мои", field.title)
+        assertEquals(72, field.columnWidthDp)
+        assertEquals(3, field.maxLines)
     }
 
     @Test

@@ -22,7 +22,7 @@ object Migrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             MIGRATION_1_2_DDL.forEach(db::execSQL)
             // Обязательно до переноса значений: FK на field_defs проверяется сразу при вставке.
-            BuiltInFieldSeed.insertInto(db, System.currentTimeMillis())
+            seedFieldDefsInV2Schema(db, System.currentTimeMillis())
             MIGRATION_1_2_COPY.forEach(db::execSQL)
         }
     }
@@ -84,11 +84,37 @@ object Migrations {
     }
 
     /**
+     * v4 → v5: у определения поля больше нет машинного ключа `key`.
+     *
+     * Колонка появилась «на всякий случай» и не пригодилась: ни одного чтения по ней в коде не было,
+     * встроенное поле опознаётся по константному `id`, а пользовательское — тоже по `id`. Зато
+     * UNIQUE-индекс по `key` активно вредил. Ключ генерировался из названия с выбрасыванием
+     * нелатинских символов, поэтому ЛЮБОЕ поле с русским названием получало один и тот же ключ
+     * `field`; при импорте бэкапа с чужого устройства `@Upsert` натыкался на нарушение уникальности,
+     * выполнял `UPDATE ... WHERE id = ?`, не находил строку (id-то другой) и молча возвращал ноль
+     * затронутых строк. Определение поля терялось, а отчёт импорта показывал его добавленным.
+     *
+     * Пересоздание таблицы, а не `DROP COLUMN`: SQLite научился ронять колонки лишь в 3.35, а версия
+     * SQLite на Android зависит от прошивки телефона. Приём тот же, что в [MIGRATION_2_3], и по тем же
+     * причинам безопасный: во время миграции внешние ключи выключены (`onOpen` с
+     * `PRAGMA foreign_keys = ON` фреймворк вызывает уже после `onUpgrade`), иначе неявный DELETE от
+     * `DROP TABLE` унёс бы каскадом `field_presets` и упёрся бы в RESTRICT со стороны `record_values`.
+     * `defer_foreign_keys` — та же подстраховка на случай включённых ключей: он откладывает проверку
+     * до коммита, но каскад отменить не может. Настоящая гарантия — тест цепочки миграций.
+     */
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("PRAGMA defer_foreign_keys = TRUE")
+            MIGRATION_4_5_DDL.forEach(db::execSQL)
+        }
+    }
+
+    /**
      * Полная цепочка в порядке версий. Существует затем, чтобы список миграций был ровно один:
      * [AppDatabase] и тест цепочки берут его отсюда, поэтому забытая в сборке миграция валит тест,
      * а не телефон прораба, пропустившего пару версий.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }
 
 /**
@@ -111,6 +137,47 @@ internal val MIGRATION_1_2_DDL: List<String> = listOf(
         "FOREIGN KEY(`fieldId`) REFERENCES `field_defs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
     "CREATE INDEX IF NOT EXISTS `index_record_values_fieldId` ON `record_values` (`fieldId`)",
 )
+
+/**
+ * Заводит встроенные поля в схеме v2 — той, что создаёт [MIGRATION_1_2_DDL], с колонкой `key`.
+ *
+ * Отдельно от `BuiltInFieldSeed`, хотя когда-то это была одна функция на оба пути. Разошлись они не
+ * по недосмотру: сид чистой установки пишет строку ТЕКУЩЕЙ схемы, а миграция обязана писать строку
+ * той, которую сама только что создала, — а с v5 у поля не стало `key`. Общая функция после этого
+ * означала бы, что прошлое переписывается вместе с настоящим; замороженный шаг истории не должен
+ * меняться от того, что схема поехала дальше.
+ *
+ * Значения по-прежнему берутся из [BuiltInFields], так что вторая их копия не заводится. `key = id`:
+ * колонка требовала NOT NULL и UNIQUE, читать её было некому уже тогда, а [Migrations.MIGRATION_4_5]
+ * её и вовсе уносит — годится любое уникальное значение, и `id` уникален по определению.
+ *
+ * Что обе ветки в итоге сходятся, проверяет `BuiltInFieldSeedTest` — сравнением на текущей версии,
+ * то есть после всей цепочки, а не на v2.
+ */
+private fun seedFieldDefsInV2Schema(db: SupportSQLiteDatabase, createdAt: Long) {
+    val sql = "INSERT INTO field_defs " +
+        "(`id`, `key`, `title`, `label`, `orderIndex`, `isArchived`, `isBuiltIn`, `isRequired`, " +
+        "`suggestFromHistory`, `columnWidthDp`, `maxLines`, `showAtCompactLod`, `createdAt`) " +
+        "VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, ?)"
+    BuiltInFields.ALL.forEach { spec ->
+        db.execSQL(
+            sql,
+            arrayOf<Any>(
+                spec.id,
+                spec.id,
+                spec.title,
+                spec.label,
+                spec.orderIndex,
+                if (spec.isRequired) 1 else 0,
+                if (spec.suggestFromHistory) 1 else 0,
+                spec.columnWidthDp,
+                spec.maxLines,
+                if (spec.showAtCompactLod) 1 else 0,
+                createdAt,
+            ),
+        )
+    }
+}
 
 /**
  * Перенос содержимого старых колонок. `TRIM(...) <> ''` отсекает не только пустые строки, но и
@@ -168,4 +235,27 @@ internal val MIGRATION_3_4_DDL: List<String> = listOf(
     "INSERT INTO field_presets (`id`, `fieldId`, `code`, `orderIndex`) " +
         "SELECT `id`, '${BuiltInFields.LOCATION_ID}', `code`, `orderIndex` FROM location_presets",
     "DROP TABLE location_presets",
+)
+
+/**
+ * Пересоздание `field_defs` без колонки `key`. `CREATE TABLE` скопирован дословно из
+ * `app/schemas/.../5.json` — по тем же причинам, что и DDL выше: Room сверяет схему по хешу.
+ *
+ * Восстанавливать после `DROP TABLE` нечего: единственным индексом таблицы был как раз UNIQUE по
+ * `key`, а в 5.json у `field_defs` индексов не осталось вовсе.
+ */
+internal val MIGRATION_4_5_DDL: List<String> = listOf(
+    "CREATE TABLE IF NOT EXISTS `_new_field_defs` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+        "`label` TEXT NOT NULL, `orderIndex` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, " +
+        "`isBuiltIn` INTEGER NOT NULL, `isRequired` INTEGER NOT NULL, " +
+        "`suggestFromHistory` INTEGER NOT NULL, `columnWidthDp` INTEGER NOT NULL, " +
+        "`maxLines` INTEGER NOT NULL, `showAtCompactLod` INTEGER NOT NULL, " +
+        "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+    "INSERT INTO `_new_field_defs` (`id`, `title`, `label`, `orderIndex`, `isArchived`, `isBuiltIn`, " +
+        "`isRequired`, `suggestFromHistory`, `columnWidthDp`, `maxLines`, `showAtCompactLod`, `createdAt`) " +
+        "SELECT `id`, `title`, `label`, `orderIndex`, `isArchived`, `isBuiltIn`, " +
+        "`isRequired`, `suggestFromHistory`, `columnWidthDp`, `maxLines`, `showAtCompactLod`, `createdAt` " +
+        "FROM `field_defs`",
+    "DROP TABLE `field_defs`",
+    "ALTER TABLE `_new_field_defs` RENAME TO `field_defs`",
 )

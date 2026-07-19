@@ -48,12 +48,12 @@ class BackupRoundTripTest {
         fieldPresets = listOf(BackupFieldPreset(id = "l1", fieldId = BuiltInFields.LOCATION_ID, code = "1-01", orderIndex = 0)),
         fieldDefs = listOf(
             BackupFieldDef(
-                id = BuiltInFields.LOCATION_ID, key = BuiltInFields.LOCATION_KEY, title = "Л", label = "Локация",
+                id = BuiltInFields.LOCATION_ID, title = "Л", label = "Локация",
                 orderIndex = 0, isArchived = false, isBuiltIn = true, isRequired = false,
                 suggestFromHistory = true, columnWidthDp = 56, maxLines = 2, showAtCompactLod = true, createdAt = 1,
             ),
             BackupFieldDef(
-                id = "f-custom", key = "volume", title = "ОБЪЁМ", label = "Объём & \"брутто\"",
+                id = "f-custom", title = "ОБЪЁМ", label = "Объём & \"брутто\"",
                 orderIndex = 2, isArchived = true, isBuiltIn = false, isRequired = false,
                 suggestFromHistory = false, columnWidthDp = 80, maxLines = 1, showAtCompactLod = false, createdAt = 3,
             ),

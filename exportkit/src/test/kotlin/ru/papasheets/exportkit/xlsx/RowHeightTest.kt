@@ -53,6 +53,43 @@ class RowHeightTest {
         assertEquals(3, RowHeight.estimateTextLines(row(listOf("коротко"), listOf("а\nб\nв")), fields))
     }
 
+    /**
+     * Excel переносит по словам, и слово, не влезшее в остаток строки, уезжает на новую целиком.
+     * Деление длины на вместимость дало бы здесь 2 строки (18 символов при вместимости 10), текст
+     * занял бы 3, и хвост оказался бы срезан при печати.
+     */
+    @Test
+    fun `a word that does not fit moves to the next line whole`() {
+        val fields = listOf(narrowWrap)
+        assertEquals(3, RowHeight.estimateTextLines(row(listOf("кладка кирпич раствор")), fields))
+    }
+
+    /** Слово длиннее всей колонки Excel всё-таки рвёт — единственный случай посимвольного переноса. */
+    @Test
+    fun `a word longer than the column is broken across lines`() {
+        val fields = listOf(narrowWrap)
+        assertEquals(3, RowHeight.estimateTextLines(row(listOf("x".repeat(21))), fields))
+    }
+
+    /** Пробелы между словами не должны сами по себе плодить строки. */
+    @Test
+    fun `short words share a line up to the column capacity`() {
+        val fields = listOf(narrowWrap)
+        assertEquals(1, RowHeight.estimateTextLines(row(listOf("а б в г д")), fields))
+    }
+
+    /**
+     * 409.5pt — потолок высоты строки в OOXML: выше Excel отказывается открывать файл целиком.
+     * Простыня текста в ячейке не должна стоить прорабу всего экспорта.
+     */
+    @Test
+    fun `a photo row never exceeds the OOXML row height ceiling`() {
+        val fields = listOf(narrowWrap)
+        val giant = row(listOf(List(500) { "строка $it" }.joinToString("\n")))
+
+        assertEquals(MAX_ROW_HEIGHT_PT, RowHeight.forPhotoRow(giant, fields), 0.0)
+    }
+
     @Test
     fun `a photo row is never shorter than the photo itself`() {
         val fields = listOf(narrowWrap)

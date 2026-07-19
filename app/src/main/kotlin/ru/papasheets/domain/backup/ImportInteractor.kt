@@ -2,9 +2,11 @@ package ru.papasheets.domain.backup
 
 import android.content.Context
 import android.net.Uri
+import java.io.File
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import ru.papasheets.data.DefaultSeed
 import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldPresetRepository
@@ -54,13 +56,19 @@ class ImportInteractor(
             val existingPhotoIds = photoStore.getAllMeta().mapTo(HashSet()) { it.id }
             val existingRecordUpdatedAt = recordRepository.getAll().associate { it.id to it.updatedAt }
 
-            // Устройство ещё не использовалось (ни одного журнала, ни одной записи) — единственные
-            // подрядчики на нём тогда это одноразовая заглушка DefaultSeed со случайными UUID, которые
-            // никогда не совпадут с UUID из бэкапа. Заменяем её целиком — иначе те же 5 подрядчиков
-            // задвоились бы под новыми id рядом с настоящими из бэкапа.
+            // Заводская заглушка DefaultSeed заведена со случайными UUID, которые никогда не совпадут
+            // с UUID из бэкапа, поэтому не снесённая — она задвоила бы тех же пятерых подрядчиков под
+            // новыми id рядом с настоящими. Сносим, но только пока это ровно она: пул, в котором
+            // прораб успел что-то поменять, принадлежит уже ему, и стирать его нельзя, даже если ни
+            // одной записи он ещё не завёл (проверку ведёт DefaultSeed.isUntouchedSeed). Пустота
+            // журналов и записей остаётся в условии не ради «девственности» устройства, а потому что
+            // record_values ссылается на подрядчиков с ON DELETE RESTRICT.
             // На определения полей это не распространяется: их id — константы (BuiltInFields), так что
             // встроенное поле из бэкапа совпадёт со здешним по id и просто заменит его, без задвоения.
-            if (existingJournalIds.isEmpty() && existingRecordUpdatedAt.isEmpty() && contents.data.contractors.isNotEmpty()) {
+            val existingContractors = contractorRepository.getAll()
+            if (existingJournalIds.isEmpty() && existingRecordUpdatedAt.isEmpty() &&
+                contents.data.contractors.isNotEmpty() && DefaultSeed.isUntouchedSeed(existingContractors)
+            ) {
                 contractorRepository.deleteAll()
             }
             val existingContractorIds = contractorRepository.getAll().mapTo(HashSet()) { it.id }
@@ -123,11 +131,25 @@ class ImportInteractor(
         }
     }
 
-    /** Файл — только если его ещё нет на диске (байты фото иммутабельны, перезаписывать нечего). */
+    /**
+     * Файл — только если его ещё нет на диске: байты фото иммутабельны, перезаписывать нечего.
+     *
+     * Пишется он через временный файл с переименованием, и это не перестраховка. Импорт может
+     * оборваться посреди копирования (убитый процесс, кончившееся место), и файл под настоящим
+     * именем остался бы усечённым JPEG'ом. Проверка `exists()` приняла бы его за готовый, повторный
+     * импорт прошёл бы мимо — фото оказалось бы битым навсегда, причём молча. Переименование внутри
+     * одной файловой системы атомарно, поэтому под настоящим именем файл появляется только целиком
+     * записанным, а оборвавшийся импорт оставляет лишь `.part`, который ничему не мешает.
+     */
     private fun writePhotoFileIfAbsent(photoId: String, kind: BackupPhotoKind, stream: InputStream) {
         val file = if (kind == BackupPhotoKind.MEDIUM) photoStore.mediumFile(photoId) else photoStore.thumbFile(photoId)
         if (file.exists()) return
         file.parentFile?.mkdirs()
-        file.outputStream().use { out -> stream.copyTo(out) }
+        val partial = File(file.parentFile, "${file.name}.part")
+        partial.outputStream().use { out -> stream.copyTo(out) }
+        if (!partial.renameTo(file)) {
+            partial.delete()
+            error("Не удалось сохранить фото $photoId ($kind): переименование ${partial.name} не удалось")
+        }
     }
 }

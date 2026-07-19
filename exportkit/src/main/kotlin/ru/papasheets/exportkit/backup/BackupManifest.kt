@@ -23,7 +23,7 @@ data class BackupManifest(
 ) {
     companion object {
         /** Версия формата .psbackup, которую пишет эта версия приложения. */
-        const val CURRENT_FORMAT_VERSION = 3
+        const val CURRENT_FORMAT_VERSION = 4
 
         /** Самая старая версия, которую эта сборка ещё умеет читать (апгрейдя в памяти). */
         const val MIN_SUPPORTED_FORMAT_VERSION = 1

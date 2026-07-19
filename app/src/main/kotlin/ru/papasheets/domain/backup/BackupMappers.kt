@@ -48,12 +48,12 @@ fun FieldPresetEntity.toBackup() = BackupFieldPreset(id, fieldId, code, orderInd
 fun BackupFieldPreset.toEntity() = FieldPresetEntity(id, fieldId, code, orderIndex)
 
 fun FieldDefEntity.toBackup() = BackupFieldDef(
-    id, key, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
+    id, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
     suggestFromHistory, columnWidthDp, maxLines, showAtCompactLod, createdAt,
 )
 
 fun BackupFieldDef.toEntity() = FieldDefEntity(
-    id, key, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
+    id, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
     suggestFromHistory, columnWidthDp, maxLines, showAtCompactLod, createdAt,
 )
 

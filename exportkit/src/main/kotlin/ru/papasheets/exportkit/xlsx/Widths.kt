@@ -25,4 +25,23 @@ object Widths {
         val raw = ZERO_DP_CHARS + dp * CHARS_PER_DP
         return Math.round(raw.coerceIn(MIN_CHARS, MAX_CHARS) * 100.0) / 100.0
     }
+
+    /**
+     * Ширина колонки в символьных единицах, вмещающая [pt] пунктов. Нужна там, где ширину диктует не
+     * поле матрицы, а вставленный объект: колонка Ф обязана быть не уже фото, которое в ней лежит.
+     *
+     * Здесь, в отличие от [dpToChars], пересчёт не эмпирический, а по формуле OOXML: ширина колонки
+     * задана в ширинах символа «0» ([MAX_DIGIT_WIDTH_PX] для Calibri 11) плюс [PADDING_PX] на поля
+     * ячейки. Пункты переводятся в пиксели по 96 dpi — той же плотности, в которой Excel считает
+     * ширины колонок, тогда как высоты строк и размеры картинок он держит в пунктах.
+     */
+    fun ptToChars(pt: Double): Double {
+        val px = pt * PX_PER_POINT
+        val raw = (px - PADDING_PX) / MAX_DIGIT_WIDTH_PX
+        return Math.round(raw.coerceIn(MIN_CHARS, MAX_CHARS) * 100.0) / 100.0
+    }
+
+    private const val PX_PER_POINT = 96.0 / 72.0
+    private const val MAX_DIGIT_WIDTH_PX = 7.0
+    private const val PADDING_PX = 5.0
 }

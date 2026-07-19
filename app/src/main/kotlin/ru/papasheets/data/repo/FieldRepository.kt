@@ -7,8 +7,8 @@ import ru.papasheets.data.db.dao.FieldDefDao
 import ru.papasheets.data.db.entity.FieldDefEntity
 
 /**
- * Всё, что экран полей может изменить в определении: `id`, `key`, `orderIndex`, `isBuiltIn` и
- * `createdAt` сюда не входят — ими распоряжается [FieldRepository], и снаружи их не назначают.
+ * Всё, что экран полей может изменить в определении: `id`, `orderIndex`, `isBuiltIn` и `createdAt`
+ * сюда не входят — ими распоряжается [FieldRepository], и снаружи их не назначают.
  */
 data class FieldDraft(
     /** Подпись подколонки в шапке матрицы — там тесно, поэтому коротко: «Л», «ОБЪЁМ». */
@@ -48,7 +48,7 @@ sealed interface FieldDeleteOutcome {
  * строки формы записи: набор и его порядок у всех трёх один, поэтому и источник должен быть один,
  * иначе экспорт разъедется с матрицей по составу колонок.
  *
- * Здесь же живут правила, а не на экране полей: генерация `id`/`key`/`orderIndex`, запрет удаления
+ * Здесь же живут правила, а не на экране полей: генерация `id`/`orderIndex`, запрет удаления
  * встроенного поля и заполненного поля. Экран показывает исход ([FieldDeleteOutcome]), но не решает,
  * каким он будет.
  */
@@ -71,7 +71,6 @@ class FieldRepository(private val dao: FieldDefDao) {
         dao.insert(
             FieldDefEntity(
                 id = UUID.randomUUID().toString(),
-                key = uniqueKey(draft.label, existing.mapTo(HashSet()) { it.key }),
                 title = draft.title.trim(),
                 label = draft.label.trim(),
                 orderIndex = (existing.maxOfOrNull { it.orderIndex } ?: -1) + 1,
@@ -87,11 +86,7 @@ class FieldRepository(private val dao: FieldDefDao) {
         )
     }
 
-    /**
-     * Правка определения. `key` не меняется даже у своего поля: он ничего не значит для прораба
-     * (в интерфейсе его нет), зато служит стабильным машинным именем колонки — переименовывать
-     * стабильное имя не за чем.
-     */
+    /** Правка определения: меняется только то, что прораб видит на экране полей. */
     suspend fun update(field: FieldDefEntity, draft: FieldDraft) = dao.update(
         field.copy(
             title = draft.title.trim(),
@@ -127,24 +122,4 @@ class FieldRepository(private val dao: FieldDefDao) {
     /** Восстанавливает определение поля из бэкапа как есть (решение принимает [ru.papasheets.domain.backup.MergeRules]). */
     suspend fun upsertFromBackup(field: FieldDefEntity) = dao.upsertFromBackup(field)
 
-    /**
-     * Машинный ключ выводится из названия, а не спрашивается у прораба: в интерфейсе `key` не виден,
-     * и требовать латинский идентификатор от человека, который заводит колонку «Объём», — просить
-     * заполнить графу ради самой графы.
-     *
-     * Русское название нелатинских символов не оставляет, поэтому от него остаётся [FALLBACK_KEY] —
-     * это нормально: смысл колонки несут `title`/`label`, а `key` обязан быть лишь стабильным и
-     * уникальным. Уникальность здесь гарантируется, а не проверяется вызывающим: `field_defs.key`
-     * под UNIQUE-индексом, и столкновение было бы отказом вставки на ровном месте.
-     */
-    private fun uniqueKey(label: String, taken: Set<String>): String {
-        val base = label.lowercase().replace(NON_KEY_CHARS, "-").trim('-').ifEmpty { FALLBACK_KEY }
-        if (base !in taken) return base
-        return generateSequence(2) { it + 1 }.map { "$base-$it" }.first { it !in taken }
-    }
-
-    private companion object {
-        val NON_KEY_CHARS = Regex("[^a-z0-9]+")
-        const val FALLBACK_KEY = "field"
-    }
 }

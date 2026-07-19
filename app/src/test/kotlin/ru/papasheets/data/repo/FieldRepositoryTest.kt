@@ -11,8 +11,8 @@ import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.exportkit.backup.BuiltInFields
 
 /**
- * Правила, которые обязан держать [FieldRepository], а не экран полей: что можно удалить, каким
- * получается новое поле и почему его `key` не может совпасть с чужим.
+ * Правила, которые обязан держать [FieldRepository], а не экран полей: что можно удалить и каким
+ * получается новое поле.
  *
  * Проверяются на подставном DAO, а не на настоящем Room: правила — это решения репозитория, и
  * настоящий SQLite добавил бы к тесту только время старта эмулятора.
@@ -37,14 +37,13 @@ class FieldRepositoryTest {
 
     private fun field(
         id: String,
-        key: String = id,
+        title: String = id,
         orderIndex: Int = 0,
         isBuiltIn: Boolean = false,
     ) = FieldDefEntity(
         id = id,
-        key = key,
-        title = key,
-        label = key,
+        title = title,
+        label = title,
         orderIndex = orderIndex,
         isArchived = false,
         isBuiltIn = isBuiltIn,
@@ -88,12 +87,11 @@ class FieldRepositoryTest {
     }
 
     /**
-     * `field_defs.key` под UNIQUE-индексом, поэтому совпадение ключей было бы не «неаккуратностью»,
-     * а отказом вставки. Русские названия латиницы не содержат, так что все свои поля приходят к
-     * одной и той же основе — и разойтись обязаны сами.
+     * Одинаково названные поля остаются разными строками. Различает их `id`, и ничего кроме него:
+     * машинного ключа у поля нет — см. заметку про встроенные поля в `docs/evolution.md`.
      */
     @Test
-    fun `keys of fields with identical labels do not collide`() {
+    fun `fields with identical labels stay distinct`() {
         val dao = FakeDao()
         val repository = FieldRepository(dao)
 
@@ -103,18 +101,7 @@ class FieldRepositoryTest {
             repository.create(draft("Объём"))
         }
 
-        assertEquals(3, dao.rows.map { it.key }.toSet().size)
-    }
-
-    /** Не должен столкнуться и с ключом встроенного поля, у которого он осмысленный и занят. */
-    @Test
-    fun `a generated key does not collide with a built-in one`() {
-        val dao = FakeDao(listOf(field(BuiltInFields.LOCATION_ID, key = "location", isBuiltIn = true)))
-        val repository = FieldRepository(dao)
-
-        runBlocking { repository.create(draft("location")) }
-
-        assertEquals(2, dao.rows.map { it.key }.toSet().size)
+        assertEquals(3, dao.rows.map { it.id }.toSet().size)
     }
 
     @Test
@@ -143,7 +130,7 @@ class FieldRepositoryTest {
     /** Встроенное поле не удаляется даже пустым: сид и бэкап всё равно вернули бы его обратно. */
     @Test
     fun `a built-in field is refused even with no values`() {
-        val dao = FakeDao(listOf(field(BuiltInFields.LOCATION_ID, key = "location", isBuiltIn = true)))
+        val dao = FakeDao(listOf(field(BuiltInFields.LOCATION_ID, title = "Локация", isBuiltIn = true)))
         val repository = FieldRepository(dao)
 
         val outcome = runBlocking { repository.delete(dao.rows.single()) }
@@ -162,15 +149,16 @@ class FieldRepositoryTest {
         assertEquals(listOf("c", "a", "b"), dao.getAllSortedIds())
     }
 
-    /** `key` — стабильное машинное имя колонки: правка названий его не трогает. */
+    /** `id` и место в порядке колонок — не то, чем распоряжается экран полей: правка их не трогает. */
     @Test
-    fun `update changes labels but never the key`() {
-        val dao = FakeDao(listOf(field("f-volume", key = "field")))
+    fun `update changes labels but never identity or order`() {
+        val dao = FakeDao(listOf(field("f-volume", orderIndex = 3)))
         val repository = FieldRepository(dao)
 
         runBlocking { repository.update(dao.rows.single(), draft("Объём бетона")) }
 
-        assertEquals("field", dao.rows.single().key)
+        assertEquals("f-volume", dao.rows.single().id)
+        assertEquals(3, dao.rows.single().orderIndex)
         assertEquals("Объём бетона", dao.rows.single().label)
     }
 
