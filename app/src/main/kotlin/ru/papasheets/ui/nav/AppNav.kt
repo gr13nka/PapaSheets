@@ -50,6 +50,8 @@ fun AppNav() {
                 journalId = journalId,
                 onBack = { navController.popBackStack() },
                 onOpenLightbox = { recordId -> navController.navigate("lightbox/$recordId") },
+                onOpenContractors = { navController.navigate(ROUTE_SETTINGS_CONTRACTORS) },
+                onOpenFields = { navController.navigate(ROUTE_SETTINGS_FIELDS) },
             )
         }
         composable(

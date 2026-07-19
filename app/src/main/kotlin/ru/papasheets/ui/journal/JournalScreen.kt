@@ -18,6 +18,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -71,7 +72,13 @@ import ru.papasheets.ui.record.RecordSheetModeSaver
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JournalScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String) -> Unit) {
+fun JournalScreen(
+    journalId: String,
+    onBack: () -> Unit,
+    onOpenLightbox: (String) -> Unit,
+    onOpenContractors: () -> Unit,
+    onOpenFields: () -> Unit,
+) {
     val graph = LocalAppGraph.current
     val viewModel: JournalViewModel = viewModel(
         factory = viewModelFactory {
@@ -201,6 +208,25 @@ fun JournalScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String
                                 onClick = {
                                     menuExpanded = false
                                     showExportDialog = true
+                                },
+                            )
+                            HorizontalDivider()
+                            // Настройка таблицы — отсюда же, из таблицы: искать её на экране списка
+                            // журналов неоткуда догадаться, когда правишь колонки прямо перед глазами.
+                            MenuItemWithHint(
+                                title = stringResource(R.string.settings_contractors),
+                                hint = stringResource(R.string.settings_contractors_hint),
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenContractors()
+                                },
+                            )
+                            MenuItemWithHint(
+                                title = stringResource(R.string.settings_fields),
+                                hint = stringResource(R.string.settings_fields_hint),
+                                onClick = {
+                                    menuExpanded = false
+                                    onOpenFields()
                                 },
                             )
                         }
@@ -362,6 +388,30 @@ private fun ModeBar(
             },
         )
     }
+}
+
+/**
+ * Пункт меню с пояснением под названием.
+ *
+ * «Подрядчики» и «Поля» — слова из головы разработчика: по ним не видно, что первое задаёт большие
+ * колонки таблицы, а второе — подколонки внутри каждой. Подпись снимает этот вопрос на месте,
+ * вместо того чтобы заставлять зайти и посмотреть.
+ */
+@Composable
+private fun MenuItemWithHint(title: String, hint: String, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = {
+            Column {
+                Text(title)
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        onClick = onClick,
+    )
 }
 
 /** Сегодня — если журнал открыт на текущий месяц, иначе первое число месяца журнала (правило M1). */

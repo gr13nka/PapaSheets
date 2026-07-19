@@ -41,7 +41,9 @@
     <string name="export_success">Сохранено</string>
 
     <string name="settings_contractors">Подрядчики</string>
-    <string name="settings_fields">Поля</string>
+    <string name="settings_contractors_hint">Большие колонки таблицы: добавить, переименовать, порядок</string>
+    <string name="settings_fields">Поля записи</string>
+    <string name="settings_fields_hint">Подколонки внутри подрядчика: Локация, Вид работ, свои</string>
 
     <string name="backup_menu_save">Сохранить бэкап</string>
     <string name="backup_menu_import">Импорт бэкапа</string>
@@ -104,7 +106,7 @@
     <string name="contractors_short_name_label">Короткое имя (до 4 символов)</string>
     <string name="contractors_empty">Пока нет подрядчиков</string>
 
-    <string name="fields_title">Поля</string>
+    <string name="fields_title">Поля записи</string>
     <string name="fields_archived_section">Архив (%d)</string>
     <string name="fields_archive_action">В архив</string>
     <string name="fields_unarchive_action">Вернуть</string>
