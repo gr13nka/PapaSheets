@@ -1,9 +1,6 @@
 package ru.papasheets.domain.xlsx
 
 import java.io.File
-import java.time.LocalDate
-import ru.papasheets.data.db.entity.ContractorEntity
-import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.exportkit.xlsx.read.PhotoRef
 
 /** Импорт xlsx сорвался по причине, которую нужно показать пользователю дословно. */
@@ -15,33 +12,48 @@ class XlsxImportException(message: String, cause: Throwable? = null) : Exception
  * месяц, журналом с 28 незнакомыми подрядчиками. Молча слить такое в базу нельзя, а откатить импорт
  * после — уже нечем.
  *
- * Цифры здесь не «прикидка», а следствие готового [plan]: показывается ровно то, что запишется.
- * Считать их отдельно от плана значило бы завести второй источник правды, который однажды разойдётся
- * с первым.
+ * **Ни одной своей цифры здесь нет — все выводятся из [plan].** Именно этим планом [XlsxImportInteractor.apply]
+ * потом и пишет, так что показать одно, а записать другое попросту нечем: значения не передаются в
+ * конструктор, а вычисляются, и второму источнику правды взяться неоткуда. Раньше они приходили
+ * параметрами, и совпадение держалось на внимательности вызывающего.
+ *
+ * Кроме плана несёт временную копию файла: она пережидает здесь показ диалога, потому что байты
+ * фото достаются из неё уже на этапе записи.
  */
 class XlsxImportPreview internal constructor(
     val journalTitle: String,
+    internal val plan: XlsxImportPlan,
+    /** Временный файл-копия выбранного xlsx; удаляется после записи или отказа. */
+    internal val sourceFile: File,
+    /** Фото по ссылке из архива — отдаёт байты, пока [sourceFile] на месте. */
+    internal val photoBytes: (PhotoRef) -> ByteArray?,
+) {
     /** true, если журнал за этот месяц уже есть и записи добавятся в него. */
-    val journalExists: Boolean,
-    val dayCount: Int,
-    val recordCount: Int,
-    val photoCount: Int,
+    val journalExists: Boolean get() = plan.journalExists
+
+    val dayCount: Int get() = plan.dayCount
+    val recordCount: Int get() = plan.records.size
+    val photoCount: Int get() = plan.photoCount
+
     /** Подрядчики, которых на устройстве нет и которые будут созданы. */
-    val newContractors: List<String>,
+    val newContractors: List<String> get() = plan.newContractors.map { it.name }
+
     /** Подрядчики из файла, найденные среди существующих по имени. */
-    val matchedContractorCount: Int,
+    val matchedContractorCount: Int get() = plan.matchedContractorCount
+
     /** Подписи колонок, под которые будут заведены новые поля записи. */
-    val newFields: List<String>,
+    val newFields: List<String> get() = plan.newFields.map { it.title }
+
     /** Колонки файла, легшие на уже существующие поля (включая встроенные «Л» и «ВИД РАБОТ»). */
-    val matchedFieldCount: Int,
+    val matchedFieldCount: Int get() = plan.matchedFieldCount
+
     /**
      * Колонки и группы, которые импорт пропустит: без подписи их не к чему привязать. Так выглядит
      * файл с вырезанной таблицей общих строк — структура на месте, а текста нет.
      */
-    val skippedUnnamedContractors: Int,
-    val skippedUnnamedFields: Int,
-    internal val plan: XlsxImportPlan,
-)
+    val skippedUnnamedContractors: Int get() = plan.skippedUnnamedContractors
+    val skippedUnnamedFields: Int get() = plan.skippedUnnamedFields
+}
 
 /** Сколько чего действительно записано — итог подтверждённого импорта. */
 class XlsxImportResult(
@@ -52,33 +64,4 @@ class XlsxImportResult(
     val importedPhotos: Int,
 )
 
-/**
- * Решённый план импорта: все сопоставления с содержимым БД уже сделаны, осталось записать.
- *
- * План строится один раз — на нём же считается предпросмотр, им же выполняется запись. Благодаря
- * этому подтверждённый импорт не может разойтись с показанными цифрами.
- */
-internal class XlsxImportPlan(
-    val year: Int,
-    val month: Int,
-    val newContractors: List<ContractorEntity>,
-    val newFields: List<FieldDefEntity>,
-    val records: List<PlannedRecord>,
-    /** Временный файл-копия выбранного xlsx: из него достаются байты фото на этапе записи. */
-    val sourceFile: File,
-    /** Фото по ссылке из архива — отдаёт байты, пока [sourceFile] на месте. */
-    val photoBytes: (PhotoRef) -> ByteArray?,
-)
 
-/**
- * Одна будущая запись журнала. Подрядчик и поля адресуются готовыми id: новые сущности получают
- * их ещё на этапе планирования, поэтому запись не зависит от того, создавались они сейчас или
- * лежали в базе с прошлого раза.
- */
-internal class PlannedRecord(
-    val date: LocalDate,
-    val contractorId: String,
-    /** id поля → значение; пустые значения сюда не попадают. */
-    val values: Map<String, String>,
-    val photo: PhotoRef?,
-)

@@ -9,8 +9,6 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ru.papasheets.data.db.TransactionRunner
-import ru.papasheets.data.db.entity.ContractorEntity
-import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.data.db.entity.RecordValueEntity
 import ru.papasheets.data.repo.ContractorRepository
@@ -74,7 +72,7 @@ class XlsxImportInteractor(
     suspend fun apply(preview: XlsxImportPreview): XlsxImportResult = withContext(Dispatchers.IO) {
         val plan = preview.plan
         try {
-            val photoMetaByRecord = importPhotos(plan)
+            val photoMetaByRecord = importPhotos(plan, preview.photoBytes)
 
             transactionRunner.run {
                 val journal = journalRepository.createOrGetJournal(plan.year, plan.month)
@@ -113,87 +111,36 @@ class XlsxImportInteractor(
                 )
             }
         } finally {
-            plan.sourceFile.delete()
+            preview.sourceFile.delete()
         }
     }
 
     /** Пользователь отказался от импорта — временная копия файла больше не нужна. */
     fun discard(preview: XlsxImportPreview) {
-        preview.plan.sourceFile.delete()
+        preview.sourceFile.delete()
     }
 
     // --- планирование -------------------------------------------------------------------------
 
+    /**
+     * Само сопоставление считает [XlsxImportPlanner] — здесь остаётся только то, ради чего нужны
+     * `Context` и репозитории: человеческое название месяца и проверка, есть ли уже такой журнал.
+     */
     private suspend fun plan(sheet: ParsedSheet, file: File): XlsxImportPreview {
-        val month = resolveMonth(sheet)
+        val plan = XlsxImportPlanner.plan(
+            sheet = sheet,
+            existingContractors = contractorRepository.getAll(),
+            existingFields = fieldRepository.getAll(),
+            existingJournals = journalRepository.getAll(),
+            now = System.currentTimeMillis(),
+        )
 
-        val contractors = ContractorMatcher(contractorRepository.getAll(), sheet.contractors)
-        val fields = FieldMatcher(fieldRepository.getAll(), sheet.fieldTitles)
-
-        val records = ArrayList<PlannedRecord>()
-        var photoCount = 0
-        for (day in sheet.days) {
-            val date = day.date ?: continue
-            for (row in day.rows) {
-                row.cells.forEachIndexed { contractorIndex, cell ->
-                    if (cell == null) return@forEachIndexed
-                    val contractorId = contractors.idFor(contractorIndex) ?: return@forEachIndexed
-                    val values = fields.valuesFor(cell.values)
-                    val photo = cell.photo?.takeIf { it.isPresent }
-                    // Запись без единого значения и без фото переносить нечего.
-                    if (values.isEmpty() && photo == null) return@forEachIndexed
-                    if (photo != null) photoCount++
-                    records += PlannedRecord(date, contractorId, values, photo)
-                }
-            }
-        }
-
-        if (records.isEmpty()) {
-            throw XlsxImportException("В таблице не нашлось ни одной записи, которую можно перенести")
-        }
-
-        val plan = XlsxImportPlan(
-            year = month.year,
-            month = month.monthValue,
-            newContractors = contractors.newEntities,
-            newFields = fields.newEntities,
-            records = records,
+        return XlsxImportPreview(
+            journalTitle = monthTitle(LocalDate.of(plan.year, plan.month, 1)),
+            plan = plan,
             sourceFile = file,
             photoBytes = { ref -> sheet.photoBytes(ref) },
         )
-        val existingJournal = journalRepository.getAll().any { it.year == month.year && it.month == month.monthValue }
-
-        return XlsxImportPreview(
-            journalTitle = monthTitle(month),
-            journalExists = existingJournal,
-            dayCount = records.map { it.date }.distinct().size,
-            recordCount = records.size,
-            photoCount = photoCount,
-            newContractors = contractors.newEntities.map { it.name },
-            matchedContractorCount = contractors.matchedCount,
-            newFields = fields.newEntities.map { it.title },
-            matchedFieldCount = fields.matchedCount,
-            skippedUnnamedContractors = contractors.unnamedCount,
-            skippedUnnamedFields = fields.unnamedCount,
-            plan = plan,
-        )
-    }
-
-    /**
-     * Месяц журнала берётся из самих дат — это единственный надёжный источник. Наш собственный
-     * экспорт пишет дату без года («01.06»), и тогда определить месяц нечем: имя листа у заказчика
-     * «Лист2», а в имени файла года тоже нет. Угадывать здесь нельзя — записи уехали бы в чужой год.
-     */
-    private fun resolveMonth(sheet: ParsedSheet): LocalDate {
-        val dates = sheet.days.mapNotNull { it.date }
-        if (dates.isEmpty()) {
-            throw XlsxImportException(
-                "В таблице не удалось распознать даты с годом — импортировать такой файл нельзя",
-            )
-        }
-        // Файл-месяц может задевать соседний день на стыке — берём месяц большинства записей.
-        return dates.groupingBy { LocalDate.of(it.year, it.monthValue, 1) }.eachCount()
-            .maxByOrNull { it.value }!!.key
     }
 
     private fun monthTitle(month: LocalDate): String {
@@ -213,14 +160,17 @@ class XlsxImportInteractor(
      *
      * @return индекс записи в плане → мета созданного фото; записи без фото в карту не попадают.
      */
-    private fun importPhotos(plan: XlsxImportPlan): Map<Int, ru.papasheets.photos.PhotoMeta> {
+    private fun importPhotos(
+        plan: XlsxImportPlan,
+        photoBytes: (PhotoRef) -> ByteArray?,
+    ): Map<Int, ru.papasheets.photos.PhotoMeta> {
         val importer = PhotoImporter(context)
         val result = LinkedHashMap<Int, ru.papasheets.photos.PhotoMeta>()
         val staging = File(context.cacheDir, "xlsx-photo-staging.jpg")
         try {
             plan.records.forEachIndexed { index, planned ->
                 val ref = planned.photo ?: return@forEachIndexed
-                val bytes = plan.photoBytes(ref) ?: return@forEachIndexed
+                val bytes = photoBytes(ref) ?: return@forEachIndexed
                 staging.writeBytes(bytes)
                 val id = UUID.randomUUID().toString()
                 val meta = try {
@@ -252,127 +202,3 @@ class XlsxImportInteractor(
     }
 }
 
-/**
- * Сопоставление подрядчиков файла с теми, что уже заведены на устройстве, — по имени: id из чужой
- * таблицы взяться неоткуда. В эталоне подрядчиков 28, а в свежей установке 5, так что большинство
- * придётся создать.
- *
- * Группы без имени (в файле с вырезанной таблицей строк такими будут все) не сопоставляются и не
- * создаются: подрядчик без имени в журнале бесполезен, а 28 безымянных строк — тем более.
- */
-private class ContractorMatcher(existing: List<ContractorEntity>, names: List<String>) {
-    private val idByIndex = HashMap<Int, String>()
-    val newEntities = ArrayList<ContractorEntity>()
-    var matchedCount = 0
-        private set
-    var unnamedCount = 0
-        private set
-
-    init {
-        val byName = existing.associateBy { it.name.trim().lowercase() }
-        var nextOrder = (existing.maxOfOrNull { it.orderIndex } ?: -1) + 1
-        var nextColor = (existing.maxOfOrNull { it.colorIndex } ?: -1) + 1
-        val createdByName = HashMap<String, String>()
-        names.forEachIndexed { index, rawName ->
-            val name = rawName.trim()
-            if (name.isEmpty()) {
-                unnamedCount++
-                return@forEachIndexed
-            }
-            val key = name.lowercase()
-            val existingId = byName[key]?.id
-            if (existingId != null) {
-                idByIndex[index] = existingId
-                matchedCount++
-                return@forEachIndexed
-            }
-            // Одно имя может встретиться в шапке дважды — второй раз это та же колонка, не второй подрядчик.
-            val alreadyCreated = createdByName[key]
-            if (alreadyCreated != null) {
-                idByIndex[index] = alreadyCreated
-                return@forEachIndexed
-            }
-            val entity = ContractorEntity(
-                id = UUID.randomUUID().toString(),
-                name = name,
-                shortName = name.take(SHORT_NAME_LENGTH),
-                colorIndex = nextColor++,
-                orderIndex = nextOrder++,
-                createdAt = System.currentTimeMillis(),
-            )
-            newEntities += entity
-            createdByName[key] = entity.id
-            idByIndex[index] = entity.id
-        }
-    }
-
-    fun idFor(contractorIndex: Int): String? = idByIndex[contractorIndex]
-
-    private companion object {
-        const val SHORT_NAME_LENGTH = 12
-    }
-}
-
-/**
- * Сопоставление колонок файла с определениями полей записи — по подписи. Встроенные «Л» и
- * «ВИД РАБОТ» ([ru.papasheets.exportkit.backup.BuiltInFields]) заведены в базе с этими же
- * заголовками, поэтому ложатся на себя сами; заводить рядом их дубликаты было бы нечем потом слить.
- */
-private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>) {
-    private val idByColumn = HashMap<Int, String>()
-    val newEntities = ArrayList<FieldDefEntity>()
-    var matchedCount = 0
-        private set
-    var unnamedCount = 0
-        private set
-
-    init {
-        val byTitle = existing.associateBy { it.title.trim().lowercase() }
-        var nextOrder = (existing.maxOfOrNull { it.orderIndex } ?: -1) + 1
-        titles.forEachIndexed { index, rawTitle ->
-            val title = rawTitle.trim()
-            if (title.isEmpty()) {
-                unnamedCount++
-                return@forEachIndexed
-            }
-            val match = byTitle[title.lowercase()]
-            if (match != null) {
-                idByColumn[index] = match.id
-                matchedCount++
-                return@forEachIndexed
-            }
-            val entity = FieldDefEntity(
-                id = UUID.randomUUID().toString(),
-                title = title,
-                label = title,
-                orderIndex = nextOrder++,
-                isArchived = false,
-                isBuiltIn = false,
-                isRequired = false,
-                suggestFromHistory = true,
-                columnWidthDp = DEFAULT_WIDTH_DP,
-                maxLines = 0,
-                showAtCompactLod = false,
-                createdAt = System.currentTimeMillis(),
-            )
-            newEntities += entity
-            idByColumn[index] = entity.id
-        }
-    }
-
-    /** id поля → значение для одной ячейки; пустые значения и колонки без подписи отбрасываются. */
-    fun valuesFor(cellValues: List<String>): Map<String, String> {
-        val result = LinkedHashMap<String, String>()
-        cellValues.forEachIndexed { index, value ->
-            val fieldId = idByColumn[index] ?: return@forEachIndexed
-            val trimmed = value.trim()
-            // record_values не хранит пустых значений — пустое значение это отсутствие строки.
-            if (trimmed.isNotEmpty()) result[fieldId] = trimmed
-        }
-        return result
-    }
-
-    private companion object {
-        const val DEFAULT_WIDTH_DP = 120
-    }
-}
