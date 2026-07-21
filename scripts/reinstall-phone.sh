@@ -73,5 +73,5 @@ else
 fi
 
 echo
-echo "Готово. Приложение «Журнал работ» на телефоне."
+echo "Готово. Приложение «PapaSheets» на телефоне."
 echo "Логи, если что-то падает:  $ADB -s $DEVICE logcat --pid=\$($ADB -s $DEVICE shell pidof $PKG)"

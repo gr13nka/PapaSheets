@@ -98,7 +98,7 @@ fi
 VERSION=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | head -1 | cut -d'"' -f2)
 STAMP=$(date +%Y-%m-%d)
 mkdir -p "$DIST"
-OUT="$DIST/ЖурналРабот-$VERSION-$STAMP.apk"
+OUT="$DIST/PapaSheets-$VERSION-$STAMP.apk"
 cp "$APK" "$OUT"
 
 echo
