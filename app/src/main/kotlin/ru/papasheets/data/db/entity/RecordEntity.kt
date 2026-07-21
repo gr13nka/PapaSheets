@@ -10,8 +10,16 @@ import androidx.room.PrimaryKey
  * добавленные прорабом поля) живёт в `record_values` — здесь только то, что есть у каждой записи
  * независимо от набора полей.
  *
- * `photoId` nullable в схеме (SET_NULL при удалении фото) — обязательность фото проверяется
- * валидацией формы, а не БД: ровно одно фото на запись, но пока форма не сохранена, ссылки нет.
+ * Фото — два слота, а не список в отдельной таблице: части работ нужен второй ракурс, больше двух
+ * не требовалось ни разу. Потолок сознательный, поэтому и выражен схемой — таблица связи позволяла
+ * бы сколько угодно и требовала бы ограничивать число где-то в коде.
+ *
+ * Оба слота nullable в схеме (SET_NULL при удалении фото) — обязательность проверяется валидацией
+ * формы, а не БД: у сохранённой записи есть хотя бы одно фото, но пока форма не сохранена, ссылки
+ * нет. Слоты равноправны и заполняются по порядку: [photoId2] без [photoId] форма не создаёт.
+ *
+ * UNIQUE на обоих слотах — то же, что и раньше на одном: фото принадлежит ровно одной записи,
+ * иначе удаление записи уносило бы кадр, который ещё виден в другой.
  */
 @Entity(
     tableName = "records",
@@ -34,11 +42,18 @@ import androidx.room.PrimaryKey
             childColumns = ["photoId"],
             onDelete = ForeignKey.SET_NULL,
         ),
+        ForeignKey(
+            entity = PhotoEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["photoId2"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
     indices = [
         Index(value = ["journalId", "dateEpochDay"]),
         Index(value = ["contractorId"]),
         Index(value = ["photoId"], unique = true),
+        Index(value = ["photoId2"], unique = true),
     ],
 )
 data class RecordEntity(
@@ -47,6 +62,10 @@ data class RecordEntity(
     val dateEpochDay: Long,
     val contractorId: String,
     val photoId: String?,
+    val photoId2: String?,
     val createdAt: Long,
     val updatedAt: Long,
-)
+) {
+    /** Фото записи в порядке слотов; пустой список — фото нет (так бывает только у несохранённой). */
+    val photoIds: List<String> get() = listOfNotNull(photoId, photoId2)
+}

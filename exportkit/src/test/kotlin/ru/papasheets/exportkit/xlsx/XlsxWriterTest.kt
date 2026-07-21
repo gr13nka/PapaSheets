@@ -55,8 +55,9 @@ class XlsxWriterTest {
         val entries = writeZip(withPhotos = true)
         val sheet = parse(entries.getValue("xl/worksheets/sheet1.xml"))
 
+        // Группа = 2 колонки Ф + 2 поля, значит шаг 4: B..E у первого подрядчика, F..I у второго.
         val mergeRefs = sheet.elements("mergeCell").map { it.getAttribute("ref") }
-        assertEquals(setOf("A1:A2", "B1:D1", "E1:G1"), mergeRefs.toSet())
+        assertEquals(setOf("A1:A2", "B1:E1", "F1:I1"), mergeRefs.toSet())
 
         val pane = sheet.elements("pane").single()
         assertEquals("1", pane.getAttribute("xSplit"))
@@ -66,59 +67,69 @@ class XlsxWriterTest {
 
         val cols = sheet.elements("col")
         assertEquals("10.5", cols[0].getAttribute("width"))
-        // Ф считается от стороны фото-квадрата (PHOTO_BOX_PT); эталонные 5.75 были уже фото.
-        assertEquals("14.9", cols[1].getAttribute("width"))
-        assertEquals("7.75", cols[2].getAttribute("width"))
-        assertEquals("50.75", cols[3].getAttribute("width"))
+        // Обе Ф считаются от стороны фото-квадрата (PHOTO_BOX_PT = 28pt), а не задаются отдельно.
+        assertEquals("4.62", cols[1].getAttribute("width"))
+        assertEquals("4.62", cols[2].getAttribute("width"))
+        assertEquals("7.75", cols[3].getAttribute("width"))
+        assertEquals("50.75", cols[4].getAttribute("width"))
 
         assertEquals("ДАТА", sheet.cellText("A1"))
         assertEquals("Иванов", sheet.cellText("B1"))
-        assertEquals("Петров & \"Сыновья\"", sheet.cellText("E1"))
+        assertEquals("Петров & \"Сыновья\"", sheet.cellText("F1"))
+        // Обе колонки фото подписаны одинаково — читатель считает длину серии, а не различает подписи.
         assertEquals("Ф", sheet.cellText("B2"))
-        assertEquals("Л", sheet.cellText("C2"))
-        assertEquals("ВИД РАБОТ", sheet.cellText("D2"))
+        assertEquals("Ф", sheet.cellText("C2"))
+        assertEquals("Л", sheet.cellText("D2"))
+        assertEquals("ВИД РАБОТ", sheet.cellText("E2"))
 
-        // Строка 3 = день1: только подрядчик1 (с фото), подрядчик2 в этот день пуст.
+        // Строка 3 = день1: только подрядчик1 (одно фото), подрядчик2 в этот день пуст.
         assertEquals("01.07", sheet.cellText("A3"))
         assertNull(sheet.cellText("B3")) // Ф — под фото, без текста
-        assertEquals("1-01", sheet.cellText("C3"))
-        assertEquals("Штукатурка <потолок>\nвторая строка", sheet.cellText("D3"))
-        assertNull(sheet.cellText("E3"))
+        assertNull(sheet.cellText("C3"))
+        assertEquals("1-01", sheet.cellText("D3"))
+        assertEquals("Штукатурка <потолок>\nвторая строка", sheet.cellText("E3"))
         assertNull(sheet.cellText("F3"))
-        assertNull(sheet.cellText("G3"))
+        assertNull(sheet.cellText("H3"))
+        assertNull(sheet.cellText("I3"))
 
-        // Строка 4 = день2: оба подрядчика заполнены, только подрядчик2 с фото.
+        // Строка 4 = день2: оба подрядчика заполнены, у подрядчика2 два фото.
         assertEquals("02.07", sheet.cellText("A4"))
         assertNull(sheet.cellText("B4"))
-        assertEquals("1-02", sheet.cellText("C4"))
-        assertEquals("Заливка пола", sheet.cellText("D4"))
-        assertNull(sheet.cellText("E4"))
-        assertEquals("2-05; доп", sheet.cellText("F4"))
-        assertEquals("Кладка \"кирпич\" & раствор", sheet.cellText("G4"))
+        assertEquals("1-02", sheet.cellText("D4"))
+        assertEquals("Заливка пола", sheet.cellText("E4"))
+        assertNull(sheet.cellText("F4"))
+        assertNull(sheet.cellText("G4"))
+        assertEquals("2-05; доп", sheet.cellText("H4"))
+        assertEquals("Кладка \"кирпич\" & раствор", sheet.cellText("I4"))
 
-        // Обе строки данных содержат фото — обе должны быть утолщены.
-        assertEquals("90.0", sheet.row("3").getAttribute("ht"))
+        // Обе строки данных содержат фото — обе получают явную высоту. Текста здесь не больше двух
+        // строк (30pt), поэтому высоту задаёт фото; с трёх строк её задавал бы уже текст.
+        assertEquals("36.0", sheet.row("3").getAttribute("ht"))
         assertEquals("1", sheet.row("3").getAttribute("customHeight"))
-        assertEquals("90.0", sheet.row("4").getAttribute("ht"))
+        assertEquals("36.0", sheet.row("4").getAttribute("ht"))
     }
 
     @Test
-    fun `xlsx with photos has two oneCellAnchor drawings wired through rels`() {
+    fun `xlsx with photos has one oneCellAnchor per photo wired through rels`() {
         val entries = writeZip(withPhotos = true)
         val sheet = parse(entries.getValue("xl/worksheets/sheet1.xml"))
         assertEquals(1, sheet.elements("drawing").size)
 
         val drawing = parse(entries.getValue("xl/drawings/drawing1.xml"))
         val anchors = drawing.elements("xdr:oneCellAnchor")
-        assertEquals(2, anchors.size)
+        // Три фото на три якоря: одно у подрядчика1 и два у подрядчика2.
+        assertEquals(3, anchors.size)
 
-        val from0 = (anchors[0].getElementsByTagName("xdr:from").item(0) as Element)
-        assertEquals("1", (from0.getElementsByTagName("xdr:col").item(0)).textContent) // Ф подрядчика1
-        assertEquals("2", (from0.getElementsByTagName("xdr:row").item(0)).textContent) // 1-я строка данных
+        fun anchorCell(index: Int): Pair<String, String> {
+            val from = anchors[index].getElementsByTagName("xdr:from").item(0) as Element
+            return from.getElementsByTagName("xdr:col").item(0).textContent to
+                from.getElementsByTagName("xdr:row").item(0).textContent
+        }
 
-        val from1 = (anchors[1].getElementsByTagName("xdr:from").item(0) as Element)
-        assertEquals("4", (from1.getElementsByTagName("xdr:col").item(0)).textContent) // Ф подрядчика2
-        assertEquals("3", (from1.getElementsByTagName("xdr:row").item(0)).textContent) // 2-я строка данных
+        // 0-based: B=1, F=5, G=6; строка данных 1 = 2, строка данных 2 = 3.
+        assertEquals("1" to "2", anchorCell(0)) // Ф1 подрядчика1, 1-я строка данных
+        assertEquals("5" to "3", anchorCell(1)) // Ф1 подрядчика2, 2-я строка данных
+        assertEquals("6" to "3", anchorCell(2)) // Ф2 того же подрядчика — второе фото записи
 
         val ext0 = anchors[0].getElementsByTagName("xdr:ext").item(0) as Element
         val (w0, h0) = TestFixtures.photoASize
@@ -133,13 +144,17 @@ class XlsxWriterTest {
         val drawingRels = parse(entries.getValue("xl/drawings/_rels/drawing1.xml.rels"))
         val relIds = drawingRels.elements("Relationship").map { it.getAttribute("Id") }.toSet()
         val relTargets = drawingRels.elements("Relationship").map { it.getAttribute("Target") }.toSet()
-        assertEquals(setOf("../media/photo-a.jpg", "../media/photo-b.jpg"), relTargets)
+        assertEquals(
+            setOf("../media/photo-a.jpg", "../media/photo-b.jpg", "../media/photo-c.jpg"),
+            relTargets,
+        )
 
         val blipEmbeds = drawing.elements("a:blip").map { it.getAttribute("r:embed") }.toSet()
         assertEquals(relIds, blipEmbeds)
 
         assertTrue(entries.containsKey("xl/media/photo-a.jpg"))
         assertTrue(entries.containsKey("xl/media/photo-b.jpg"))
+        assertTrue(entries.containsKey("xl/media/photo-c.jpg"))
 
         val contentTypes = parse(entries.getValue("[Content_Types].xml"))
         assertTrue(contentTypes.elements("Default").any { it.getAttribute("Extension") == "jpg" })
@@ -155,8 +170,8 @@ class XlsxWriterTest {
 
         val sheet = parse(entries.getValue("xl/worksheets/sheet1.xml"))
         assertEquals(0, sheet.elements("drawing").size)
-        assertEquals("1-01", sheet.cellText("C3"))
-        assertEquals("2-05; доп", sheet.cellText("F4"))
+        assertEquals("1-01", sheet.cellText("D3"))
+        assertEquals("2-05; доп", sheet.cellText("H4"))
         // Без фото строки не утолщаются даже там, где раньше стояло фото.
         assertTrue(sheet.row("3").getAttribute("ht").isEmpty())
 

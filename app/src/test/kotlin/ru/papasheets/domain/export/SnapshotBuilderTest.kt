@@ -18,17 +18,24 @@ class SnapshotBuilderTest {
     private fun contractor(id: String, order: Int, archived: Boolean = false) =
         ContractorEntity(id = id, name = "Подрядчик $id", shortName = id, colorIndex = order, orderIndex = order, isArchived = archived, createdAt = 0)
 
-    private fun record(id: String, day: Long, contractorId: String, createdAt: Long, photoId: String? = null) =
-        testRecord(
-            id = id, dateEpochDay = day, contractorId = contractorId, photoId = photoId, createdAt = createdAt,
-            values = mapOf(BuiltInFields.LOCATION_ID to "1-01", BuiltInFields.WORK_ID to "работа $id"),
-        )
+    private fun record(
+        id: String,
+        day: Long,
+        contractorId: String,
+        createdAt: Long,
+        photoId: String? = null,
+        photoId2: String? = null,
+    ) = testRecord(
+        id = id, dateEpochDay = day, contractorId = contractorId,
+        photoId = photoId, photoId2 = photoId2, createdAt = createdAt,
+        values = mapOf(BuiltInFields.LOCATION_ID to "1-01", BuiltInFields.WORK_ID to "работа $id"),
+    )
 
     @Test
     fun `snapshot sorts days ascending regardless of createdAt order and maps grid cells`() {
         val contractors = listOf(contractor("A", 0), contractor("B", 1))
         val records = listOf(
-            record("b1", day2, "B", createdAt = 100, photoId = "p1"),
+            record("b1", day2, "B", createdAt = 100, photoId = "p1", photoId2 = "p2"),
             record("a1", day1, "A", createdAt = 200),
         )
 
@@ -42,12 +49,13 @@ class SnapshotBuilderTest {
         val day1Row = snapshot.days[0].rows.single()
         // Порядок значений ячейки строго соответствует snapshot.fields.
         assertEquals(listOf("1-01", "работа a1"), day1Row.cells[0]?.values)
-        assertNull(day1Row.cells[0]?.photoId)
+        assertEquals(emptyList<String>(), day1Row.cells[0]?.photoIds)
         assertNull(day1Row.cells[1])
 
         val day2Row = snapshot.days[1].rows.single()
         assertNull(day2Row.cells[0])
-        assertEquals("p1", day2Row.cells[1]?.photoId)
+        // Оба фото записи доходят до снимка в порядке слотов.
+        assertEquals(listOf("p1", "p2"), day2Row.cells[1]?.photoIds)
     }
 
     @Test

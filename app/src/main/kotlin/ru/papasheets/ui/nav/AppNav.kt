@@ -22,7 +22,8 @@ private const val ROUTE_SETTINGS_FIELDS = "settings/fields"
 /** Debug-маршрут: плоский список записей того же журнала. Кнопки на него из UI нет — только по URL. */
 private const val ROUTE_JOURNAL_LIST = "journal/{$ARG_JOURNAL_ID}/list"
 private const val ARG_RECORD_ID = "recordId"
-private const val ROUTE_LIGHTBOX = "lightbox/{$ARG_RECORD_ID}"
+private const val ARG_PHOTO_SLOT = "slot"
+private const val ROUTE_LIGHTBOX = "lightbox/{$ARG_RECORD_ID}/{$ARG_PHOTO_SLOT}"
 
 @Composable
 fun AppNav() {
@@ -49,7 +50,7 @@ fun AppNav() {
             JournalScreen(
                 journalId = journalId,
                 onBack = { navController.popBackStack() },
-                onOpenLightbox = { recordId -> navController.navigate("lightbox/$recordId") },
+                onOpenLightbox = { recordId, slot -> navController.navigate("lightbox/$recordId/$slot") },
                 onOpenContractors = { navController.navigate(ROUTE_SETTINGS_CONTRACTORS) },
                 onOpenFields = { navController.navigate(ROUTE_SETTINGS_FIELDS) },
             )
@@ -62,16 +63,21 @@ fun AppNav() {
             DayListScreen(
                 journalId = journalId,
                 onBack = { navController.popBackStack() },
-                onOpenLightbox = { recordId -> navController.navigate("lightbox/$recordId") },
+                onOpenLightbox = { recordId, slot -> navController.navigate("lightbox/$recordId/$slot") },
             )
         }
         composable(
             route = ROUTE_LIGHTBOX,
-            arguments = listOf(navArgument(ARG_RECORD_ID) { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument(ARG_RECORD_ID) { type = NavType.StringType },
+                navArgument(ARG_PHOTO_SLOT) { type = NavType.IntType },
+            ),
         ) { backStackEntry ->
             val recordId = backStackEntry.arguments?.getString(ARG_RECORD_ID) ?: return@composable
+            val slot = backStackEntry.arguments?.getInt(ARG_PHOTO_SLOT) ?: 0
             LightboxScreen(
                 recordId = recordId,
+                slot = slot,
                 onClose = { navController.popBackStack() },
             )
         }

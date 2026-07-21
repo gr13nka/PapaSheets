@@ -27,7 +27,7 @@ import ru.papasheets.data.db.entity.RecordValueEntity
  *
  * Поднимать её можно только вместе с новой [Migration] в [Migrations.ALL] — см. docs/evolution.md.
  */
-const val APP_DATABASE_VERSION = 5
+const val APP_DATABASE_VERSION = 6
 
 @Database(
     entities = [

@@ -57,17 +57,38 @@ class XlsxRoundTripTest {
         val snapshot = TestFixtures.snapshot()
         val sheet = writeThenRead(snapshot, TestFixtures.photoProvider())
 
-        // Фото было у первого подрядчика в первый день и у второго — во второй.
+        // Одно фото было у первого подрядчика в первый день, два — у второго во второй.
         val firstDay = sheet.days[0].rows.single()
         val secondDay = sheet.days[1].rows.single()
-        assertTrue(firstDay.cells[0]!!.photo!!.isPresent)
+        assertEquals(1, firstDay.cells[0]!!.photos.size)
+        assertTrue(firstDay.cells[0]!!.photos.single().isPresent)
         assertNull(firstDay.cells[1])
-        assertNull(secondDay.cells[0]!!.photo)
-        assertTrue(secondDay.cells[1]!!.photo!!.isPresent)
+        assertTrue(secondDay.cells[0]!!.photos.isEmpty())
+        assertEquals(2, secondDay.cells[1]!!.photos.size)
+        assertTrue(secondDay.cells[1]!!.photos.all { it.isPresent })
 
         assertArrayEquals(
             TestFixtures.jpegBytes(TestFixtures.photoASize.first, TestFixtures.photoASize.second),
-            sheet.photoBytes(firstDay.cells[0]!!.photo!!),
+            sheet.photoBytes(firstDay.cells[0]!!.photos.single()),
+        )
+    }
+
+    /**
+     * Слоты не должны перепутаться местами: второе фото записи обязано вернуться вторым, иначе
+     * ракурсы поменяются местами при каждом круге экспорт→импорт, никак себя не выдав.
+     */
+    @Test
+    fun `two photos of one record keep their order`() {
+        val sheet = writeThenRead(TestFixtures.snapshot(), TestFixtures.photoProvider())
+        val photos = sheet.days[1].rows.single().cells[1]!!.photos
+
+        assertArrayEquals(
+            TestFixtures.jpegBytes(TestFixtures.photoBSize.first, TestFixtures.photoBSize.second),
+            sheet.photoBytes(photos[0]),
+        )
+        assertArrayEquals(
+            TestFixtures.jpegBytes(TestFixtures.photoCSize.first, TestFixtures.photoCSize.second),
+            sheet.photoBytes(photos[1]),
         )
     }
 
@@ -75,12 +96,13 @@ class XlsxRoundTripTest {
     fun `a journal without photos reads back without them`() {
         val sheet = writeThenRead(TestFixtures.snapshot(), photos = null)
 
-        assertTrue(sheet.rows.flatMap { it.cells }.filterNotNull().all { it.photo == null })
+        assertTrue(sheet.rows.flatMap { it.cells }.filterNotNull().all { it.photos.isEmpty() })
     }
 
     /**
-     * Число полей — переменное (M9), и раскладка обязана сходиться при любом. Ноль полей отдельно
-     * важен: групповых merge в таком файле нет вовсе, и шапку читатель распознаёт по меткам «Ф».
+     * Число полей — переменное (M9), и раскладка обязана сходиться при любом. Ноль полей остаётся
+     * крайним случаем, хотя и перестал быть вырожденным: с двумя колонками Ф группа шире одной
+     * ячейки даже без полей, так что групповые merge пишутся и здесь.
      */
     @Test
     fun `the round trip holds for field counts other than the historical two`() {
@@ -92,7 +114,7 @@ class XlsxRoundTripTest {
             assertEquals("полей: $count", listOf("Иванов", "Петров"), sheet.contractors)
             assertEquals("полей: $count", fields.map { it.title }, sheet.fieldTitles)
             assertEquals("полей: $count", fields.indices.map { "b$it" }, sheet.rows.single().cells[1]!!.values)
-            assertTrue("полей: $count", sheet.rows.single().cells[1]!!.photo!!.isPresent)
+            assertTrue("полей: $count", sheet.rows.single().cells[1]!!.photos.single().isPresent)
         }
     }
 }

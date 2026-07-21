@@ -17,6 +17,9 @@ import ru.papasheets.exportkit.model.SnapshotRow
  * и тех же строках. Использует [javax.imageio.ImageIO] (доступен на JVM тестов, но не на Android —
  * поэтому только здесь, не в main-коде exportkit) для генерации настоящих JPEG разных пропорций.
  *
+ * Одна запись держит два фото, другая — одно: раскладка обязана быть верной в обоих случаях, а
+ * пустой второй слот встречается чаще заполненного.
+ *
  * Набор полей повторяет тот, что был захардкожен до перехода экспорта на произвольное их число
  * (ширины — из эталона docs/reference/iyun-xlsx), поэтому тесты на нём остаются регресс-сверкой
  * формата: если раскладка «поехала», это видно по неизменным ожиданиям.
@@ -24,10 +27,12 @@ import ru.papasheets.exportkit.model.SnapshotRow
 object TestFixtures {
     const val PHOTO_A = "photo-a"
     const val PHOTO_B = "photo-b"
+    const val PHOTO_C = "photo-c"
 
     // Разные пропорции (landscape/portrait) — проверка, что EMU сохраняет aspect ratio.
     val photoASize = 40 to 30
     val photoBSize = 24 to 40
+    val photoCSize = 32 to 32
 
     val legacyFields = listOf(
         SnapshotField(title = "Л", widthChars = 7.75, wrap = false),
@@ -47,7 +52,7 @@ object TestFixtures {
                 rows = listOf(
                     SnapshotRow(
                         cells = listOf(
-                            SnapshotCell(listOf("1-01", "Штукатурка <потолок>\nвторая строка"), photoId = PHOTO_A),
+                            SnapshotCell(listOf("1-01", "Штукатурка <потолок>\nвторая строка"), photoIds = listOf(PHOTO_A)),
                             null,
                         ),
                     ),
@@ -58,8 +63,9 @@ object TestFixtures {
                 rows = listOf(
                     SnapshotRow(
                         cells = listOf(
-                            SnapshotCell(listOf("1-02", "Заливка пола"), photoId = null),
-                            SnapshotCell(listOf("2-05; доп", "Кладка \"кирпич\" & раствор"), photoId = PHOTO_B),
+                            SnapshotCell(listOf("1-02", "Заливка пола"), photoIds = emptyList()),
+                            // Два фото — вторая колонка Ф этой группы.
+                            SnapshotCell(listOf("2-05; доп", "Кладка \"кирпич\" & раствор"), photoIds = listOf(PHOTO_B, PHOTO_C)),
                         ),
                     ),
                 ),
@@ -81,8 +87,8 @@ object TestFixtures {
                 rows = listOf(
                     SnapshotRow(
                         cells = listOf(
-                            SnapshotCell(fields.indices.map { "a$it" }, photoId = null),
-                            SnapshotCell(fields.indices.map { "b$it" }, photoId = PHOTO_B),
+                            SnapshotCell(fields.indices.map { "a$it" }, photoIds = emptyList()),
+                            SnapshotCell(fields.indices.map { "b$it" }, photoIds = listOf(PHOTO_B)),
                         ),
                     ),
                 ),
@@ -101,8 +107,9 @@ object TestFixtures {
         val bytes = mapOf(
             PHOTO_A to jpegBytes(photoASize.first, photoASize.second),
             PHOTO_B to jpegBytes(photoBSize.first, photoBSize.second),
+            PHOTO_C to jpegBytes(photoCSize.first, photoCSize.second),
         )
-        val sizes = mapOf(PHOTO_A to photoASize, PHOTO_B to photoBSize)
+        val sizes = mapOf(PHOTO_A to photoASize, PHOTO_B to photoBSize, PHOTO_C to photoCSize)
         return object : PhotoBytesProvider {
             override fun open(photoId: String) = bytes.getValue(photoId).inputStream()
             override fun size(photoId: String) = sizes.getValue(photoId)

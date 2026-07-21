@@ -22,16 +22,20 @@ class CsvWriterTest {
         val text = String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
 
         // Подписи колонок полей берутся из снимка — те же, что в шапке xlsx, а не отдельная константа.
-        assertTrue(text.startsWith("Дата;Подрядчик;Л;ВИД РАБОТ;Фото\r\n"))
+        // Колонок под фото столько же, сколько слотов у записи, и они всегда обе.
+        assertTrue(text, text.startsWith("Дата;Подрядчик;Л;ВИД РАБОТ;Фото 1;Фото 2\r\n"))
 
         // Плоский формат: только 3 фактических записи, пустая ячейка (день1/подрядчик2) строки не создаёт.
         assertEquals(4, Regex("\r\n").findAll(text).count()) // заголовок + 3 записи
 
-        assertTrue(text.contains("01.07;Иванов;1-01;\"Штукатурка <потолок>\nвторая строка\";photo-a.jpg\r\n"))
-        assertTrue(text.contains("02.07;Иванов;1-02;Заливка пола;\r\n"))
+        // Одно фото — вторая колонка пустая; пустой слот не сдвигает строку относительно шапки.
+        assertTrue(text, text.contains("01.07;Иванов;1-01;\"Штукатурка <потолок>\nвторая строка\";photo-a.jpg;\r\n"))
+        assertTrue(text, text.contains("02.07;Иванов;1-02;Заливка пола;;\r\n"))
         assertTrue(
+            text,
             text.contains(
-                "02.07;\"Петров & \"\"Сыновья\"\"\";\"2-05; доп\";\"Кладка \"\"кирпич\"\" & раствор\";photo-b.jpg\r\n",
+                "02.07;\"Петров & \"\"Сыновья\"\"\";\"2-05; доп\";" +
+                    "\"Кладка \"\"кирпич\"\" & раствор\";photo-b.jpg;photo-c.jpg\r\n",
             ),
         )
     }
@@ -48,7 +52,7 @@ class CsvWriterTest {
 
         val bytes = out.toByteArray()
         val text = String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
-        assertTrue(text, text.startsWith("Дата;Подрядчик;\"Объём; м\"\"2\";Обычное;Фото\r\n"))
+        assertTrue(text, text.startsWith("Дата;Подрядчик;\"Объём; м\"\"2\";Обычное;Фото 1;Фото 2\r\n"))
     }
 
     /** Число колонок значений всегда равно числу полей — иначе строка «съезжает» относительно шапки. */
@@ -60,7 +64,7 @@ class CsvWriterTest {
 
         val bytes = out.toByteArray()
         val text = String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
-        assertTrue(text, text.contains("01.07;Иванов;a0;a1;a2;a3;\r\n"))
-        assertTrue(text, text.contains("01.07;Петров;b0;b1;b2;b3;photo-b.jpg\r\n"))
+        assertTrue(text, text.contains("01.07;Иванов;a0;a1;a2;a3;;\r\n"))
+        assertTrue(text, text.contains("01.07;Петров;b0;b1;b2;b3;photo-b.jpg;\r\n"))
     }
 }

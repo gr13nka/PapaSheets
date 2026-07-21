@@ -65,7 +65,7 @@ fun buildGridModel(
                 val record = perColumn[column]?.getOrNull(rowInDay)
                 cells.add(
                     record?.let { entry ->
-                        GridCell(entry.record.id, entry.record.photoId, fields.map { entry.valueOf(it.id) })
+                        GridCell(entry.record.id, entry.record.photoIds, fields.map { entry.valueOf(it.id) })
                     },
                 )
             }

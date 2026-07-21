@@ -87,9 +87,13 @@ object XlsxReader {
     }
 
     /**
-     * Фото листа: `лист → drawing → media`. Ключ результата — 1-based ячейка листа, к которой
-     * привязан якорь, приведённая к колонке Ф своей группы: у Excel и Google Sheets картинка иногда
-     * стоит не ровно на Ф, а на соседней колонке той же группы, и запись от этого не меняется.
+     * Фото листа: `лист → drawing → media`. Ключ результата — строка листа, подрядчик и слот фото
+     * внутри его группы.
+     *
+     * Слот берётся из колонки якоря, и только у колонок Ф он осмыслен. Картинка, стоящая на колонке
+     * поля, всё равно приписывается подрядчику этой группы, но в слот 0: у Excel и Google Sheets
+     * фото нередко съезжает с Ф на соседнюю колонку, и запись от этого не меняется. Считать номер
+     * слота по такой колонке значило бы разложить съехавшие фото по слотам как попало.
      */
     private fun readPhotoAnchors(pkg: OpcPackage, sheetPart: String, layout: HeaderLayout): Map<PhotoKey, PhotoRef> {
         val drawingPart = Relationships.readFor(pkg, sheetPart).targetsOfType("/drawing").firstOrNull()
@@ -104,22 +108,24 @@ object XlsxReader {
         for (anchor in parser.anchors()) {
             val sheetRow = anchor.row + 1
             val sheetColumn = anchor.column + 1
-            val contractorIndex = when (val role = MatrixSheetLayout.roleOf(sheetColumn, layout.groupWidth, layout.contractorCount)) {
-                is MatrixSheetLayout.ColumnRole.Photo -> role.contractorIndex
-                is MatrixSheetLayout.ColumnRole.Field -> role.contractorIndex
+            val (contractorIndex, slot) = when (
+                val role = layout.sheet.roleOf(sheetColumn, layout.contractorCount)
+            ) {
+                is MatrixSheetLayout.ColumnRole.Photo -> role.contractorIndex to role.slot
+                is MatrixSheetLayout.ColumnRole.Field -> role.contractorIndex to 0
                 else -> continue
             }
-            // Первый якорь на ячейку выигрывает: в записи журнала фото одно, а лишние картинки
-            // поверх той же ячейки — оформление, а не данные.
+            // Первый якорь на слот выигрывает: лишние картинки поверх той же ячейки — оформление,
+            // а не данные.
             result.putIfAbsent(
-                PhotoKey(sheetRow, contractorIndex),
+                PhotoKey(sheetRow, contractorIndex, slot),
                 PhotoRef(anchor.mediaEntry, isPresent = anchor.mediaEntry in present),
             )
         }
         return result
     }
 
-    private data class PhotoKey(val sheetRow: Int, val contractorIndex: Int)
+    private data class PhotoKey(val sheetRow: Int, val contractorIndex: Int, val slot: Int)
 
     // --- сборка записей -----------------------------------------------------------------------
 
@@ -167,13 +173,16 @@ object XlsxReader {
         photos: Map<PhotoKey, PhotoRef>,
         sheetRow: Int,
     ): ParsedRow {
-        val fieldCount = MatrixSheetLayout.fieldCount(layout.groupWidth)
         val cells = (0 until layout.contractorCount).map { contractorIndex ->
-            val values = (0 until fieldCount).map { fieldIndex ->
-                content.textAt(sheetRow, MatrixSheetLayout.fieldColumn(contractorIndex, fieldIndex, layout.groupWidth))
+            val values = (0 until layout.sheet.fieldCount).map { fieldIndex ->
+                content.textAt(sheetRow, layout.sheet.fieldColumn(contractorIndex, fieldIndex))
             }
-            val photo = photos[PhotoKey(sheetRow, contractorIndex)]
-            val cell = ParsedCell(values, photo)
+            // Слоты схлопываются: фото из второй колонки Ф при пустой первой становится первым у
+            // записи. Дырка в слотах — свойство листа, а не записи, и тащить её в журнал незачем.
+            val cellPhotos = (0 until layout.sheet.photoColumns).mapNotNull { slot ->
+                photos[PhotoKey(sheetRow, contractorIndex, slot)]
+            }
+            val cell = ParsedCell(values, cellPhotos)
             if (cell.isBlank) null else cell
         }
         return ParsedRow(sheetRow, cells)
@@ -181,27 +190,38 @@ object XlsxReader {
 }
 
 /**
- * Ширина группы и число подрядчиков, вычитанные из шапки.
+ * Раскладка листа и число подрядчиков, вычитанные из шапки.
  *
  * Главный признак — merge-диапазоны строки 1: имя подрядчика растянуто ровно на свою группу, и это
  * единственное, что читается даже когда текста нет вовсе (в эталоне все строки вынесены в
- * sharedStrings, а сама часть из дампа вырезана). Запасной признак — метки «Ф» в строке 2: наш
- * собственный экспорт при пустом наборе полей групповых merge не пишет вовсе, потому что merge из
- * одной ячейки Excel считает повреждением файла.
+ * sharedStrings, а сама часть из дампа вырезана). Запасной признак — метки «Ф» в строке 2: чужой
+ * файл может не иметь merge-шапки вовсе.
+ *
+ * Число колонок Ф тоже вычитывается, а не берётся из [MatrixSheetLayout.PHOTO_COLUMNS_PER_GROUP]:
+ * второй слот фото появился позже формата, и файлы с одной колонкой Ф — это и наш прошлый экспорт,
+ * и журнал заказчика. Ошибиться тут нельзя: лишняя колонка Ф сдвинула бы все поля группы на одну
+ * влево, то есть подставила бы значения не в те столбцы, ничем себя не выдав.
  */
-internal class HeaderLayout(val groupWidth: Int, val contractorCount: Int) {
+internal class HeaderLayout(val sheet: MatrixSheetLayout, val contractorCount: Int) {
 
     fun contractorNames(content: SheetContent): List<String> = (0 until contractorCount).map { index ->
-        content.textAt(MatrixSheetLayout.CONTRACTOR_HEADER_ROW, MatrixSheetLayout.photoColumn(index, groupWidth))
+        content.textAt(MatrixSheetLayout.CONTRACTOR_HEADER_ROW, sheet.photoColumn(index, 0))
     }
 
     /** Подписи полей берутся у первой группы: в матрице набор колонок у всех подрядчиков одинаковый. */
     fun fieldTitles(content: SheetContent): List<String> =
-        (0 until MatrixSheetLayout.fieldCount(groupWidth)).map { fieldIndex ->
-            content.textAt(MatrixSheetLayout.FIELD_HEADER_ROW, MatrixSheetLayout.fieldColumn(0, fieldIndex, groupWidth))
+        (0 until sheet.fieldCount).map { fieldIndex ->
+            content.textAt(MatrixSheetLayout.FIELD_HEADER_ROW, sheet.fieldColumn(0, fieldIndex))
         }
 
     companion object {
+        /**
+         * Сколько колонок Ф считать, когда меток «Ф» в шапке нет вовсе. Одна: так выглядели все
+         * файлы до появления второго слота, и так же выглядит чужая таблица, где колонка под фото
+         * просто не подписана.
+         */
+        private const val PHOTO_COLUMNS_WITHOUT_LABELS = 1
+
         fun detect(content: SheetContent): HeaderLayout =
             fromMerges(content) ?: fromPhotoLabels(content)
                 ?: throw XlsxFormatException(
@@ -214,7 +234,22 @@ internal class HeaderLayout(val groupWidth: Int, val contractorCount: Int) {
             // Ширина берётся по самой частой группе: у крайнего подрядчика merge иногда шире
             // остальных, а вся раскладка листа держится на едином шаге.
             val width = groups.groupingBy { it.second }.eachCount().maxByOrNull { it.value }?.key ?: return null
-            return HeaderLayout(groupWidth = width, contractorCount = groups.size)
+            val photoColumns = photoColumnRun(content, groups.first().first, width)
+            return HeaderLayout(MatrixSheetLayout.ofGroupWidth(width, photoColumns), groups.size)
+        }
+
+        /**
+         * Длина серии подряд идущих меток «Ф» от начала группы. Именно серия, а не общее число
+         * меток: колонки Ф стоят в начале группы вплотную, и их количество — это то, сколько раз
+         * подряд встретилась подпись, прежде чем пошли поля.
+         */
+        private fun photoColumnRun(content: SheetContent, firstColumn: Int, groupWidth: Int): Int {
+            val labels = content.cells[MatrixSheetLayout.FIELD_HEADER_ROW] ?: return PHOTO_COLUMNS_WITHOUT_LABELS
+            var run = 0
+            while (run < groupWidth && labels[firstColumn + run]?.text?.trim() == MatrixSheetLayout.PHOTO_LABEL) {
+                run++
+            }
+            return run.coerceAtLeast(PHOTO_COLUMNS_WITHOUT_LABELS)
         }
 
         /** `B1:D1` → (первая колонка, ширина). Вертикальный `A1:A2` и любые merge вне строки 1 отбрасываются. */
@@ -227,14 +262,24 @@ internal class HeaderLayout(val groupWidth: Int, val contractorCount: Int) {
             return if (width >= 1) from.column to width else null
         }
 
+        /**
+         * Раскладка по одним меткам «Ф». Шаг группы — расстояние не до соседней метки, а до начала
+         * СЛЕДУЮЩЕЙ серии: с двумя колонками Ф соседняя метка стоит вплотную, и наивное
+         * `markers[1] - markers[0]` дало бы ширину группы 1, то есть развалило бы весь лист.
+         */
         private fun fromPhotoLabels(content: SheetContent): HeaderLayout? {
             val markers = content.cells[MatrixSheetLayout.FIELD_HEADER_ROW]
                 ?.filterValues { it.text.trim() == MatrixSheetLayout.PHOTO_LABEL }
                 ?.keys?.sorted()
                 ?: return null
             if (markers.isEmpty()) return null
-            val width = if (markers.size > 1) markers[1] - markers[0] else 1
-            return HeaderLayout(groupWidth = width, contractorCount = markers.size)
+
+            var run = 1
+            while (run < markers.size && markers[run] == markers[run - 1] + 1) run++
+
+            // Единственная группа: следующей серии нет, и о полях справа метки ничего не говорят.
+            val width = if (markers.size > run) markers[run] - markers[0] else run
+            return HeaderLayout(MatrixSheetLayout.ofGroupWidth(width, run), markers.size / run)
         }
     }
 }

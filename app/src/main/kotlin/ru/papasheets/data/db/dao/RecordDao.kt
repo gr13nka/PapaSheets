@@ -35,9 +35,15 @@ interface RecordDao {
     @Query("SELECT * FROM records")
     suspend fun getAll(): List<RecordEntity>
 
-    /** photoId записей журнала (без null) — каскадное удаление журнала (M8) сносит эти фото явно: FK
-     *  CASCADE уносит записи вместе с журналом, но файлы/строки фото не трогает. */
-    @Query("SELECT DISTINCT photoId FROM records WHERE journalId = :journalId AND photoId IS NOT NULL")
+    /**
+     * Оба слота фото записей журнала (без null) — каскадное удаление журнала (M8) сносит эти фото
+     * явно: FK CASCADE уносит записи вместе с журналом, но файлы/строки фото не трогает, а reference
+     * counting'а у фото нет. Пропустить второй слот значило бы навсегда оставить его файлы сиротами.
+     */
+    @Query(
+        "SELECT photoId FROM records WHERE journalId = :journalId AND photoId IS NOT NULL " +
+            "UNION SELECT photoId2 FROM records WHERE journalId = :journalId AND photoId2 IS NOT NULL",
+    )
     suspend fun photoIdsForJournal(journalId: String): List<String>
 
     @Insert

@@ -45,7 +45,7 @@ fun buildJournalSnapshot(
             rows.add(
                 SnapshotRow(
                     grid.rows[index].cells.map { cell ->
-                        cell?.let { SnapshotCell(values = it.values, photoId = it.thumbKey) }
+                        cell?.let { SnapshotCell(values = it.values, photoIds = it.thumbKeys) }
                     },
                 ),
             )

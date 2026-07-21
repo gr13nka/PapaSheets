@@ -182,27 +182,29 @@ internal class MatrixRenderer(
         translate(left = left, top = top) {
             scale(scale = zoom, pivot = Offset.Zero) {
                 clipRect(left = 0f, top = 0f, right = geometry.groupW, bottom = rowHeight) {
-                    val box = geometry.photoBoxPx
-                    val boxLeft = geometry.photoPadX
-                    val boxTop = geometry.cellPad
-                    val key = cell.thumbKey
-                    when {
-                        key == null -> drawRect(
+                    val keys = cell.thumbKeys
+                    if (keys.isEmpty()) {
+                        // Пустая Ф-подколонка: один блок «фото ещё нет» на весь квадрат.
+                        val tile = geometry.photoTiles(1).single()
+                        drawRect(
                             color = colors.contractor(colorIndex).copy(alpha = colors.emptyPhotoAlpha),
-                            topLeft = Offset(boxLeft, boxTop),
-                            size = Size(box, box),
+                            topLeft = Offset(tile.left, tile.top),
+                            size = Size(tile.size, tile.size),
                         )
-                        else -> {
+                    } else {
+                        val tiles = geometry.photoTiles(keys.size)
+                        keys.take(tiles.size).forEachIndexed { slot, key ->
+                            val tile = tiles[slot]
                             val bitmap = thumbnails.peek(key)
                             if (bitmap != null) {
-                                drawThumb(bitmap, boxLeft, boxTop, box)
+                                drawThumb(bitmap, tile.left, tile.top, tile.size)
                             } else {
                                 drawRect(
                                     color = colors.contractor(colorIndex).copy(alpha = colors.placeholderAlpha),
-                                    topLeft = Offset(boxLeft, boxTop),
-                                    size = Size(box, box),
+                                    topLeft = Offset(tile.left, tile.top),
+                                    size = Size(tile.size, tile.size),
                                 )
-                                thumbnails.request(key, (box * zoom).roundToInt())
+                                thumbnails.request(key, (tile.size * zoom).roundToInt())
                             }
                         }
                     }

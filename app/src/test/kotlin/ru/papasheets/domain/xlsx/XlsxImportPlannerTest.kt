@@ -53,8 +53,8 @@ class XlsxImportPlannerTest {
 
     private fun row(vararg cells: ParsedCell?) = ParsedRow(sheetRow = 3, cells = cells.toList())
 
-    private fun cell(vararg values: String, photo: PhotoRef? = null) =
-        ParsedCell(values = values.toList(), photo = photo)
+    private fun cell(vararg values: String, photo: PhotoRef? = null, photos: List<PhotoRef> = listOfNotNull(photo)) =
+        ParsedCell(values = values.toList(), photos = photos)
 
     private fun contractor(name: String, colorIndex: Int = 0, orderIndex: Int = 0) = ContractorEntity(
         id = "id-$name",
@@ -347,6 +347,30 @@ class XlsxImportPlannerTest {
         )
         assertEquals(1, withBytes.records.size)
         assertEquals(1, withBytes.photoCount)
+
+        // Оба фото записи учитываются, а отсутствующие байты — нет: одно фото при двух ссылках.
+        val twoPhotos = plan(
+            sheet(
+                contractors = listOf("Оконщики"),
+                days = listOf(
+                    day(
+                        DATE,
+                        row(
+                            cell(
+                                "", "",
+                                photos = listOf(
+                                    PhotoRef("xl/media/i1.jpg", isPresent = true),
+                                    PhotoRef("xl/media/i2.jpg", isPresent = false),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(1, twoPhotos.records.size)
+        assertEquals(1, twoPhotos.photoCount)
+        assertEquals(1, twoPhotos.records.single().photos.size)
 
         val sheetWithoutBytes = sheet(
             contractors = listOf("Оконщики"),

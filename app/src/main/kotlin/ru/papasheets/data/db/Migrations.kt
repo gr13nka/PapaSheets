@@ -110,11 +110,34 @@ object Migrations {
     }
 
     /**
+     * v5 → v6: у записи появляется второй слот фото.
+     *
+     * Единственная миграция, которая трогает `records` и при этом ничего не пересоздаёт. SQLite
+     * разрешает `ADD COLUMN` со ссылкой `REFERENCES` при одном условии — значение по умолчанию
+     * NULL, — и оно здесь выполняется само собой: у существующих записей второго фото нет.
+     * Ограничение SQLite на `UNIQUE` внутри `ADD COLUMN` обходится не хитростью, а тем, что
+     * UNIQUE в схеме и так выражен отдельным индексом, а не констрейнтом колонки.
+     *
+     * Поэтому обошлось без приёма из [MIGRATION_2_3] с подменой таблицы — и хорошо: на телефоне
+     * прораба к этому моменту лежит настоящий журнал, а не пустая база, так что цена ошибки уже не
+     * переустановка. Шаг, который не двигает ни одной существующей строки, здесь предпочтительнее
+     * даже ценой асимметрии со schema-файлом (там колонка объявлена между `photoId` и `createdAt`,
+     * а `ADD COLUMN` дописывает её в конец). Room сверяет колонки по имени, а не по порядку, — это
+     * и проверяет `migratedDatabase_opensWithRoom`.
+     */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            MIGRATION_5_6_DDL.forEach(db::execSQL)
+        }
+    }
+
+    /**
      * Полная цепочка в порядке версий. Существует затем, чтобы список миграций был ровно один:
      * [AppDatabase] и тест цепочки берут его отсюда, поэтому забытая в сборке миграция валит тест,
      * а не телефон прораба, пропустившего пару версий.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    val ALL: Array<Migration> =
+        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }
 
 /**
@@ -258,4 +281,18 @@ internal val MIGRATION_4_5_DDL: List<String> = listOf(
         "FROM `field_defs`",
     "DROP TABLE `field_defs`",
     "ALTER TABLE `_new_field_defs` RENAME TO `field_defs`",
+)
+
+/**
+ * Второй слот фото. Определение колонки и индекса сверено с `app/schemas/.../6.json` — Room
+ * сравнивает фактическую схему с ожидаемой при первом открытии, и расхождение в действии внешнего
+ * ключа роняет приложение так же надёжно, как забытая колонка.
+ *
+ * `ON UPDATE NO ACTION ON DELETE SET NULL` повторяет поведение первого слота дословно: удалённое
+ * фото обязано освобождать ссылку, иначе запись осталась бы указывать в пустоту.
+ */
+internal val MIGRATION_5_6_DDL: List<String> = listOf(
+    "ALTER TABLE `records` ADD COLUMN `photoId2` TEXT REFERENCES `photos`(`id`) " +
+        "ON UPDATE NO ACTION ON DELETE SET NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS `index_records_photoId2` ON `records` (`photoId2`)",
 )

@@ -24,6 +24,8 @@ data class LightboxUiState(
 
 class LightboxViewModel(
     recordId: String,
+    /** Какое из фото записи показать — 0-based слот из тапа по превью. */
+    private val slot: Int,
     recordRepository: RecordRepository,
     contractorRepository: ContractorRepository,
     fieldRepository: FieldRepository,
@@ -39,7 +41,8 @@ class LightboxViewModel(
             val fields = fieldRepository.observeActive().first()
             _uiState.update {
                 it.copy(
-                    photoId = record.record.photoId,
+                    // Слот вне диапазона (запись потеряла фото, пока лайтбокс открывался) → первое, если есть.
+                    photoId = record.record.photoIds.getOrNull(slot) ?: record.record.photoIds.firstOrNull(),
                     dateEpochDay = record.record.dateEpochDay,
                     contractorShortName = contractor?.shortName ?: "",
                     recordLabel = RecordDisplay.of(record, fields).primary,

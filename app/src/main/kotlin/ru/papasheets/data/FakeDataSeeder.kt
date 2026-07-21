@@ -127,6 +127,7 @@ class FakeDataSeeder(
         dateEpochDay = epochDay,
         contractorId = contractorId,
         photoId = null,
+        photoId2 = null,
         createdAt = createdAt,
         updatedAt = createdAt,
     )

@@ -67,7 +67,7 @@ import ru.papasheets.ui.record.RecordSheetModeSaver
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String) -> Unit) {
+fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (recordId: String, slot: Int) -> Unit) {
     val graph = LocalAppGraph.current
     val viewModel: DayListViewModel = viewModel(
         factory = viewModelFactory {
@@ -139,7 +139,7 @@ fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (String
                             photoStore = graph.photoStore,
                             onClick = { sheetMode = RecordSheetMode.Edit(entry.record.id) },
                             onLongClick = { recordPendingDelete = entry.record },
-                            onPhotoClick = { onOpenLightbox(entry.record.id) },
+                            onPhotoClick = { onOpenLightbox(entry.record.id, 0) },
                         )
                     }
                 }

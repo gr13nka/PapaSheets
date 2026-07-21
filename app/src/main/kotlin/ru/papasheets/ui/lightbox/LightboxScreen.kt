@@ -33,14 +33,15 @@ import ru.papasheets.ui.common.ZoomableImage
  * с матрицей в M3, когда появится единая точка входа в форму записи из грид-ячейки.
  */
 @Composable
-fun LightboxScreen(recordId: String, onClose: () -> Unit) {
+fun LightboxScreen(recordId: String, slot: Int, onClose: () -> Unit) {
     val graph = LocalAppGraph.current
     val viewModel: LightboxViewModel = viewModel(
-        key = "lightbox-$recordId",
+        key = "lightbox-$recordId-$slot",
         factory = viewModelFactory {
             initializer {
                 LightboxViewModel(
                     recordId = recordId,
+                    slot = slot,
                     recordRepository = graph.recordRepository,
                     contractorRepository = graph.contractorRepository,
                     fieldRepository = graph.fieldRepository,

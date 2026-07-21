@@ -75,7 +75,7 @@ import ru.papasheets.ui.record.RecordSheetModeSaver
 fun JournalScreen(
     journalId: String,
     onBack: () -> Unit,
-    onOpenLightbox: (String) -> Unit,
+    onOpenLightbox: (recordId: String, slot: Int) -> Unit,
     onOpenContractors: () -> Unit,
     onOpenFields: () -> Unit,
 ) {
@@ -131,8 +131,8 @@ fun JournalScreen(
                 sheetMode = RecordSheetMode.Edit(recordId)
             }
 
-            override fun onPhotoTap(recordId: String) {
-                onOpenLightboxState.value(recordId)
+            override fun onPhotoTap(recordId: String, slot: Int) {
+                onOpenLightboxState.value(recordId, slot)
             }
 
             override fun onEmptySlotTap(dateEpochDay: Long, contractorId: String) {
@@ -276,7 +276,8 @@ fun JournalScreen(
                     onSortBy = viewModel::sortBy,
                     onRecordClick = { sheetMode = RecordSheetMode.Edit(it) },
                     onRecordLongClick = { recordPendingDelete = it },
-                    onPhotoClick = onOpenLightbox,
+                    // Плоский debug-список показывает только первое фото записи — открываем его же.
+                    onPhotoClick = { onOpenLightbox(it, 0) },
                 )
                 else -> MatrixView(
                     model = model.grid,

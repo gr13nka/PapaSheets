@@ -56,6 +56,7 @@ class RecordRepository(
         contractorId: String,
         values: Map<String, String>,
         photoId: String?,
+        photoId2: String?,
     ) = transactionRunner.run {
         val now = System.currentTimeMillis()
         val id = UUID.randomUUID().toString()
@@ -66,6 +67,7 @@ class RecordRepository(
                 dateEpochDay = dateEpochDay,
                 contractorId = contractorId,
                 photoId = photoId,
+                photoId2 = photoId2,
                 createdAt = now,
                 updatedAt = now,
             ),
@@ -79,12 +81,14 @@ class RecordRepository(
         contractorId: String,
         values: Map<String, String>,
         photoId: String?,
+        photoId2: String?,
     ) = transactionRunner.run {
         dao.update(
             existing.copy(
                 dateEpochDay = dateEpochDay,
                 contractorId = contractorId,
                 photoId = photoId,
+                photoId2 = photoId2,
                 updatedAt = System.currentTimeMillis(),
             ),
         )

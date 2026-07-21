@@ -63,6 +63,11 @@ data class BackupRecord(
     /** См. [locationCode]: только для чтения v1, v2 пишет `null`. */
     val workText: String? = null,
     val photoId: String?,
+    /**
+     * Второй слот фото (формат v5). Со значением по умолчанию — этого достаточно, чтобы бэкапы
+     * ≤ v4 читались без шага в [BackupUpgrade]: у их записей второго фото и не было.
+     */
+    val photoId2: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )

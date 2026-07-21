@@ -22,6 +22,7 @@ import ru.papasheets.data.repo.ValueSuggester
 import ru.papasheets.domain.ContinueYesterday
 import ru.papasheets.domain.buildContractorOptions
 import ru.papasheets.domain.validateRecord
+import ru.papasheets.matrixgrid.MAX_PHOTOS_PER_CELL
 import ru.papasheets.photos.PhotoSource
 import ru.papasheets.photos.PhotoStore
 
@@ -35,8 +36,14 @@ data class RecordEditUiState(
     /** Поле, в котором сейчас печатают: подсказки нужны только ему одному. */
     val suggestionFieldId: String? = null,
     val suggestions: List<String> = emptyList(),
-    val photoId: String? = null,
-    val photoLoading: Boolean = false,
+    /**
+     * Черновиковые фото по порядку слотов, без дырок: 0, 1 или [MAX_PHOTOS_PER_CELL] штук. Форма
+     * заполняет слоты по порядку и при удалении сдвигает — так же, как их видят матрица и экспорт
+     * (там фото тоже гапless-список), поэтому «второй слот без первого» здесь невозможен.
+     */
+    val photoIds: List<String> = emptyList(),
+    /** Слот, для которого сейчас идёт импорт (крутилка), или null. */
+    val loadingSlot: Int? = null,
     val showContractorError: Boolean = false,
     val emptyRequiredFieldIds: Set<String> = emptySet(),
     val showBlankRecordError: Boolean = false,
@@ -49,6 +56,16 @@ data class RecordEditUiState(
 ) {
     /** Форма показывается целиком или не показывается вовсе: рисовать её без полей нечем. */
     val isLoaded: Boolean get() = fieldsLoaded && recordLoaded
+
+    /** У записи есть хотя бы одно фото — этого достаточно для валидации (второе необязательно). */
+    val hasPhoto: Boolean get() = photoIds.isNotEmpty()
+
+    /**
+     * Сколько слотов фото показать в форме: заполненные плюс один пустой «добавить», но не больше
+     * потолка. Пустой слот появляется только вслед за заполненным — второй нельзя завести раньше
+     * первого.
+     */
+    val visiblePhotoSlots: Int get() = (photoIds.size + 1).coerceAtMost(MAX_PHOTOS_PER_CELL)
 
     /** Кнопка «Продолжить вчерашнее» активна, только когда есть из чего выбирать. */
     val canContinueYesterday: Boolean get() = yesterdayRecords.isNotEmpty()
@@ -68,7 +85,8 @@ data class RecordEditUiState(
  *
  * Фото ведёт себя как черновик: [PhotoStore.import] вызывается сразу при выборе (нужен превью), но
  * старое фото при замене/удалении удаляется из [PhotoStore] только после успешного сохранения записи —
- * отмена формы не должна портить уже сохранённую запись.
+ * отмена формы не должна портить уже сохранённую запись. Слотов два ([MAX_PHOTOS_PER_CELL]), и правило
+ * «сирота — это фото, которого нет среди сохранённых» распространяется на оба разом ([originalPhotoIds]).
  */
 class RecordEditViewModel(
     private val journalId: String?,
@@ -93,8 +111,8 @@ class RecordEditViewModel(
     )
     val uiState: StateFlow<RecordEditUiState> = _uiState.asStateFlow()
 
-    /** Фото уже сохранённой записи (null для новой) — раньше этого момента "заменить"/"убрать" не удаляют файлы. */
-    private var originalPhotoId: String? = null
+    /** Фото уже сохранённой записи (пусто для новой) — раньше сохранения "заменить"/"убрать" не удаляют файлы. */
+    private var originalPhotoIds: List<String> = emptyList()
 
     /**
      * Подрядчик редактируемой записи (null в режиме создания) — держит его в дропдауне через
@@ -107,6 +125,16 @@ class RecordEditViewModel(
         get() = savedStateHandle[KEY_PENDING_CAMERA_URI]
         set(value) {
             savedStateHandle[KEY_PENDING_CAMERA_URI] = value
+        }
+
+    /**
+     * Слот, в который ляжет следующее импортируемое фото. В [savedStateHandle], чтобы пережить смерть
+     * процесса вместе с [pendingCameraUri]: камера возвращает результат уже в новом процессе.
+     */
+    private var pendingPhotoSlot: Int
+        get() = savedStateHandle[KEY_PENDING_PHOTO_SLOT] ?: 0
+        set(value) {
+            savedStateHandle[KEY_PENDING_PHOTO_SLOT] = value
         }
 
     init {
@@ -125,14 +153,14 @@ class RecordEditViewModel(
         if (recordId != null) {
             viewModelScope.launch {
                 recordRepository.getWithValues(recordId)?.let { existing ->
-                    originalPhotoId = existing.record.photoId
+                    originalPhotoIds = existing.record.photoIds
                     currentContractorId.value = existing.record.contractorId
                     _uiState.update {
                         it.copy(
                             date = LocalDate.ofEpochDay(existing.record.dateEpochDay),
                             selectedContractorId = existing.record.contractorId,
                             values = existing.asMap(),
-                            photoId = existing.record.photoId,
+                            photoIds = existing.record.photoIds,
                             recordLoaded = true,
                         )
                     }
@@ -224,6 +252,14 @@ class RecordEditViewModel(
         showBlankRecordError = false,
     )
 
+    /**
+     * Какой слот фото сейчас правит форма — вызывается перед запуском камеры или галереи. Слот
+     * запоминается до результата (в т.ч. через смерть процесса для камеры).
+     */
+    fun onPhotoSlotTargeted(slot: Int) {
+        pendingPhotoSlot = slot
+    }
+
     /** Вызывается композаблом сразу перед запуском системной камеры — temp-uri должен пережить смерть процесса. */
     fun onCameraLaunchStarted(uri: Uri) {
         pendingCameraUri = uri.toString()
@@ -243,41 +279,55 @@ class RecordEditViewModel(
         if (uri != null) importPhoto(PhotoSource.Gallery(uri))
     }
 
-    fun onPhotoRemoved() {
-        val current = _uiState.value.photoId ?: return
-        _uiState.update { it.copy(photoId = null, showPhotoImportError = false) }
-        deleteIfOrphaned(current)
-    }
-
-    /** Форма закрывается без сохранения — фото, выбранное в этой сессии редактирования, орфан. */
-    fun discardUnsavedPhoto() {
-        val current = _uiState.value.photoId
-        if (current != null && current != originalPhotoId) {
-            // ViewModel может пережить закрытие формы (тот же ключ при повторном открытии) — без
-            // сброса state.photoId указывал бы на уже удалённое фото.
-            _uiState.update { it.copy(photoId = null) }
+    fun onPhotoRemoved(slot: Int) {
+        val current = _uiState.value.photoIds.getOrNull(slot) ?: return
+        // Удаление сдвигает: слот 1 при пустом слоте 0 не остаётся — список схлопывается без дырок.
+        _uiState.update {
+            it.copy(
+                photoIds = it.photoIds.filterIndexed { index, _ -> index != slot },
+                showPhotoImportError = false,
+            )
         }
         deleteIfOrphaned(current)
     }
 
+    /** Форма закрывается без сохранения — все фото этой сессии, которых нет в сохранённой записи, сироты. */
+    fun discardUnsavedPhoto() {
+        val staged = _uiState.value.photoIds
+        // ViewModel может пережить закрытие формы (тот же ключ при повторном открытии) — возвращаем
+        // state к сохранённой правде, иначе он указывал бы на уже удалённые файлы.
+        _uiState.update { it.copy(photoIds = originalPhotoIds) }
+        staged.forEach { deleteIfOrphaned(it) }
+    }
+
+    /**
+     * Импортирует фото в слот [pendingPhotoSlot]: замена, если слот занят, иначе добавление в конец.
+     * Слот зажимается по длине списка — так фото, вернувшееся из камеры после смерти процесса (когда
+     * черновиковый список уже потерян), не создаёт дырку, а становится первым.
+     */
     private fun importPhoto(source: PhotoSource) {
-        val previousStaged = _uiState.value.photoId
-        _uiState.update { it.copy(photoLoading = true, showBlankRecordError = false, showPhotoImportError = false) }
+        val slot = pendingPhotoSlot.coerceIn(0, _uiState.value.photoIds.size)
+        val replaced = _uiState.value.photoIds.getOrNull(slot)
+        _uiState.update { it.copy(loadingSlot = slot, showBlankRecordError = false, showPhotoImportError = false) }
         viewModelScope.launch {
             try {
                 val meta = photoStore.import(source)
-                _uiState.update { it.copy(photoId = meta.id, photoLoading = false) }
-                deleteIfOrphaned(previousStaged)
+                _uiState.update { state ->
+                    val updated = state.photoIds.toMutableList()
+                    if (slot < updated.size) updated[slot] = meta.id else updated.add(meta.id)
+                    state.copy(photoIds = updated, loadingSlot = null)
+                }
+                deleteIfOrphaned(replaced)
             } catch (e: Exception) {
                 Log.e(TAG, "importPhoto: failed for $source", e)
-                _uiState.update { it.copy(photoLoading = false, showPhotoImportError = true) }
+                _uiState.update { it.copy(loadingSlot = null, showPhotoImportError = true) }
             }
         }
     }
 
-    /** Удаляет фото, только если оно не совпадает с фото уже сохранённой записи. */
+    /** Удаляет фото, только если его нет среди фото уже сохранённой записи. */
     private fun deleteIfOrphaned(photoId: String?) {
-        if (photoId != null && photoId != originalPhotoId) {
+        if (photoId != null && photoId !in originalPhotoIds) {
             viewModelScope.launch { photoStore.delete(photoId) }
         }
     }
@@ -288,7 +338,7 @@ class RecordEditViewModel(
             contractorId = state.selectedContractorId,
             fields = state.fields,
             values = state.values,
-            hasPhoto = state.photoId != null,
+            hasPhoto = state.hasPhoto,
         )
         if (!validation.isValid) {
             _uiState.update {
@@ -301,6 +351,8 @@ class RecordEditViewModel(
             return
         }
         val contractorId = requireNotNull(state.selectedContractorId)
+        val photoId = state.photoIds.getOrNull(0)
+        val photoId2 = state.photoIds.getOrNull(1)
         viewModelScope.launch {
             if (recordId == null) {
                 recordRepository.createRecord(
@@ -308,7 +360,8 @@ class RecordEditViewModel(
                     dateEpochDay = state.date.toEpochDay(),
                     contractorId = contractorId,
                     values = state.values,
-                    photoId = state.photoId,
+                    photoId = photoId,
+                    photoId2 = photoId2,
                 )
             } else {
                 recordRepository.getById(recordId)?.let { existing ->
@@ -317,18 +370,18 @@ class RecordEditViewModel(
                         dateEpochDay = state.date.toEpochDay(),
                         contractorId = contractorId,
                         values = state.values,
-                        photoId = state.photoId,
+                        photoId = photoId,
+                        photoId2 = photoId2,
                     )
                 }
             }
-            // Старое фото убираем только теперь, когда новая ссылка точно сохранена.
-            if (originalPhotoId != null && originalPhotoId != state.photoId) {
-                photoStore.delete(originalPhotoId!!)
-            }
+            // Старые фото убираем только теперь, когда новые ссылки точно сохранены: те из прежних,
+            // что новая запись уже не держит ни в одном слоте.
+            originalPhotoIds.filter { it !in state.photoIds }.forEach { photoStore.delete(it) }
             // ViewModel переживает закрытие формы (тот же ключ при повторном открытии той же
-            // записи) — без этого следующая сессия сочтёт только что сохранённое фото черновиком
-            // и удалит его при "заменить"/"убрать" ещё до сохранения, отвязав его от записи через FK.
-            originalPhotoId = state.photoId
+            // записи) — без этого следующая сессия сочла бы только что сохранённые фото черновиком
+            // и удалила бы их при "заменить"/"убрать" ещё до сохранения, отвязав от записи через FK.
+            originalPhotoIds = state.photoIds
             onSaved()
         }
     }
@@ -336,5 +389,6 @@ class RecordEditViewModel(
     private companion object {
         const val TAG = "RecordEditViewModel"
         const val KEY_PENDING_CAMERA_URI = "pendingCameraUri"
+        const val KEY_PENDING_PHOTO_SLOT = "pendingPhotoSlot"
     }
 }

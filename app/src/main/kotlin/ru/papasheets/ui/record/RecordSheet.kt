@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,6 +65,7 @@ import ru.papasheets.domain.contractorDisplayName
 import ru.papasheets.photos.CameraCapture
 import ru.papasheets.photos.GalleryPick
 import ru.papasheets.ui.LocalAppGraph
+import ru.papasheets.ui.common.formInsets
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,7 +119,10 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
         // Снимок работает и без разрешения — просто не попадёт копией в галерею (см. CameraCapture).
         launchCamera()
     }
-    fun requestCamera() {
+    // Слот выбирается ДО запуска камеры/галереи и запоминается ViewModel — результат приходит потом
+    // (у камеры вообще в новом процессе), и связать его со слотом больше нечем.
+    fun requestCamera(slot: Int) {
+        viewModel.onPhotoSlotTargeted(slot)
         if (CameraCapture.needsWriteStoragePermission && !CameraCapture.hasWriteStoragePermission(context)) {
             writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         } else {
@@ -125,6 +131,10 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         viewModel.onGalleryPicked(uri)
+    }
+    fun requestGallery(slot: Int) {
+        viewModel.onPhotoSlotTargeted(slot)
+        galleryLauncher.launch(GalleryPick.request)
     }
 
     ModalBottomSheet(onDismissRequest = { dismiss(onDismiss) }, sheetState = sheetState) {
@@ -141,6 +151,10 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // Прокрутка здесь не удобство, а условие работы отступа: сжать форму мало, поле под
+                // фокусом надо ещё и поднять над клавиатурой — поднимать нечем без скролла.
+                .verticalScroll(rememberScrollState())
+                .formInsets()
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -241,13 +255,29 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 }
             }
 
-            PhotoSlot(
-                state = state,
-                onCameraClick = ::requestCamera,
-                onGalleryClick = { galleryLauncher.launch(GalleryPick.request) },
-                onRemoveClick = viewModel::onPhotoRemoved,
-                thumbFile = state.photoId?.let(graph.photoStore::thumbFile),
-            )
+            // Слоты фото: заполненные плюс один пустой «добавить», пока не упёрлись в потолок.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                for (slot in 0 until state.visiblePhotoSlots) {
+                    PhotoSlot(
+                        modifier = Modifier.weight(1f),
+                        loading = state.loadingSlot == slot,
+                        thumbFile = state.photoIds.getOrNull(slot)?.let(graph.photoStore::thumbFile),
+                        onCameraClick = { requestCamera(slot) },
+                        onGalleryClick = { requestGallery(slot) },
+                        onRemoveClick = { viewModel.onPhotoRemoved(slot) },
+                    )
+                }
+            }
+            if (state.showPhotoImportError) {
+                Text(
+                    text = stringResource(R.string.record_photo_import_error),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
 
             if (state.showBlankRecordError) {
                 Text(
@@ -376,17 +406,24 @@ private fun FieldTextField(
     )
 }
 
+/**
+ * Один слот фото формы: пустой (кнопки Камера/Галерея), с превью (Заменить/Удалить) или крутилка на
+ * время импорта. Слоты стоят рядом ([Modifier.weight] снаружи), поэтому содержимое вертикальное —
+ * превью сверху, кнопки под ним, а не сбоку: в половине ширины формы кнопки рядом не помещаются.
+ */
 @Composable
 private fun PhotoSlot(
-    state: RecordEditUiState,
+    modifier: Modifier,
+    loading: Boolean,
+    thumbFile: File?,
     onCameraClick: () -> Unit,
     onGalleryClick: () -> Unit,
     onRemoveClick: () -> Unit,
-    thumbFile: File?,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when {
-            state.photoLoading -> Row(
+            loading -> Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -394,10 +431,7 @@ private fun PhotoSlot(
                 Text(stringResource(R.string.record_photo_processing))
             }
 
-            thumbFile != null -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            thumbFile != null -> {
                 AsyncImage(
                     model = thumbFile,
                     contentDescription = null,
@@ -406,48 +440,35 @@ private fun PhotoSlot(
                         .size(72.dp)
                         .clip(RoundedCornerShape(8.dp)),
                 )
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    var replaceExpanded by remember { mutableStateOf(false) }
-                    Box {
-                        OutlinedButton(onClick = { replaceExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.record_photo_replace))
-                        }
-                        DropdownMenu(expanded = replaceExpanded, onDismissRequest = { replaceExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.record_photo_camera)) },
-                                onClick = { replaceExpanded = false; onCameraClick() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.record_photo_gallery)) },
-                                onClick = { replaceExpanded = false; onGalleryClick() },
-                            )
-                        }
+                var replaceExpanded by remember { mutableStateOf(false) }
+                Box {
+                    OutlinedButton(onClick = { replaceExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.record_photo_replace))
                     }
-                    OutlinedButton(onClick = onRemoveClick, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.record_photo_remove))
+                    DropdownMenu(expanded = replaceExpanded, onDismissRequest = { replaceExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.record_photo_camera)) },
+                            onClick = { replaceExpanded = false; onCameraClick() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.record_photo_gallery)) },
+                            onClick = { replaceExpanded = false; onGalleryClick() },
+                        )
                     }
+                }
+                OutlinedButton(onClick = onRemoveClick, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.record_photo_remove))
                 }
             }
 
-            else -> Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = onCameraClick, modifier = Modifier.weight(1f)) {
+            else -> {
+                OutlinedButton(onClick = onCameraClick, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.record_photo_camera))
                 }
-                OutlinedButton(onClick = onGalleryClick, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = onGalleryClick, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.record_photo_gallery))
                 }
             }
-        }
-
-        if (state.showPhotoImportError) {
-            Text(
-                text = stringResource(R.string.record_photo_import_error),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
     }
 }

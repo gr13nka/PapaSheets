@@ -13,7 +13,7 @@ class RowHeightTest {
     private val noWrap = SnapshotField(title = "Л", widthChars = 5.0, wrap = false)
 
     private fun row(vararg values: List<String>?) =
-        SnapshotRow(values.map { it?.let { v -> SnapshotCell(v, photoId = null) } })
+        SnapshotRow(values.map { it?.let { v -> SnapshotCell(v, photoIds = emptyList()) } })
 
     @Test
     fun `explicit newlines each start a new line`() {

@@ -9,7 +9,8 @@ interface MatrixCallbacks {
     fun onCellTap(recordId: String)
 
     /** Тап по фото-превью внутри ячейки — открыть лайтбокс. */
-    fun onPhotoTap(recordId: String)
+    /** Тап по превью: [slot] — какое именно из фото записи, 0-based. */
+    fun onPhotoTap(recordId: String, slot: Int)
 
     /** Тап по пустому слоту — создать запись с предзаполненными датой и подрядчиком. */
     fun onEmptySlotTap(dateEpochDay: Long, contractorId: String)

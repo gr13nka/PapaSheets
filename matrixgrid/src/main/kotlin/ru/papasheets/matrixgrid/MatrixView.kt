@@ -101,7 +101,10 @@ private fun dispatchHit(
     }
     when {
         longPress -> callbacks.onCellLongPress(cell.recordId)
-        hit.onPhoto && cell.thumbKey != null -> callbacks.onPhotoTap(cell.recordId)
+        // Слот из хит-теста — половина Ф-подколонки; зажимаем по реальному числу фото, чтобы тап по
+        // пустой правой половине записи с одним фото открыл это единственное фото, а не слот 1.
+        hit.onPhoto && cell.thumbKeys.isNotEmpty() ->
+            callbacks.onPhotoTap(cell.recordId, hit.photoSlot.coerceAtMost(cell.thumbKeys.size - 1))
         else -> callbacks.onCellTap(cell.recordId)
     }
 }

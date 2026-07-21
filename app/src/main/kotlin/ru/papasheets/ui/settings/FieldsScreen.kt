@@ -43,6 +43,7 @@ import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.repo.FieldDeleteOutcome
 import ru.papasheets.data.repo.FieldDraft
 import ru.papasheets.ui.LocalAppGraph
+import ru.papasheets.ui.common.formInsets
 
 /** Высота строки поля — общая для активного списка (нужна drag'у для перевода px в позиции) и архива. */
 private val FieldRowHeight = 72.dp
@@ -285,7 +286,7 @@ private fun FieldDialog(
         title = { Text(stringResource(if (field == null) R.string.fields_add_title else R.string.fields_edit_title)) },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier.verticalScroll(rememberScrollState()).formInsets(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedTextField(

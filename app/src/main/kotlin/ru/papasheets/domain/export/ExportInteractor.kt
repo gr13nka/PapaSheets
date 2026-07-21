@@ -65,7 +65,8 @@ class ExportInteractor(
         val photoIds = snapshot.days.asSequence()
             .flatMap { it.rows.asSequence() }
             .flatMap { it.cells.asSequence() }
-            .mapNotNull { it?.photoId }
+            .filterNotNull()
+            .flatMap { it.photoIds.asSequence() }
             .toSet()
         return photoIds.associateWith { id ->
             val meta = requireNotNull(photoStore.getMeta(id)) { "Фото не найдено: $id" }

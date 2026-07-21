@@ -47,35 +47,41 @@ class SheetLayoutTest {
         parse(SheetXml.build(snapshot, hasDrawing))
 
     @Test
-    fun `four fields widen the contractor group to five columns`() {
+    fun `four fields widen the contractor group to six columns`() {
         val sheet = sheetOf(TestFixtures.snapshotWithFields(fields(4)))
 
-        // Группа = Ф + 4 поля; 2 подрядчика → A + 2*5 = 11 колонок (последняя K).
-        assertEquals("A1:K3", sheet.elements("dimension").single().getAttribute("ref"))
-        assertEquals(11, sheet.elements("col").size)
+        // Группа = 2 колонки Ф + 4 поля; 2 подрядчика → A + 2*6 = 13 колонок (последняя M).
+        assertEquals("A1:M3", sheet.elements("dimension").single().getAttribute("ref"))
+        assertEquals(13, sheet.elements("col").size)
 
-        assertEquals(listOf("A1:A2", "B1:F1", "G1:K1"), sheet.elements("mergeCell").map { it.getAttribute("ref") })
+        assertEquals(listOf("A1:A2", "B1:G1", "H1:M1"), sheet.elements("mergeCell").map { it.getAttribute("ref") })
         assertEquals("3", sheet.elements("mergeCells").single().getAttribute("count"))
 
-        // Порядок <cols>: дата, затем на каждую группу Ф и ширины полей по порядку.
-        // Ф — 14.9: ширина колонки считается от стороны фото-квадрата (PHOTO_BOX_PT), а не берётся
-        // из эталона. Прежние 5.75 были уже картинки, и фото наезжало на первую колонку поля.
+        // Порядок <cols>: дата, затем на каждую группу обе Ф и ширины полей по порядку.
+        // Ф — 4.62: ширина колонки считается от стороны фото-квадрата (PHOTO_BOX_PT), а не берётся
+        // из эталона, иначе фото наезжало бы на первую колонку поля.
         val widths = sheet.elements("col").map { it.getAttribute("width") }
         assertEquals(
-            listOf("10.5", "14.9", "10.0", "11.0", "12.0", "13.0", "14.9", "10.0", "11.0", "12.0", "13.0"),
+            listOf(
+                "10.5",
+                "4.62", "4.62", "10.0", "11.0", "12.0", "13.0",
+                "4.62", "4.62", "10.0", "11.0", "12.0", "13.0",
+            ),
             widths,
         )
 
         // Шапка и данные обеих групп идут с тем же шагом.
         assertEquals("Ф", sheet.cellText("B2"))
-        assertEquals("Поле 0", sheet.cellText("C2"))
-        assertEquals("Поле 3", sheet.cellText("F2"))
-        assertEquals("Ф", sheet.cellText("G2"))
-        assertEquals("Поле 0", sheet.cellText("H2"))
-        assertEquals("a0", sheet.cellText("C3"))
-        assertEquals("a3", sheet.cellText("F3"))
-        assertEquals("b0", sheet.cellText("H3"))
-        assertEquals("b3", sheet.cellText("K3"))
+        assertEquals("Ф", sheet.cellText("C2"))
+        assertEquals("Поле 0", sheet.cellText("D2"))
+        assertEquals("Поле 3", sheet.cellText("G2"))
+        assertEquals("Ф", sheet.cellText("H2"))
+        assertEquals("Ф", sheet.cellText("I2"))
+        assertEquals("Поле 0", sheet.cellText("J2"))
+        assertEquals("a0", sheet.cellText("D3"))
+        assertEquals("a3", sheet.cellText("G3"))
+        assertEquals("b0", sheet.cellText("J3"))
+        assertEquals("b3", sheet.cellText("M3"))
     }
 
     @Test
@@ -99,26 +105,31 @@ class SheetLayoutTest {
             .map { drawing.getElementsByTagName("xdr:oneCellAnchor").item(it) as Element }
         assertEquals(1, anchors.size)
 
-        // Фото у второго подрядчика: Ф-колонка группы = 1 + 5*1 = 6 (0-based), т.е. столбец G.
+        // Фото у второго подрядчика, слот 0: первая Ф группы = 1 + 6*1 = 7 (0-based), т.е. столбец H.
         val from = anchors[0].getElementsByTagName("xdr:from").item(0) as Element
-        assertEquals("6", from.getElementsByTagName("xdr:col").item(0).textContent)
+        assertEquals("7", from.getElementsByTagName("xdr:col").item(0).textContent)
         assertEquals("2", from.getElementsByTagName("xdr:row").item(0).textContent)
     }
 
+    /**
+     * Ноль полей больше не схлопывает группу в одну колонку: колонок Ф две, значит merge из одной
+     * ячейки (который Excel считает повреждением файла) при таком наборе просто не получается.
+     * Проверка на вырожденный merge остаётся — она сторожит само правило, а не текущее число Ф.
+     */
     @Test
-    fun `no fields leaves only the date merge, never a single-cell one`() {
+    fun `no fields still merges each contractor over both photo columns`() {
         val sheet = sheetOf(TestFixtures.snapshotWithFields(emptyList()))
 
-        // Группа схлопнулась в одну колонку Ф: merge из одной ячейки Excel считает файл повреждённым,
-        // поэтому групповых merge быть не должно вовсе — и count обязан это отражать.
         val merges = sheet.elements("mergeCell").map { it.getAttribute("ref") }
-        assertEquals(listOf("A1:A2"), merges)
-        assertEquals("1", sheet.elements("mergeCells").single().getAttribute("count"))
-        assertTrue(merges.none { it.substringBefore(':') == it.substringAfter(':') && it != "A1:A2" })
+        assertEquals(listOf("A1:A2", "B1:C1", "D1:E1"), merges)
+        assertEquals("3", sheet.elements("mergeCells").single().getAttribute("count"))
+        assertTrue(merges.none { it.substringBefore(':') == it.substringAfter(':') })
 
-        assertEquals("A1:C3", sheet.elements("dimension").single().getAttribute("ref"))
+        assertEquals("A1:E3", sheet.elements("dimension").single().getAttribute("ref"))
         assertEquals("Ф", sheet.cellText("B2"))
         assertEquals("Ф", sheet.cellText("C2"))
+        assertEquals("Ф", sheet.cellText("D2"))
+        assertEquals("Ф", sheet.cellText("E2"))
     }
 
     @Test

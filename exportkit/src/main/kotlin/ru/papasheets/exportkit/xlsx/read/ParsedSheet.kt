@@ -71,10 +71,15 @@ class ParsedRow(
 /** Значения полей одной записи; размер списка = [ParsedSheet.fieldTitles].size, пустое значение = `""`. */
 class ParsedCell(
     val values: List<String>,
-    val photo: PhotoRef?,
+    /**
+     * Фото записи по порядку, без дырок: пустые слоты листа уже схлопнуты читателем. Длина — от 0
+     * до числа колонок Ф в исходном файле, которое не обязано совпадать с числом слотов у записи
+     * (старый файл даёт максимум одно фото).
+     */
+    val photos: List<PhotoRef>,
 ) {
     /** Пустая ячейка — ни текста, ни фото; такие в журнал не переносятся. */
-    val isBlank: Boolean get() = photo == null && values.all { it.isBlank() }
+    val isBlank: Boolean get() = photos.isEmpty() && values.all { it.isBlank() }
 }
 
 /**

@@ -3,6 +3,7 @@ package ru.papasheets.exportkit.csv
 import java.io.OutputStream
 import java.io.OutputStreamWriter
 import ru.papasheets.exportkit.model.JournalSnapshot
+import ru.papasheets.exportkit.xlsx.MatrixSheetLayout
 
 private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 
@@ -18,15 +19,21 @@ object CsvWriter {
         val writer = OutputStreamWriter(out, Charsets.UTF_8)
         // Заголовок собирается из тех же полей, что и данные, и экранируется тем же escape:
         // подпись поля задаёт пользователь, и `;` или `"` в ней сломали бы разбор первой строки.
-        writer.write(csvLine(listOf("Дата", "Подрядчик") + snapshot.fields.map { it.title } + "Фото"))
+        // Колонок под фото столько же, сколько слотов у записи, и заголовки у них фиксированные:
+        // переменное число колонок сделало бы ширину строки зависящей от данных, а CSV читают
+        // построчно, ожидая одинаковую шапку.
+        val photoTitles = (1..MatrixSheetLayout.PHOTO_COLUMNS_PER_GROUP).map { "Фото $it" }
+        writer.write(csvLine(listOf("Дата", "Подрядчик") + snapshot.fields.map { it.title } + photoTitles))
         for (day in snapshot.days) {
             for (row in day.rows) {
                 row.cells.forEachIndexed { index, cell ->
                     if (cell != null) {
                         val contractor = snapshot.contractors[index].name
-                        val photoFile = cell.photoId?.let { "$it.jpg" } ?: ""
+                        val photoFiles = (0 until MatrixSheetLayout.PHOTO_COLUMNS_PER_GROUP).map { slot ->
+                            cell.photoIds.getOrNull(slot)?.let { "$it.jpg" } ?: ""
+                        }
                         val values = snapshot.fields.indices.map { cell.values.getOrElse(it) { "" } }
-                        writer.write(csvLine(listOf(day.dateLabel, contractor) + values + photoFile))
+                        writer.write(csvLine(listOf(day.dateLabel, contractor) + values + photoFiles))
                     }
                 }
             }

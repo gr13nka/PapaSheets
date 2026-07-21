@@ -60,6 +60,7 @@ fun testRecord(
     dateEpochDay: Long = 0,
     contractorId: String = "c",
     photoId: String? = null,
+    photoId2: String? = null,
     createdAt: Long = 0,
     values: Map<String, String> = emptyMap(),
 ): RecordWithValues = RecordWithValues(
@@ -69,6 +70,7 @@ fun testRecord(
         dateEpochDay = dateEpochDay,
         contractorId = contractorId,
         photoId = photoId,
+        photoId2 = photoId2,
         createdAt = createdAt,
         updatedAt = createdAt,
     ),

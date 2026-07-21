@@ -78,19 +78,21 @@ class XlsxImportInteractor(
                 val journal = journalRepository.createOrGetJournal(plan.year, plan.month)
                 plan.newContractors.forEach { contractorRepository.insert(it) }
                 plan.newFields.forEach { fieldRepository.upsertFromBackup(it) }
-                photoMetaByRecord.values.forEach { photoStore.insertMetaIfAbsent(it) }
+                photoMetaByRecord.values.flatten().forEach { photoStore.insertMetaIfAbsent(it) }
 
                 val now = System.currentTimeMillis()
                 val records = ArrayList<RecordEntity>(plan.records.size)
                 val values = ArrayList<RecordValueEntity>()
                 plan.records.forEachIndexed { index, planned ->
                     val recordId = UUID.randomUUID().toString()
+                    val photoIds = photoMetaByRecord[index].orEmpty().map { it.id }
                     records += RecordEntity(
                         id = recordId,
                         journalId = journal.id,
                         dateEpochDay = planned.date.toEpochDay(),
                         contractorId = planned.contractorId,
-                        photoId = photoMetaByRecord[index]?.id,
+                        photoId = photoIds.getOrNull(0),
+                        photoId2 = photoIds.getOrNull(1),
                         createdAt = now,
                         updatedAt = now,
                     )
@@ -158,29 +160,31 @@ class XlsxImportInteractor(
      * [PhotoImporter] умеет читать только Uri, поэтому байты сначала ложатся во временный файл —
      * `file://`-Uri для `ContentResolver` неотличим от галерейного.
      *
-     * @return индекс записи в плане → мета созданного фото; записи без фото в карту не попадают.
+     * @return индекс записи в плане → мета созданных фото по порядку; записи без фото в карту не
+     * попадают, а фото, которое не удалось декодировать, просто отсутствует в списке своей записи.
      */
     private fun importPhotos(
         plan: XlsxImportPlan,
         photoBytes: (PhotoRef) -> ByteArray?,
-    ): Map<Int, ru.papasheets.photos.PhotoMeta> {
+    ): Map<Int, List<ru.papasheets.photos.PhotoMeta>> {
         val importer = PhotoImporter(context)
-        val result = LinkedHashMap<Int, ru.papasheets.photos.PhotoMeta>()
+        val result = LinkedHashMap<Int, List<ru.papasheets.photos.PhotoMeta>>()
         val staging = File(context.cacheDir, "xlsx-photo-staging.jpg")
         try {
             plan.records.forEachIndexed { index, planned ->
-                val ref = planned.photo ?: return@forEachIndexed
-                val bytes = photoBytes(ref) ?: return@forEachIndexed
-                staging.writeBytes(bytes)
-                val id = UUID.randomUUID().toString()
-                val meta = try {
-                    importer.importTo(id, PhotoSource.Gallery(Uri.fromFile(staging)), photoStore.mediumFile(id), photoStore.thumbFile(id))
-                } catch (e: IllegalStateException) {
-                    // Не всякая картинка в чужом файле — фотография: встречаются png-иконки и битые
-                    // вложения. Запись переносим без фото, а не роняем весь импорт из-за одной.
-                    return@forEachIndexed
+                val metas = planned.photos.mapNotNull { ref ->
+                    val bytes = photoBytes(ref) ?: return@mapNotNull null
+                    staging.writeBytes(bytes)
+                    val id = UUID.randomUUID().toString()
+                    try {
+                        importer.importTo(id, PhotoSource.Gallery(Uri.fromFile(staging)), photoStore.mediumFile(id), photoStore.thumbFile(id))
+                    } catch (e: IllegalStateException) {
+                        // Не всякая картинка в чужом файле — фотография: встречаются png-иконки и битые
+                        // вложения. Такое фото пропускаем, а не роняем весь импорт из-за одной картинки.
+                        null
+                    }
                 }
-                result[index] = meta
+                if (metas.isNotEmpty()) result[index] = metas
             }
         } finally {
             staging.delete()

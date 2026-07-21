@@ -307,6 +307,44 @@ class MatrixGeometryTest {
     }
 
     @Test
+    fun photoSlotSplitsTheColumnInHalf() {
+        val g = bigGeometry()
+        // На density 2, zoom 1: dateColW=128, photoColW=144 → граница слотов на localX=72 (x=200).
+        val left = g.hitTest(140f, 100f, 0f, 0f, 1f) as MatrixHit.Body
+        assertTrue(left.onPhoto)
+        assertEquals(0, left.photoSlot) // localX=12 < 72
+        assertEquals(0, left.group)
+
+        val right = g.hitTest(250f, 100f, 0f, 0f, 1f) as MatrixHit.Body
+        assertTrue(right.onPhoto)
+        assertEquals(1, right.photoSlot) // localX=122 в [72,144)
+        assertEquals(0, right.group)
+    }
+
+    @Test
+    fun photoTilesGiveOneCenteredBoxOrTwoSideBySide() {
+        val g = bigGeometry() // density 2: photoColW=144, photoBoxPx=128, photoPadX=8, cellPad=12
+
+        val single = g.photoTiles(1).single()
+        assertEquals(8f, single.left, 0.01f)
+        assertEquals(12f, single.top, 0.01f)
+        assertEquals(128f, single.size, 0.01f)
+
+        // Два бокса делят подколонку поровну с зазором photoPadX: size=(144-8-8-8)/2=60.
+        val pair = g.photoTiles(2)
+        assertEquals(2, pair.size)
+        assertEquals(8f, pair[0].left, 0.01f)
+        assertEquals(60f, pair[0].size, 0.01f)
+        assertEquals(76f, pair[1].left, 0.01f) // 8 + 60 + 8
+        assertEquals(60f, pair[1].size, 0.01f)
+        // Оба бокса целиком внутри подколонки — правый край не залезает в первое поле.
+        assertTrue(pair[1].left + pair[1].size <= g.photoColW + 0.01f)
+
+        // Больше MAX_PHOTOS_PER_CELL плиток подколонка не отдаёт.
+        assertEquals(MAX_PHOTOS_PER_CELL, g.photoTiles(5).size)
+    }
+
+    @Test
     fun hitTestAgreesWithRendererWhenWorldCentered() {
         // Мир уже́ вьюпорта (как на fit-обзоре) → центрируется. Hit-тест обязан попадать ровно туда, куда
         // рендерер рисует ячейку: берём экранный центр группы из groupScreenLeft/rowScreenTop и проверяем,

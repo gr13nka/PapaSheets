@@ -74,7 +74,7 @@ class XlsxReaderReferenceTest {
         val sheet = referenceSheet()
 
         val withPhoto = sheet.rows.flatMap { row ->
-            row.cells.mapIndexedNotNull { index, cell -> cell?.photo?.let { index to it } }
+            row.cells.mapIndexedNotNull { index, cell -> cell?.photos?.firstOrNull()?.let { index to it } }
         }
         assertEquals(25, withPhoto.size)
 
@@ -87,7 +87,7 @@ class XlsxReaderReferenceTest {
     @Test
     fun `absent media bytes yield an empty reference rather than an error`() {
         val sheet = referenceSheet()
-        val ref = sheet.rows.firstNotNullOf { row -> row.cells.firstNotNullOfOrNull { it?.photo } }
+        val ref = sheet.rows.firstNotNullOf { row -> row.cells.firstNotNullOfOrNull { it?.photos?.firstOrNull() } }
 
         assertFalse(ref.isPresent)
         assertNotNull(ref.entryName)

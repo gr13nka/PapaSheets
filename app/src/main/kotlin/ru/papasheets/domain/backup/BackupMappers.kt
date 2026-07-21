@@ -34,8 +34,11 @@ fun BackupContractor.toEntity() = ContractorEntity(id, name, shortName, colorInd
  * в `recordValues` — этим занимается `BackupUpgrade` внутри `BackupReader`. В таблице `records`
  * соответствующих колонок нет с v3.
  */
-fun RecordEntity.toBackup() = BackupRecord(id, journalId, dateEpochDay, contractorId, photoId = photoId, createdAt = createdAt, updatedAt = updatedAt)
-fun BackupRecord.toEntity() = RecordEntity(id, journalId, dateEpochDay, contractorId, photoId, createdAt, updatedAt)
+fun RecordEntity.toBackup() = BackupRecord(
+    id, journalId, dateEpochDay, contractorId,
+    photoId = photoId, photoId2 = photoId2, createdAt = createdAt, updatedAt = updatedAt,
+)
+fun BackupRecord.toEntity() = RecordEntity(id, journalId, dateEpochDay, contractorId, photoId, photoId2, createdAt, updatedAt)
 
 fun PhotoMeta.toBackup() = BackupPhoto(id, width, height, sizeBytes, originUri, createdAt)
 fun BackupPhoto.toMeta() = PhotoMeta(id, width, height, sizeBytes, originUri, createdAt)

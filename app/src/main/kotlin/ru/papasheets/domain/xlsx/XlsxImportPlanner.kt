@@ -37,8 +37,8 @@ internal class XlsxImportPlan(
     /** Сколько дней журнала затронет импорт: записи одного дня показываются одной датой. */
     val dayCount: Int get() = records.distinctBy { it.date }.size
 
-    /** Записей с доступным фото. Больше этого числа фото не приедет, меньше — может (см. `importPhotos`). */
-    val photoCount: Int get() = records.count { it.photo != null }
+    /** Всего доступных фото по всем записям. Больше не приедет, меньше — может (см. `importPhotos`). */
+    val photoCount: Int get() = records.sumOf { it.photos.size }
 }
 
 /**
@@ -51,7 +51,8 @@ internal class PlannedRecord(
     val contractorId: String,
     /** id поля → значение; пустые значения сюда не попадают. */
     val values: Map<String, String>,
-    val photo: PhotoRef?,
+    /** Доступные фото записи по порядку (максимум — сколько колонок Ф было в файле). */
+    val photos: List<PhotoRef>,
 )
 
 /**
@@ -88,10 +89,10 @@ internal object XlsxImportPlanner {
                     if (cell == null) return@forEachIndexed
                     val contractorId = contractors.idFor(contractorIndex) ?: return@forEachIndexed
                     val values = fields.valuesFor(cell.values)
-                    val photo = cell.photo?.takeIf { it.isPresent }
+                    val photos = cell.photos.filter { it.isPresent }
                     // Запись без единого значения и без фото переносить нечего.
-                    if (values.isEmpty() && photo == null) return@forEachIndexed
-                    records += PlannedRecord(date, contractorId, values, photo)
+                    if (values.isEmpty() && photos.isEmpty()) return@forEachIndexed
+                    records += PlannedRecord(date, contractorId, values, photos)
                 }
             }
         }

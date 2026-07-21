@@ -11,11 +11,19 @@ import kotlin.math.min
  * координаты в сетке и суб-зону; сопоставление с записью (заполнена/пуста, recordId) делает [MatrixView].
  */
 internal sealed interface MatrixHit {
-    /** Точка в теле матрицы. [onPhoto] — попадание в Ф-подколонку (фото-зона ячейки). */
-    data class Body(val row: Int, val group: Int, val onPhoto: Boolean) : MatrixHit
+    /**
+     * Точка в теле матрицы. [onPhoto] — попадание в Ф-подколонку (фото-зона ячейки). [photoSlot] —
+     * какая половина этой подколонки (0 — левая, 1 — правая): у записи с двумя фото так выбирается,
+     * какое открыть. Осмыслен только при [onPhoto]; вызывающая сторона всё равно зажимает его по
+     * фактическому числу фото — геометрия про содержимое ячейки не знает.
+     */
+    data class Body(val row: Int, val group: Int, val onPhoto: Boolean, val photoSlot: Int) : MatrixHit
     /** Шапка, колонка дат, угол или пустое поле за границей мира. */
     data object Other : MatrixHit
 }
+
+/** Плитка превью внутри Ф-подколонки (базовые единицы, левый край группы = 0). */
+internal class PhotoTile(val left: Float, val top: Float, val size: Float)
 
 /**
  * Наибольший зум, ещё НЕ попадающий в LOD0. Потолок обзорной ветки [MatrixGeometry.fitZoom]: ровно
@@ -121,6 +129,26 @@ internal class MatrixGeometry(
         // Уже ровные метрики переиспользуем как есть: тогда на типичном журнале оба яруса ссылаются
         // на ОДИН объект, и переход через порог LOD не меняет ни высоту мира, ни pan (см. [metrics]).
         flat = if (rowMetrics is RowMetrics.Uniform) rowMetrics else RowMetrics.Uniform(rowMetrics.rowCount, rowH)
+    }
+
+    // --- Плитки превью внутри Ф-подколонки. ---
+
+    /**
+     * Прямоугольники превью для записи с [photoCount] фото (базовые единицы). Одно фото — полный
+     * квадрат [photoBoxPx] по центру подколонки, ровно как было до второго слота. Два — два равных
+     * бокса рядом с зазором в [photoPadX]: каждый мельче, зато оба видны целиком, а Ф-подколонка не
+     * расширяется (её ширина — константа модели, на ней держится вся виртуализация по X).
+     *
+     * [photoCount] зажимается сверху [MAX_PHOTOS_PER_CELL]: больше плиток в подколонку не поместить,
+     * и лишние молча отбрасываются здесь, а не наезжают на соседнюю группу.
+     */
+    fun photoTiles(photoCount: Int): List<PhotoTile> {
+        if (photoCount <= 1) return listOf(PhotoTile(photoPadX, cellPad, photoBoxPx))
+        val boxes = MAX_PHOTOS_PER_CELL
+        val size = (photoColW - 2 * photoPadX - (boxes - 1) * photoPadX) / boxes
+        return (0 until boxes).map { slot ->
+            PhotoTile(left = photoPadX + slot * (size + photoPadX), top = cellPad, size = size)
+        }
     }
 
     // --- Подколонки внутри группы (ось X). ---
@@ -300,7 +328,10 @@ internal class MatrixGeometry(
         val localX = worldX - group * groupPx
         // Фото-зона (тап → лайтбокс) есть только там, где превью реально рисуются (LOD0/LOD1); на LOD2
         // «картина месяца» без битмапов — попадание в Ф-подколонку = обычный тап по ячейке.
-        val onPhoto = Lod.forZoom(zoom) != Lod.LOD2 && localX < photoColW * zoom
-        return MatrixHit.Body(row = row, group = group, onPhoto = onPhoto)
+        val photoColPx = photoColW * zoom
+        val onPhoto = Lod.forZoom(zoom) != Lod.LOD2 && localX < photoColPx
+        // Половина подколонки → слот. Зажатие по реальному числу фото — на стороне [MatrixView].
+        val photoSlot = if (localX < photoColPx / 2f) 0 else 1
+        return MatrixHit.Body(row = row, group = group, onPhoto = onPhoto, photoSlot = photoSlot)
     }
 }
