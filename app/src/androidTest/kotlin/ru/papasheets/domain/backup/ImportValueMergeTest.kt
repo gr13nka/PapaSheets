@@ -148,7 +148,7 @@ class ImportValueMergeTest {
 
     private fun recordEntity(updatedAt: Long) = RecordEntity(
         id = RECORD_ID, journalId = JOURNAL_ID, dateEpochDay = 100, contractorId = CONTRACTOR_ID,
-        photoId = null, createdAt = 1, updatedAt = updatedAt,
+        photoId = null, photoId2 = null, createdAt = 1, updatedAt = updatedAt,
     )
 
     /** Настоящий .psbackup текущего формата: путь чтения в тесте тот же, что и в приложении. */

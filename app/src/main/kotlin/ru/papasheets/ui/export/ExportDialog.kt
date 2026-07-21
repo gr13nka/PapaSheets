@@ -15,10 +15,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -26,42 +22,30 @@ import androidx.compose.ui.unit.dp
 import ru.papasheets.R
 import ru.papasheets.domain.export.ExportFormat
 
-private const val MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-private const val MIME_CSV = "text/csv"
-
 /**
- * Диалог экспорта журнала: выбор формата → системный SAF `CreateDocument` → прогресс. Сам решает,
- * с каким MIME-типом и именем открыть системный пикер; фактическую запись делает [onExport]
- * (VM/Interactor) — диалог только собирает выбор пользователя и показывает [exporting].
+ * Диалог экспорта журнала: папка (выбранная однажды) → формат → перезапись файла → прогресс.
  *
+ * Файл всегда один и тот же («Июль 2026.xlsx»), поэтому системного пикера имени тут больше нет:
+ * прораб один раз выбирает папку ([ActivityResultContracts.OpenDocumentTree]), а дальше видит, как
+ * тот же файл обновляется. Пока папка не выбрана, форматы недоступны — писать некуда; фактическую
+ * запись (и уход прежней версии в архив) делает [onExport] через [ru.papasheets.domain.export.ExportFolder].
+ *
+ * @param folderName имя выбранной папки, или `null` — папка не выбрана / доступ к ней потерян.
  * @param filterActive на экране включён фильтр. Выгрузка его не учитывает (см.
  *   [ru.papasheets.domain.export.buildJournalSnapshot]), и об этом надо предупредить здесь: без
  *   предупреждения прораб ждёт в файле ровно то, что видит на экране, а получает весь журнал.
  */
 @Composable
 fun ExportDialog(
-    defaultFileName: (ExportFormat) -> String,
+    folderName: String?,
     exporting: Boolean,
     filterActive: Boolean,
-    onExport: (ExportFormat, Uri) -> Unit,
+    onFolderChosen: (Uri) -> Unit,
+    onExport: (ExportFormat) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var pendingFormat by remember { mutableStateOf<ExportFormat?>(null) }
-
-    val xlsxLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(MIME_XLSX)) { uri ->
-        val format = pendingFormat
-        pendingFormat = null
-        if (uri != null && format != null) onExport(format, uri)
-    }
-    val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(MIME_CSV)) { uri ->
-        pendingFormat = null
-        if (uri != null) onExport(ExportFormat.CSV, uri)
-    }
-
-    fun launch(format: ExportFormat) {
-        pendingFormat = format
-        val fileName = defaultFileName(format)
-        if (format == ExportFormat.CSV) csvLauncher.launch(fileName) else xlsxLauncher.launch(fileName)
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) onFolderChosen(uri)
     }
 
     AlertDialog(
@@ -86,13 +70,39 @@ fun ExportDialog(
                             modifier = Modifier.padding(bottom = 4.dp),
                         )
                     }
-                    TextButton(onClick = { launch(ExportFormat.XLSX_WITH_PHOTOS) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = folderName?.let { stringResource(R.string.export_folder_current, it) }
+                            ?: stringResource(R.string.export_folder_none),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    TextButton(onClick = { folderLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            stringResource(
+                                if (folderName == null) R.string.export_choose_folder else R.string.export_change_folder,
+                            ),
+                        )
+                    }
+
+                    val folderReady = folderName != null
+                    TextButton(
+                        onClick = { onExport(ExportFormat.XLSX_WITH_PHOTOS) },
+                        enabled = folderReady,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Text(stringResource(R.string.export_option_xlsx_photos))
                     }
-                    TextButton(onClick = { launch(ExportFormat.XLSX_NO_PHOTOS) }, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(
+                        onClick = { onExport(ExportFormat.XLSX_NO_PHOTOS) },
+                        enabled = folderReady,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Text(stringResource(R.string.export_option_xlsx_no_photos))
                     }
-                    TextButton(onClick = { launch(ExportFormat.CSV) }, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(
+                        onClick = { onExport(ExportFormat.CSV) },
+                        enabled = folderReady,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Text(stringResource(R.string.export_option_csv))
                     }
                 }

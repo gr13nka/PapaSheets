@@ -220,6 +220,40 @@ class MigrationTest {
     }
 
     /**
+     * У записи появляется второй слот фото — аддитивным `ADD COLUMN`, не трогая ни строки.
+     *
+     * Единственная миграция, которая касается `records` без пересоздания: у существующих записей
+     * второго фото не было, поэтому колонка добавляется со значением по умолчанию NULL. Проверяется,
+     * что записи целы, новый слот у них пуст, а UNIQUE-индекс на нём работает — иначе два фото
+     * встали бы в один слот незаметно.
+     */
+    @Test
+    fun migration5To6_addsSecondPhotoSlotKeepingRecords() {
+        helper.createDatabase(TEST_DB, 5).use { it.seedV5Fixtures() }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 6, true, Migrations.MIGRATION_5_6)
+
+        assertTrue("photoId2" in db.columnsOf("records"))
+        // Записи на месте: у первой фото в слоте 1, второй слот пуст; у второй — оба пусты.
+        assertEquals(
+            setOf("r-1" to "ph1", "r-2" to null),
+            db.query("SELECT id, photoId FROM records").use { cursor ->
+                buildSet { while (cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1)) }
+            },
+        )
+        assertEquals(2L, db.queryLong("SELECT COUNT(*) FROM records WHERE photoId2 IS NULL"))
+
+        // UNIQUE на photoId2: одно фото не может оказаться во вторых слотах двух записей.
+        db.execSQL("UPDATE records SET photoId2 = 'ph2' WHERE id = 'r-1'")
+        try {
+            db.execSQL("UPDATE records SET photoId2 = 'ph2' WHERE id = 'r-2'")
+            fail("ожидался отказ по уникальному индексу index_records_photoId2")
+        } catch (e: SQLiteConstraintException) {
+            assertTrue(e.message!!.isNotBlank())
+        }
+    }
+
+    /**
      * Путь с самой первой версии до текущей одним прогоном.
      *
      * Отдельные тесты шагов не покрывают именно этот сценарий: у прораба может стоять сборка,
@@ -375,6 +409,20 @@ class MigrationTest {
             "INSERT INTO field_presets VALUES ('p-1', ?, 'К1', 0)",
             arrayOf(BuiltInFields.LOCATION_ID),
         )
+    }
+
+    /**
+     * Состояние после v5: у записи один слот фото (`photoId`), колонки `photoId2` ещё нет. Двух
+     * строк и двух фото хватает, чтобы проверить и перенос данных, и уникальность нового слота.
+     */
+    private fun SupportSQLiteDatabase.seedV5Fixtures() {
+        execSQL("INSERT INTO journals VALUES ('j1', 2026, 7, 'Июль', 0)")
+        execSQL("INSERT INTO contractors VALUES ('c1', 'Г.П.', 'ГП', 0, 0, 0, 0)")
+        execSQL("INSERT INTO photos VALUES ('ph1', 100, 100, 1000, NULL, 0)")
+        execSQL("INSERT INTO photos VALUES ('ph2', 100, 100, 1000, NULL, 0)")
+        // v5-схема записи: 7 колонок, photoId2 ещё нет.
+        execSQL("INSERT INTO records VALUES ('r-1', 'j1', 20000, 'c1', 'ph1', 0, 0)")
+        execSQL("INSERT INTO records VALUES ('r-2', 'j1', 20000, 'c1', NULL, 0, 0)")
     }
 
     private fun SupportSQLiteDatabase.insertV1Record(id: String, location: String, work: String) {

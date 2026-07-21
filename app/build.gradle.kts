@@ -98,6 +98,7 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.coil.compose)
     implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.documentfile)
     implementation(libs.androidx.core.ktx)
     debugImplementation(libs.compose.ui.tooling)
 

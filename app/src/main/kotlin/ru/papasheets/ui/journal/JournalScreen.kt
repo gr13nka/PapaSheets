@@ -334,11 +334,18 @@ fun JournalScreen(
     }
 
     if (showExportDialog) {
+        val exportFolderName by viewModel.exportFolderName.collectAsState()
+        // Диалог открылся — перечитываем папку: доступ к ней мог отвалиться с прошлого раза.
+        LaunchedEffect(Unit) { viewModel.refreshExportFolder() }
         ExportDialog(
-            defaultFileName = viewModel::defaultExportFileName,
+            folderName = exportFolderName,
             exporting = exporting,
             filterActive = !query.filter.isEmpty,
-            onExport = { format, uri -> viewModel.exportTo(uri, format) },
+            onFolderChosen = viewModel::onExportFolderChosen,
+            onExport = { format ->
+                viewModel.exportTo(format)
+                showExportDialog = false
+            },
             onDismiss = { showExportDialog = false },
         )
     }

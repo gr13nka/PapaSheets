@@ -37,6 +37,10 @@
     <string name="export_option_xlsx_no_photos">Excel (.xlsx) без фото</string>
     <string name="export_option_csv">Таблица CSV</string>
     <string name="export_filter_warning">Фильтр на экране не влияет на выгрузку: в файл пойдёт весь журнал.</string>
+    <string name="export_folder_current">Папка: %1$s</string>
+    <string name="export_folder_none">Папка не выбрана</string>
+    <string name="export_choose_folder">Выбрать папку</string>
+    <string name="export_change_folder">Изменить папку</string>
     <string name="export_in_progress">Экспортируем…</string>
     <string name="export_success">Сохранено</string>
 

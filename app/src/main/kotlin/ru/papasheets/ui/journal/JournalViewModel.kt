@@ -228,16 +228,32 @@ class JournalViewModel(
     private val _exportEvents = MutableSharedFlow<ExportEvent>(extraBufferCapacity = 1)
     val exportEvents: SharedFlow<ExportEvent> = _exportEvents.asSharedFlow()
 
-    /** Имя файла по умолчанию для SAF `CreateDocument` — показывает [ru.papasheets.ui.export.ExportDialog]. */
-    fun defaultExportFileName(format: ExportFormat): String =
-        exportInteractor.defaultFileName(journal.value?.title ?: "Журнал", format)
+    /** Имя выбранной папки экспорта, или null — показывает [ru.papasheets.ui.export.ExportDialog]. */
+    private val _exportFolderName = MutableStateFlow<String?>(null)
+    val exportFolderName: StateFlow<String?> = _exportFolderName.asStateFlow()
 
-    fun exportTo(uri: Uri, format: ExportFormat) {
+    /** Диалог экспорта открылся: перечитываем имя папки — доступ мог отвалиться между запусками. */
+    fun refreshExportFolder() {
+        viewModelScope.launch { _exportFolderName.value = exportInteractor.exportFolderName() }
+    }
+
+    /** Пользователь выбрал папку в системном диалоге — запоминаем и обновляем показанное имя. */
+    fun onExportFolderChosen(treeUri: Uri) {
+        exportInteractor.rememberExportFolder(treeUri)
+        refreshExportFolder()
+    }
+
+    /**
+     * Пишет журнал в файл его месяца внутри выбранной папки, перезаписывая прежнюю версию (та уходит
+     * в архив — см. [ru.papasheets.domain.export.ExportFolder]). Папка обязана быть выбрана; диалог
+     * до этого момента не даёт нажать формат.
+     */
+    fun exportTo(format: ExportFormat) {
         if (_exporting.value) return
         viewModelScope.launch {
             _exporting.value = true
             try {
-                exportInteractor.export(journalId, format, uri)
+                exportInteractor.export(journalId, format)
                 _exportEvents.emit(ExportEvent.Success)
             } catch (e: Exception) {
                 Log.e(TAG, "export failed: format=$format", e)
