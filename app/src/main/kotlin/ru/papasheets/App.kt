@@ -26,6 +26,7 @@ import ru.papasheets.domain.backup.ImportInteractor
 import ru.papasheets.domain.export.ExportFolder
 import ru.papasheets.domain.export.ExportInteractor
 import ru.papasheets.domain.xlsx.XlsxImportInteractor
+import ru.papasheets.logging.AppLog
 import ru.papasheets.photos.PhotoStore
 
 /** GC сирот-фото гоняется при выходе приложения на передний план, но не чаще одного раза за этот период. */
@@ -44,6 +45,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this)
+        graph.appLog.installAsUncaughtExceptionHandler()
         scheduleForegroundGc()
     }
 
@@ -68,6 +70,7 @@ class App : Application() {
 class AppGraph(context: Context) {
     val appContext: Context = context.applicationContext
 
+    val appLog: AppLog by lazy { AppLog(appContext) }
     private val database: AppDatabase by lazy { AppDatabase.build(appContext) }
     private val monthTitleFormatter: MonthTitleFormatter by lazy { MonthTitleFormatter(appContext) }
 
@@ -85,7 +88,7 @@ class AppGraph(context: Context) {
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
     private val exportFolder: ExportFolder by lazy { ExportFolder(appContext) }
     val exportInteractor: ExportInteractor by lazy {
-        ExportInteractor(journalRepository, recordRepository, contractorRepository, fieldRepository, photoStore, exportFolder)
+        ExportInteractor(journalRepository, recordRepository, contractorRepository, fieldRepository, photoStore, exportFolder, appLog)
     }
 
     /**

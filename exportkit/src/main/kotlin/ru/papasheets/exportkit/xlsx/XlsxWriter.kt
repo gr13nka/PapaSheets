@@ -1,6 +1,8 @@
 package ru.papasheets.exportkit.xlsx
 
 import java.io.OutputStream
+import java.util.Calendar
+import java.util.GregorianCalendar
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import ru.papasheets.exportkit.model.JournalSnapshot
@@ -16,10 +18,23 @@ import ru.papasheets.exportkit.model.PhotoBytesProvider
  * `photos == null` → лист без фото: та же раскладка данных, но без `xl/drawings` и `xl/media`.
  * Заканчивает запись ([ZipOutputStream.finish]), но не закрывает [out] — закрытие остаётся за
  * вызывающей стороной (она открыла поток, ей и решать, когда его отпустить).
+ *
+ * [log] — диагностика для отладки «выгрузились не все фото» (см. [ru.papasheets.logging.AppLog] в
+ * `:app`): сколько фото-якорей собрано, где сработал срез лимита колонок, какие файлы записаны в
+ * `xl/media`. Побочный эффект, изолированный от результата: `:exportkit` не знает про Android и не
+ * пишет в файлы сам, поэтому лог — просто колбэк со строкой. Не должен трогать [ZipOutputStream]
+ * или [out] — иначе побайтовые тесты формата (см. `XlsxWriterTest`) перестали бы быть гарантией.
  */
 object XlsxWriter {
-    fun write(snapshot: JournalSnapshot, photos: PhotoBytesProvider?, out: OutputStream) {
-        val anchors = if (photos != null) collectAnchors(snapshot, photos) else emptyList()
+    /**
+     * Фиксированное время ZIP-записей: вывод воспроизводим по байтам (и тест инварианта log
+     * детерминирован). 1980-01-01 — эпоха DOS-времени ZIP, попадает в диапазон без
+     * extended-timestamp extra.
+     */
+    private val ENTRY_TIME_MS = GregorianCalendar(1980, Calendar.JANUARY, 1, 0, 0, 0).timeInMillis
+
+    fun write(snapshot: JournalSnapshot, photos: PhotoBytesProvider?, out: OutputStream, log: (String) -> Unit = {}) {
+        val anchors = if (photos != null) collectAnchors(snapshot, photos, log) else emptyList()
         val hasDrawing = anchors.isNotEmpty()
         val zip = ZipOutputStream(out)
 
@@ -35,9 +50,10 @@ object XlsxWriter {
             putEntry(zip, "xl/drawings/drawing1.xml", DrawingXml.build(anchors))
             putEntry(zip, "xl/drawings/_rels/drawing1.xml.rels", RelsXml.drawing(anchors))
             for (anchor in anchors) {
-                zip.putNextEntry(ZipEntry("xl/media/${anchor.photoId}.jpg"))
+                zip.putNextEntry(ZipEntry("xl/media/${anchor.photoId}.jpg").also { it.time = ENTRY_TIME_MS })
                 photos.open(anchor.photoId).use { it.copyTo(zip) }
                 zip.closeEntry()
+                log("xlsx: записан xl/media/${anchor.photoId}.jpg")
             }
         }
 
@@ -58,14 +74,23 @@ object XlsxWriter {
      * приписал бы кадр чужой работе. Потерять лишнее фото здесь не страшно (схема записи столько и
      * не хранит), приписать — страшно.
      */
-    private fun collectAnchors(snapshot: JournalSnapshot, photos: PhotoBytesProvider): List<PhotoAnchor> {
+    private fun collectAnchors(snapshot: JournalSnapshot, photos: PhotoBytesProvider, log: (String) -> Unit): List<PhotoAnchor> {
         val anchors = ArrayList<PhotoAnchor>()
         val layout = MatrixSheetLayout.forWriting(snapshot.fields.size)
         var dataRowIndex = 0
+        var totalPhotoIds = 0
         for (day in snapshot.days) {
             for (row in day.rows) {
                 row.cells.forEachIndexed { contractorIndex, cellValue ->
-                    val photoIds = cellValue?.photoIds.orEmpty().take(layout.photoColumns)
+                    val allPhotoIds = cellValue?.photoIds.orEmpty()
+                    totalPhotoIds += allPhotoIds.size
+                    if (allPhotoIds.size > layout.photoColumns) {
+                        log(
+                            "xlsx: в ячейке ${allPhotoIds.size} фото при лимите ${layout.photoColumns} " +
+                                "колонок — отброшено ${allPhotoIds.size - layout.photoColumns}",
+                        )
+                    }
+                    val photoIds = allPhotoIds.take(layout.photoColumns)
                     photoIds.forEachIndexed { slot, photoId ->
                         val (width, height) = photos.size(photoId)
                         val scale = PHOTO_BOX_PT / maxOf(width, height).toDouble()
@@ -82,6 +107,7 @@ object XlsxWriter {
                 dataRowIndex++
             }
         }
+        log("xlsx: собрано ${anchors.size} фото-якорей из $totalPhotoIds photoId в снимке")
         return anchors
     }
 
@@ -110,7 +136,7 @@ object XlsxWriter {
     }
 
     private fun putEntry(zip: ZipOutputStream, name: String, content: String) {
-        zip.putNextEntry(ZipEntry(name))
+        zip.putNextEntry(ZipEntry(name).also { it.time = ENTRY_TIME_MS })
         zip.write(content.toByteArray(Charsets.UTF_8))
         zip.closeEntry()
     }

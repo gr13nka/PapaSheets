@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipInputStream
 import javax.xml.parsers.DocumentBuilderFactory
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -11,6 +12,11 @@ import org.junit.Test
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import ru.papasheets.exportkit.TestFixtures
+import ru.papasheets.exportkit.model.JournalSnapshot
+import ru.papasheets.exportkit.model.SnapshotCell
+import ru.papasheets.exportkit.model.SnapshotContractor
+import ru.papasheets.exportkit.model.SnapshotDay
+import ru.papasheets.exportkit.model.SnapshotRow
 
 class XlsxWriterTest {
 
@@ -177,5 +183,49 @@ class XlsxWriterTest {
 
         val contentTypes = parse(entries.getValue("[Content_Types].xml"))
         assertTrue(contentTypes.elements("Default").none { it.getAttribute("Extension") == "jpg" })
+    }
+
+    @Test
+    fun `log parameter does not change written bytes`() {
+        val silent = ByteArrayOutputStream()
+        XlsxWriter.write(TestFixtures.snapshot(), TestFixtures.photoProvider(), silent)
+
+        val logged = ByteArrayOutputStream()
+        val collected = mutableListOf<String>()
+        XlsxWriter.write(TestFixtures.snapshot(), TestFixtures.photoProvider(), logged, log = collected::add)
+
+        assertArrayEquals(silent.toByteArray(), logged.toByteArray())
+        // Побочный эффект случился — лог не превратился в молчаливую заглушку по ошибке.
+        assertTrue(collected.isNotEmpty())
+    }
+
+    @Test
+    fun `log reports truncation when a cell has more photos than columns`() {
+        // У подрядчика три фото при лимите в PHOTO_COLUMNS_PER_GROUP = 2 колонки.
+        val snapshot = JournalSnapshot(
+            title = "Июль 2026",
+            contractors = listOf(SnapshotContractor(name = "Иванов")),
+            fields = TestFixtures.legacyFields,
+            days = listOf(
+                SnapshotDay(
+                    dateLabel = "01.07",
+                    rows = listOf(
+                        SnapshotRow(
+                            cells = listOf(
+                                SnapshotCell(
+                                    listOf("1-01", "Штукатурка"),
+                                    photoIds = listOf(TestFixtures.PHOTO_A, TestFixtures.PHOTO_B, TestFixtures.PHOTO_C),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val collected = mutableListOf<String>()
+        XlsxWriter.write(snapshot, TestFixtures.photoProvider(), ByteArrayOutputStream(), log = collected::add)
+
+        assertTrue(collected.any { it.contains("3") && it.contains("отброшено") })
     }
 }

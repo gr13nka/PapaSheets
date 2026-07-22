@@ -2,7 +2,6 @@ package ru.papasheets.ui.journal
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.time.LocalDate
@@ -40,6 +39,7 @@ import ru.papasheets.domain.buildGridModel
 import ru.papasheets.domain.export.ExportFormat
 import ru.papasheets.domain.export.ExportInteractor
 import ru.papasheets.domain.sortRecords
+import ru.papasheets.logging.AppLog
 import ru.papasheets.matrixgrid.GridModel
 import ru.papasheets.photos.BitmapThumbnailSource
 import ru.papasheets.photos.PhotoStore
@@ -118,6 +118,7 @@ class JournalViewModel(
     photoStore: PhotoStore,
     private val exportInteractor: ExportInteractor,
     appContext: Context,
+    private val appLog: AppLog,
 ) : ViewModel() {
 
     val thumbnails = BitmapThumbnailSource(photoStore, viewModelScope, appContext)
@@ -256,7 +257,7 @@ class JournalViewModel(
                 exportInteractor.export(journalId, format)
                 _exportEvents.emit(ExportEvent.Success)
             } catch (e: Exception) {
-                Log.e(TAG, "export failed: format=$format", e)
+                appLog.e(TAG, "экспорт не удался", e)
                 _exportEvents.emit(ExportEvent.Failure(e.message ?: "Не удалось экспортировать"))
             } finally {
                 _exporting.value = false

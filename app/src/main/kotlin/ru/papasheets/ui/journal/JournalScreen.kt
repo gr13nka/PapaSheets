@@ -93,6 +93,7 @@ fun JournalScreen(
                     photoStore = graph.photoStore,
                     exportInteractor = graph.exportInteractor,
                     appContext = graph.appContext,
+                    appLog = graph.appLog,
                 )
             }
         },

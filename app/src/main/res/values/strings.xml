@@ -76,6 +76,9 @@
     <string name="xlsx_preview_confirm">Импортировать</string>
     <string name="xlsx_import_done">Импортировано в «%1$s»: записей %2$d, фото %3$d</string>
     <string name="backup_menu_import_any">Импорт бэкапа или таблицы</string>
+    <string name="share_logs_menu">Отправить логи</string>
+    <string name="share_logs_chooser_title">Отправить логи</string>
+    <string name="share_logs_failed">Не удалось отправить логи</string>
 
     <string name="record_delete_confirm_title">Удалить запись?</string>
     <string name="record_delete_confirm_message">Это действие нельзя отменить.</string>

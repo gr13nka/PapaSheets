@@ -1,5 +1,6 @@
 package ru.papasheets.ui.journals
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,7 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.papasheets.BuildConfig
 import ru.papasheets.R
 import ru.papasheets.data.FakeDataSeeder
@@ -167,6 +170,21 @@ fun JournalListScreen(
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.backup_menu_import)) },
                             onClick = { menuExpanded = false; importLauncher.launch(arrayOf("*/*")) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.share_logs_menu)) },
+                            onClick = {
+                                menuExpanded = false
+                                scope.launch {
+                                    try {
+                                        val intent = withContext(Dispatchers.IO) { graph.appLog.buildShareIntent() }
+                                        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_logs_chooser_title)))
+                                    } catch (e: Exception) {
+                                        graph.appLog.e("JournalListScreen", "не удалось отправить логи", e)
+                                        Toast.makeText(context, R.string.share_logs_failed, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
                         )
                     }
                 },
