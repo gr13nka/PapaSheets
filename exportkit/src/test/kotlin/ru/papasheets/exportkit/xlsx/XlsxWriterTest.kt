@@ -74,8 +74,8 @@ class XlsxWriterTest {
         val cols = sheet.elements("col")
         assertEquals("10.5", cols[0].getAttribute("width"))
         // Обе Ф считаются от стороны фото-квадрата (PHOTO_BOX_PT = 28pt), а не задаются отдельно.
-        assertEquals("4.62", cols[1].getAttribute("width"))
-        assertEquals("4.62", cols[2].getAttribute("width"))
+        assertEquals("7.29", cols[1].getAttribute("width"))
+        assertEquals("7.29", cols[2].getAttribute("width"))
         assertEquals("7.75", cols[3].getAttribute("width"))
         assertEquals("50.75", cols[4].getAttribute("width"))
 
@@ -108,11 +108,11 @@ class XlsxWriterTest {
         assertEquals("2-05; доп", sheet.cellText("H4"))
         assertEquals("Кладка \"кирпич\" & раствор", sheet.cellText("I4"))
 
-        // Обе строки данных содержат фото — обе получают явную высоту. Текста здесь не больше двух
-        // строк (30pt), поэтому высоту задаёт фото; с трёх строк её задавал бы уже текст.
-        assertEquals("36.0", sheet.row("3").getAttribute("ht"))
+        // Обе строки данных содержат фото — обе получают явную высоту. Текста здесь не больше трёх
+        // строк (45pt), поэтому высоту задаёт фото; с четырёх строк её задавал бы уже текст.
+        assertEquals("50.0", sheet.row("3").getAttribute("ht"))
         assertEquals("1", sheet.row("3").getAttribute("customHeight"))
-        assertEquals("36.0", sheet.row("4").getAttribute("ht"))
+        assertEquals("50.0", sheet.row("4").getAttribute("ht"))
     }
 
     @Test
