@@ -94,7 +94,7 @@ class RecordEditViewModel(
     initialDate: LocalDate,
     initialContractorId: String? = null,
     private val recordRepository: RecordRepository,
-    contractorRepository: ContractorRepository,
+    private val contractorRepository: ContractorRepository,
     fieldRepository: FieldRepository,
     private val valueSuggester: ValueSuggester,
     private val photoStore: PhotoStore,
@@ -179,6 +179,17 @@ class RecordEditViewModel(
     fun onContractorSelected(contractorId: String) {
         _uiState.update { it.copy(selectedContractorId = contractorId, showContractorError = false) }
         refreshContinuationCandidates()
+    }
+
+    /**
+     * Заводит подрядчика прямо из формы и сразу выбирает его: прораб столкнулся с новым подрядчиком
+     * посреди заполнения записи, и уход в настройки стоил бы ему набранного. В списке дропдауна новый
+     * появится сам — он собран из [ContractorRepository.observeAll].
+     */
+    fun createContractor(name: String, shortName: String) {
+        viewModelScope.launch {
+            onContractorSelected(contractorRepository.create(name, shortName))
+        }
     }
 
     /**

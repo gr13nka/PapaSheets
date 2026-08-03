@@ -24,14 +24,21 @@ class ContractorRepository(private val dao: ContractorDao) {
 
     suspend fun update(contractor: ContractorEntity) = dao.update(contractor)
 
-    /** Новый подрядчик в конец списка: orderIndex и colorIndex — следующие по счёту (палитра переиспользуется по модулю). */
-    suspend fun create(name: String, shortName: String) {
+    /**
+     * Новый подрядчик в конец списка: orderIndex и colorIndex — следующие по счёту (палитра
+     * переиспользуется по модулю).
+     *
+     * @return id заведённого подрядчика — форма записи выбирает его сразу после создания, а искать
+     * себя же по имени в списке ненадёжно (имена не уникальны).
+     */
+    suspend fun create(name: String, shortName: String): String {
         val all = dao.observeAll().first()
         val nextOrder = (all.maxOfOrNull { it.orderIndex } ?: -1) + 1
         val nextColor = (all.maxOfOrNull { it.colorIndex } ?: -1) + 1
+        val id = UUID.randomUUID().toString()
         dao.insert(
             ContractorEntity(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 name = name,
                 shortName = shortName,
                 colorIndex = nextColor,
@@ -39,6 +46,7 @@ class ContractorRepository(private val dao: ContractorDao) {
                 createdAt = System.currentTimeMillis(),
             ),
         )
+        return id
     }
 
     suspend fun rename(contractor: ContractorEntity, name: String, shortName: String) =

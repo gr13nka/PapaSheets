@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
@@ -65,6 +66,7 @@ import ru.papasheets.domain.contractorDisplayName
 import ru.papasheets.photos.CameraCapture
 import ru.papasheets.photos.GalleryPick
 import ru.papasheets.ui.LocalAppGraph
+import ru.papasheets.ui.common.ContractorDialog
 import ru.papasheets.ui.common.formInsets
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -206,6 +208,8 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
 
             var contractorExpanded by remember { mutableStateOf(false) }
             val selectedContractor = state.contractors.find { it.id == state.selectedContractorId }
+            // Новый подрядчик заводится не выходя из формы: уход в настройки стоил бы набранного.
+            var showNewContractorDialog by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
                 expanded = contractorExpanded,
                 onExpandedChange = { contractorExpanded = it },
@@ -239,7 +243,27 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                             },
                         )
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.record_contractor_create)) },
+                        onClick = {
+                            contractorExpanded = false
+                            showNewContractorDialog = true
+                        },
+                    )
                 }
+            }
+            if (showNewContractorDialog) {
+                ContractorDialog(
+                    initialName = "",
+                    initialShortName = "",
+                    titleRes = R.string.contractors_add_title,
+                    onDismiss = { showNewContractorDialog = false },
+                    onConfirm = { name, shortName ->
+                        viewModel.createContractor(name, shortName)
+                        showNewContractorDialog = false
+                    },
+                )
             }
 
             state.fields.forEach { field ->
