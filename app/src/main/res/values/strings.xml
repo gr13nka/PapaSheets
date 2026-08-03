@@ -90,6 +90,7 @@
     <string name="record_title_edit">Редактировать запись</string>
     <string name="record_contractor_label">Подрядчик</string>
     <string name="record_contractor_create">+ Создать нового подрядчика</string>
+    <string name="record_discard">Не сохранять</string>
     <string name="record_validation_required">Обязательное поле</string>
     <string name="record_validation_blank">Запись пустая: заполните хотя бы одно поле или добавьте фото</string>
     <string name="record_photo_camera">Камера</string>

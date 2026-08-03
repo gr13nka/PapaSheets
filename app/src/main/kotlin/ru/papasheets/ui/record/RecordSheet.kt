@@ -62,6 +62,7 @@ import ru.papasheets.R
 import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.domain.ContinueYesterday
 import ru.papasheets.domain.JournalDates
+import ru.papasheets.domain.RecordCloseAction
 import ru.papasheets.domain.contractorDisplayName
 import ru.papasheets.photos.CameraCapture
 import ru.papasheets.photos.GalleryPick
@@ -102,9 +103,27 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    fun dismiss(after: () -> Unit) {
-        viewModel.discardUnsavedPhoto()
+    fun closeSheet(after: () -> Unit) {
         scope.launch { sheetState.hide() }.invokeOnCompletion { after() }
+    }
+
+    /** Явный отказ от набранного — только кнопкой «Не сохранять»: фото этой сессии осиротели. */
+    fun discard() {
+        viewModel.discardUnsavedPhoto()
+        closeSheet(onDismiss)
+    }
+
+    /**
+     * Закрытие формы (свайп, «Назад», тап по затемнению) сохраняет начатую запись — решение целиком
+     * за [RecordEditViewModel.onCloseRequested]. Без подрядчика сохранять некуда, и лист, уже
+     * уехавший вниз по свайпу, приходится возвращать: жалоба видна только на открытой форме.
+     */
+    fun closeRequested() {
+        when (viewModel.onCloseRequested(onSaved = { closeSheet(onSaved) })) {
+            RecordCloseAction.Save -> Unit
+            RecordCloseAction.Discard -> discard()
+            RecordCloseAction.KeepOpen -> scope.launch { sheetState.show() }
+        }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
@@ -139,7 +158,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
         galleryLauncher.launch(GalleryPick.request)
     }
 
-    ModalBottomSheet(onDismissRequest = { dismiss(onDismiss) }, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = { closeRequested() }, sheetState = sheetState) {
         if (!state.isLoaded) {
             Box(
                 modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -316,13 +335,13 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TextButton(
-                    onClick = { dismiss(onDismiss) },
+                    onClick = { discard() },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(stringResource(R.string.action_cancel))
+                    Text(stringResource(R.string.record_discard))
                 }
                 Button(
-                    onClick = { viewModel.save(onSaved = { dismiss(onSaved) }) },
+                    onClick = { viewModel.save(onSaved = { closeSheet(onSaved) }) },
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(stringResource(R.string.action_save))

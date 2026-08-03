@@ -99,4 +99,48 @@ class RecordValidationTest {
         assertEquals(setOf(work.id), result.emptyRequiredFieldIds)
         assertFalse(result.isValid)
     }
+
+    /**
+     * Ради этого правило и заводилось: прораб успел ввести локацию и свернул приложение — запись
+     * должна лечь в журнал недозаполненной, а не пропасть. Обязательные поля спрашивает только
+     * кнопка «Сохранить».
+     */
+    @Test
+    fun `closing saves a record with an empty required field`() {
+        val validation = validateRecord("c", fields, mapOf(location.id to "1-01"), hasPhoto = false)
+
+        assertFalse(validation.isValid)
+        assertEquals(RecordCloseAction.Save, recordCloseAction(validation))
+    }
+
+    @Test
+    fun `closing an untouched form saves nothing`() {
+        val validation = validateRecord("c", fields, emptyMap(), hasPhoto = false)
+
+        assertEquals(RecordCloseAction.Discard, recordCloseAction(validation))
+    }
+
+    /** Одно фото без единого заполненного поля — уже запись, её тоже сохраняем. */
+    @Test
+    fun `closing saves a record that has only a photo`() {
+        val validation = validateRecord("c", fields, emptyMap(), hasPhoto = true)
+
+        assertEquals(RecordCloseAction.Save, recordCloseAction(validation))
+    }
+
+    /** Подрядчик обязателен схемой БД: сохранить некуда, поэтому форма остаётся на экране. */
+    @Test
+    fun `closing is refused while the contractor is not picked`() {
+        val validation = validateRecord(null, fields, mapOf(location.id to "1-01"), hasPhoto = false)
+
+        assertEquals(RecordCloseAction.KeepOpen, recordCloseAction(validation))
+    }
+
+    /** Пустая форма без подрядчика — просто закрыть: держать прораба не за что, терять нечего. */
+    @Test
+    fun `an empty form without a contractor closes instead of complaining`() {
+        val validation = validateRecord(null, fields, emptyMap(), hasPhoto = false)
+
+        assertEquals(RecordCloseAction.Discard, recordCloseAction(validation))
+    }
 }

@@ -13,6 +13,35 @@ data class RecordValidation(
     val isValid: Boolean get() = !contractorMissing && emptyRequiredFieldIds.isEmpty() && !isBlankRecord
 }
 
+/** Что делает форма записи, когда её закрывают без явного «Сохранить». */
+enum class RecordCloseAction {
+    /** Записать как есть. */
+    Save,
+
+    /** Записывать нечего — закрыться молча. */
+    Discard,
+
+    /** Закрыться нельзя, форма остаётся на экране с жалобой. */
+    KeepOpen,
+}
+
+/**
+ * Закрытие формы — это сохранение: начатая запись не мусор, и терять набранное из-за свёрнутого
+ * приложения прораб не должен. Поэтому обязательные поля здесь не требуются — их требует только
+ * явное «Сохранить» ([RecordValidation.emptyRequiredFieldIds]), где напоминание уместно и не стоит
+ * данных.
+ *
+ * Два исключения. Пустую форму записывать нечего — иначе промах по ячейке матрицы плодил бы пустые
+ * строки (то же правило, что и у [validateRecord]). А без подрядчика записи негде лежать: столбец
+ * обязателен схемой, внешним ключом на `contractors`, — тут форма остаётся открытой, и уйти можно
+ * только явным отказом.
+ */
+fun recordCloseAction(validation: RecordValidation): RecordCloseAction = when {
+    validation.isBlankRecord -> RecordCloseAction.Discard
+    validation.contractorMissing -> RecordCloseAction.KeepOpen
+    else -> RecordCloseAction.Save
+}
+
 /**
  * Единственное место, где решается, что считать заполненной записью.
  *

@@ -20,7 +20,9 @@ import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.data.repo.ValueSuggester
 import ru.papasheets.domain.ContinueYesterday
+import ru.papasheets.domain.RecordCloseAction
 import ru.papasheets.domain.buildContractorOptions
+import ru.papasheets.domain.recordCloseAction
 import ru.papasheets.domain.validateRecord
 import ru.papasheets.matrixgrid.MAX_PHOTOS_PER_CELL
 import ru.papasheets.photos.PhotoSource
@@ -113,6 +115,9 @@ class RecordEditViewModel(
 
     /** Фото уже сохранённой записи (пусто для новой) — раньше сохранения "заменить"/"убрать" не удаляют файлы. */
     private var originalPhotoIds: List<String> = emptyList()
+
+    /** Идёт запись в БД — см. [persist]. */
+    private var persisting = false
 
     /**
      * Подрядчик редактируемой записи (null в режиме создания) — держит его в дропдауне через
@@ -343,14 +348,10 @@ class RecordEditViewModel(
         }
     }
 
+    /** Явное «Сохранить»: строгая проверка, все жалобы разом. */
     fun save(onSaved: () -> Unit) {
         val state = _uiState.value
-        val validation = validateRecord(
-            contractorId = state.selectedContractorId,
-            fields = state.fields,
-            values = state.values,
-            hasPhoto = state.hasPhoto,
-        )
+        val validation = validate(state)
         if (!validation.isValid) {
             _uiState.update {
                 it.copy(
@@ -361,6 +362,43 @@ class RecordEditViewModel(
             }
             return
         }
+        persist(state, onSaved)
+    }
+
+    /**
+     * Форму закрывают (свайп, «Назад», затемнение) — недозаполненную запись сохраняем как есть, см.
+     * [recordCloseAction]. Возвращает то, что сделано, чтобы форма не проверяла условия повторно:
+     * при [RecordCloseAction.Save] закрываться нужно из [onSaved], когда запись уже в БД, при
+     * [RecordCloseAction.KeepOpen] — не закрываться вовсе (жалоба уже выставлена в состоянии).
+     */
+    fun onCloseRequested(onSaved: () -> Unit): RecordCloseAction {
+        val state = _uiState.value
+        val action = recordCloseAction(validate(state))
+        when (action) {
+            RecordCloseAction.Save -> persist(state, onSaved)
+            RecordCloseAction.KeepOpen -> _uiState.update { it.copy(showContractorError = true) }
+            RecordCloseAction.Discard -> Unit
+        }
+        return action
+    }
+
+    private fun validate(state: RecordEditUiState) = validateRecord(
+        contractorId = state.selectedContractorId,
+        fields = state.fields,
+        values = state.values,
+        hasPhoto = state.hasPhoto,
+    )
+
+    /**
+     * Запись в БД и уборка отвязанных фото; вызывается только после проверки.
+     *
+     * Повторный вызов, пока предыдущий не закончил, игнорируется: закрытие формы сохраняет, а
+     * дотянуться до него дважды подряд (второй «Назад» раньше, чем закроется лист) легко — при
+     * создании это завело бы вторую такую же запись. Закроет форму первый вызов.
+     */
+    private fun persist(state: RecordEditUiState, onSaved: () -> Unit) {
+        if (persisting) return
+        persisting = true
         val contractorId = requireNotNull(state.selectedContractorId)
         val photoId = state.photoIds.getOrNull(0)
         val photoId2 = state.photoIds.getOrNull(1)
@@ -393,6 +431,7 @@ class RecordEditViewModel(
             // записи) — без этого следующая сессия сочла бы только что сохранённые фото черновиком
             // и удалила бы их при "заменить"/"убрать" ещё до сохранения, отвязав от записи через FK.
             originalPhotoIds = state.photoIds
+            persisting = false
             onSaved()
         }
     }
