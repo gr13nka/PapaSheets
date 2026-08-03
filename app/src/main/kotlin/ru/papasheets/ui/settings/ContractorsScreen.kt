@@ -15,12 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +41,7 @@ import ru.papasheets.R
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.matrixgrid.ContractorPalette
 import ru.papasheets.ui.LocalAppGraph
+import ru.papasheets.ui.common.ContractorDialog
 
 /** Высота строки подрядчика — общая для активного списка (нужна drag'у для перевода px в позиции) и архива. */
 private val ContractorRowHeight = 64.dp
@@ -189,48 +188,4 @@ private fun ContractorRow(
         }
         TextButton(onClick = onTrailingClick) { Text(trailingLabel) }
     }
-}
-
-@Composable
-private fun ContractorDialog(
-    initialName: String,
-    initialShortName: String,
-    titleRes: Int,
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, shortName: String) -> Unit,
-) {
-    var name by remember { mutableStateOf(initialName) }
-    var shortName by remember { mutableStateOf(initialShortName) }
-    val isValid = name.isNotBlank() && shortName.isNotBlank()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(titleRes)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.contractors_name_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = shortName,
-                    onValueChange = { shortName = it.take(4) },
-                    label = { Text(stringResource(R.string.contractors_short_name_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(name.trim(), shortName.trim()) }, enabled = isValid) {
-                Text(stringResource(R.string.action_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-        },
-    )
 }
