@@ -36,6 +36,11 @@ UI и вся документация на русском; локаль прил
   («daemon disappeared»), а в худшем случае падает система. Один агент за раз.
 - **AVD `Pixel7` повреждён**: APK ставится с «Success», а через секунду система не находит
   пакет с ошибкой ввода-вывода. `-wipe-data` не лечит. Использовать `Pixel7smoke`.
+- **«SDK location not found» ≠ SDK не установлен.** На linux-машине он лежит в
+  `~/.local/opt/android-sdk` (плюс симлинк `~/Android/Sdk` туда же), `local.properties` в репозитории
+  нет, а `ANDROID_HOME` доходит не до всякой оболочки. Лечится префиксом
+  `ANDROID_HOME=~/.local/opt/android-sdk ./gradlew ...`, а не установкой SDK заново. Скрипты в
+  `scripts/` без этой переменной подставляют macOS-путь `~/Library/Android/sdk` и не находят `adb`.
 
 ## Архитектура
 
