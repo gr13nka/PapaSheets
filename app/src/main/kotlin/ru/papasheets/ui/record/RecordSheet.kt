@@ -358,8 +358,8 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
 
 /**
  * Одна строка формы по определению поля. Вид ввода целиком выводится из определения: подсказки —
- * там, где включена история, многострочность — там же, где матрица снимает потолок строк
- * ([FieldDefEntity.maxLines] != 1), так что ячейка и поле ввода не расходятся видом.
+ * там, где включена история, высота — по тому же [FieldDefEntity.maxLines], которым матрица
+ * ограничивает текст в ячейке, так что ячейка и поле ввода не расходятся видом.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -412,7 +412,10 @@ private fun FieldTextField(
     onValueChange: (String) -> Unit,
     modifier: Modifier,
 ) {
-    val singleLine = field.maxLines == 1
+    // Высота ввода — потолок строк самого поля, а не «многострочное значит высокое»: «Локация» (2)
+    // занимает одну строку и растягивается до двух, а блок на три строки остаётся у полей без
+    // потолка вроде «Вида работ». Потолок читается как в матрице ([GridField.lineCap]): <= 0 — нет.
+    val unlimited = field.maxLines <= 0
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -423,9 +426,9 @@ private fun FieldTextField(
         } else {
             null
         },
-        singleLine = singleLine,
-        minLines = if (singleLine) 1 else 3,
-        maxLines = if (singleLine) 1 else 6,
+        singleLine = field.maxLines == 1,
+        minLines = if (unlimited) 3 else 1,
+        maxLines = if (unlimited) 6 else field.maxLines,
         modifier = modifier,
     )
 }
