@@ -11,7 +11,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SDK="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+# Порядок: ANDROID_HOME, потом обычные места. macOS-путь жёстко в дефолте оставлять нельзя —
+# на linux он не существует, и apksigner «просто не находился», из-за чего проверка подписи ниже
+# молча пропускалась (см. её ветку else).
+SDK="${ANDROID_HOME:-}"
+if [[ -z "$SDK" ]]; then
+    for candidate in "$HOME/Library/Android/sdk" "$HOME/Android/Sdk" "$HOME/.local/opt/android-sdk"; do
+        [[ -d "$candidate" ]] && { SDK="$candidate"; break; }
+    done
+fi
 KEYSTORE="keystore/papasheets-release.keystore"
 APK="app/build/outputs/apk/release/app-release.apk"
 ALIAS="papasheets"
@@ -53,7 +61,11 @@ if [[ "$NEW_KEYSTORE" == "1" ]]; then
 
     # local.properties не в git — там и место паролям.
     touch local.properties
-    sed -i '' '/^RELEASE_STORE_PASSWORD=/d;/^RELEASE_KEY_PASSWORD=/d;/^RELEASE_KEY_ALIAS=/d' local.properties
+    # Без sed -i: его синтаксис у BSD и GNU несовместим, и на linux строка «sed -i ''» молча
+    # уходила в чтение несуществующего файла, оставляя пароли ненаписанными.
+    grep -v -E '^(RELEASE_STORE_PASSWORD|RELEASE_KEY_PASSWORD|RELEASE_KEY_ALIAS)=' local.properties \
+        > local.properties.tmp || true
+    mv local.properties.tmp local.properties
     { echo "RELEASE_STORE_PASSWORD=$pw"; echo "RELEASE_KEY_PASSWORD=$pw"; echo "RELEASE_KEY_ALIAS=$ALIAS"; } >> local.properties
     unset pw
     echo "Ключ создан: $KEYSTORE"
@@ -90,10 +102,16 @@ echo "Собираю release…"
 
 # Проверяем, что он реально подписан: неподписанный APK телефон молча откажется ставить.
 APKSIGNER=$(find "$SDK/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -1)
-if [[ -n "$APKSIGNER" ]]; then
-    "$APKSIGNER" verify "$APK" >/dev/null 2>&1 || { echo "APK не подписан как следует — ставить его нельзя." >&2; exit 1; }
-    echo "Подпись на месте."
+if [[ -z "$APKSIGNER" ]]; then
+    # Раньше здесь был молчаливый пропуск, и скрипт печатал «Готово» для APK, про который ничего не
+    # знал. Для файла, который уходит людям, «не смог проверить» обязано звучать как отказ.
+    echo "apksigner не найден в $SDK/build-tools — проверить подпись нечем." >&2
+    echo "Укажи путь к SDK: ANDROID_HOME=<путь> $0" >&2
+    exit 1
 fi
+"$APKSIGNER" verify "$APK" >/dev/null 2>&1 || { echo "APK не подписан как следует — ставить его нельзя." >&2; exit 1; }
+echo "Подпись на месте."
+"$APKSIGNER" verify --print-certs "$APK" | grep -i "SHA-256 digest" | head -1
 
 VERSION=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | head -1 | cut -d'"' -f2)
 STAMP=$(date +%Y-%m-%d)
