@@ -49,6 +49,9 @@ class RecordRepository(
 
     /**
      * @param values `fieldId → значение`, как их набрали в форме; чистить и отсеивать пустые не нужно.
+     * @return id заведённой записи. Id генерируется здесь, и без возврата вызывающему пришлось бы
+     * искать только что созданную запись по её содержимому — а оно не уникально: две записи одного
+     * подрядчика за один день с одинаковым текстом законны.
      */
     suspend fun createRecord(
         journalId: String,
@@ -57,7 +60,7 @@ class RecordRepository(
         values: Map<String, String>,
         photoId: String?,
         photoId2: String?,
-    ) = transactionRunner.run {
+    ): String = transactionRunner.run {
         val now = System.currentTimeMillis()
         val id = UUID.randomUUID().toString()
         dao.insert(
@@ -73,6 +76,7 @@ class RecordRepository(
             ),
         )
         replaceValues(id, values)
+        id
     }
 
     suspend fun updateRecord(
