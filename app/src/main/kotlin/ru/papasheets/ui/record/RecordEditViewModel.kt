@@ -17,6 +17,8 @@ import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.db.entity.RecordWithValues
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldRepository
+import ru.papasheets.data.repo.FieldValueColorRepository
+import ru.papasheets.data.repo.FieldValueColors
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.data.repo.ValueSuggester
 import ru.papasheets.domain.ContinueYesterday
@@ -55,6 +57,8 @@ data class RecordEditUiState(
     /** Записи выбранного подрядчика за (дата формы − 1 день) в этом журнале; пусто вне режима создания. */
     val yesterdayRecords: List<RecordWithValues> = emptyList(),
     val showContinuationPicker: Boolean = false,
+    /** Цвета значений всех полей: `fieldId` → значение → индекс палитры (см. [FieldValueColorRepository]). */
+    val valueColors: FieldValueColors = emptyMap(),
 ) {
     /** Форма показывается целиком или не показывается вовсе: рисовать её без полей нечем. */
     val isLoaded: Boolean get() = fieldsLoaded && recordLoaded
@@ -75,6 +79,13 @@ data class RecordEditUiState(
     fun valueOf(fieldId: String): String = values[fieldId].orEmpty()
 
     fun suggestionsFor(fieldId: String): List<String> = if (suggestionFieldId == fieldId) suggestions else emptyList()
+
+    /**
+     * Цвет значения, набранного в поле прямо сейчас. Значение тримится так же, как это делает
+     * `FieldValueColorRepository.setColor` при покраске, — иначе кружок в форме и заливка в матрице
+     * разошлись бы на одном хвостовом пробеле.
+     */
+    fun colorOf(fieldId: String, value: String): Int? = valueColors[fieldId]?.get(value.trim())
 }
 
 /**
@@ -99,6 +110,7 @@ class RecordEditViewModel(
     private val contractorRepository: ContractorRepository,
     fieldRepository: FieldRepository,
     private val valueSuggester: ValueSuggester,
+    private val valueColorRepository: FieldValueColorRepository,
     private val photoStore: PhotoStore,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -155,6 +167,11 @@ class RecordEditViewModel(
                 _uiState.update { it.copy(fields = fields, fieldsLoaded = true) }
             }
         }
+        viewModelScope.launch {
+            valueColorRepository.observeAll().collect { colors ->
+                _uiState.update { it.copy(valueColors = colors) }
+            }
+        }
         if (recordId != null) {
             viewModelScope.launch {
                 recordRepository.getWithValues(recordId)?.let { existing ->
@@ -174,6 +191,17 @@ class RecordEditViewModel(
         } else {
             refreshContinuationCandidates()
         }
+    }
+
+    /**
+     * Красит набранное в поле значение или снимает с него цвет ([colorIndex] = null).
+     *
+     * Цвет пишется сразу, не дожидаясь сохранения записи: он принадлежит значению, а не этой записи,
+     * и отменять его вместе с формой было бы неверно — «Штукатурка» осталась бы бесцветной у всех
+     * остальных записей тоже. Обновлённая карта прилетит обратно потоком из репозитория.
+     */
+    fun onValueColorPicked(fieldId: String, value: String, colorIndex: Int?) {
+        viewModelScope.launch { valueColorRepository.setColor(fieldId, value, colorIndex) }
     }
 
     fun onDateSelected(date: LocalDate) {

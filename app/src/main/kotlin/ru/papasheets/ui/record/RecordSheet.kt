@@ -3,6 +3,8 @@ package ru.papasheets.ui.record
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -64,9 +67,12 @@ import ru.papasheets.domain.ContinueYesterday
 import ru.papasheets.domain.JournalDates
 import ru.papasheets.domain.RecordCloseAction
 import ru.papasheets.domain.contractorDisplayName
+import ru.papasheets.matrixgrid.MatrixPalette
 import ru.papasheets.photos.CameraCapture
 import ru.papasheets.photos.GalleryPick
 import ru.papasheets.ui.LocalAppGraph
+import ru.papasheets.ui.common.ColorPickerDialog
+import ru.papasheets.ui.common.ColorSwatchButton
 import ru.papasheets.ui.common.ContractorDialog
 import ru.papasheets.ui.common.formInsets
 
@@ -91,6 +97,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                     contractorRepository = graph.contractorRepository,
                     fieldRepository = graph.fieldRepository,
                     valueSuggester = graph.valueSuggester,
+                    valueColorRepository = graph.fieldValueColorRepository,
                     photoStore = graph.photoStore,
                     savedStateHandle = createSavedStateHandle(),
                 )
@@ -292,8 +299,10 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                         value = state.valueOf(field.id),
                         suggestions = state.suggestionsFor(field.id),
                         isError = field.id in state.emptyRequiredFieldIds,
+                        colorOf = { state.colorOf(field.id, it) },
                         onValueChange = { viewModel.onValueChanged(field.id, it) },
                         onSuggestionPicked = { viewModel.onSuggestionPicked(field.id, it) },
+                        onColorPicked = { viewModel.onValueColorPicked(field.id, state.valueOf(field.id), it) },
                     )
                 }
             }
@@ -379,6 +388,11 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
  * Одна строка формы по определению поля. Вид ввода целиком выводится из определения: подсказки —
  * там, где включена история, высота — по тому же [FieldDefEntity.maxLines], которым матрица
  * ограничивает текст в ячейке, так что ячейка и поле ввода не расходятся видом.
+ *
+ * Кружок цвета стоит у каждого поля, а не только у «Вида работ»: в матрице цветом заливается
+ * подколонка своего поля, поэтому «какое поле красить» — вопрос, которого нет нигде в коде, и
+ * заводить его в форме значило бы завести правило, которое неоткуда узнать. Пустое значение красить
+ * нечего — кнопка выключена.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -387,6 +401,51 @@ private fun FieldInput(
     value: String,
     suggestions: List<String>,
     isError: Boolean,
+    colorOf: (String) -> Int?,
+    onValueChange: (String) -> Unit,
+    onSuggestionPicked: (String) -> Unit,
+    onColorPicked: (Int?) -> Unit,
+) {
+    var showColorPicker by remember { mutableStateOf(false) }
+    // По верху: поле «Вида работ» растёт на три строки, и кружок, вставший по центру такого поля,
+    // уезжал бы вниз тем дальше, чем длиннее текст.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            FieldValueInput(field, value, suggestions, isError, colorOf, onValueChange, onSuggestionPicked)
+        }
+        ColorSwatchButton(
+            colorIndex = colorOf(value),
+            enabled = value.isNotBlank(),
+            onClick = { showColorPicker = true },
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+    if (showColorPicker) {
+        ColorPickerDialog(
+            title = stringResource(R.string.color_picker_title, value.trim()),
+            selected = colorOf(value),
+            onPick = {
+                onColorPicked(it)
+                showColorPicker = false
+            },
+            onDismiss = { showColorPicker = false },
+        )
+    }
+}
+
+/** Само поле ввода: с выпадашкой подсказок или без неё — по флагу истории у определения поля. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FieldValueInput(
+    field: FieldDefEntity,
+    value: String,
+    suggestions: List<String>,
+    isError: Boolean,
+    colorOf: (String) -> Int?,
     onValueChange: (String) -> Unit,
     onSuggestionPicked: (String) -> Unit,
 ) {
@@ -412,6 +471,9 @@ private fun FieldInput(
         ExposedDropdownMenu(expanded = menuOpen, onDismissRequest = { expanded = false }) {
             suggestions.forEach { suggestion ->
                 DropdownMenuItem(
+                    // Цвет подсказки виден до выбора: иначе прораб узнавал бы, какого цвета
+                    // «Штукатурка», только выбрав её и посмотрев на кружок.
+                    leadingIcon = { ColorDot(colorOf(suggestion)) },
                     text = { Text(suggestion) },
                     onClick = {
                         onSuggestionPicked(suggestion)
@@ -421,6 +483,20 @@ private fun FieldInput(
             }
         }
     }
+}
+
+/** Метка цвета значения в списке подсказок; у бесцветного — пустое место той же ширины. */
+@Composable
+private fun ColorDot(colorIndex: Int?) {
+    Box(
+        modifier = Modifier
+            .size(16.dp)
+            .clip(CircleShape)
+            .then(
+                if (colorIndex == null) Modifier
+                else Modifier.background(MatrixPalette.color(colorIndex, isSystemInDarkTheme())),
+            ),
+    )
 }
 
 @Composable
