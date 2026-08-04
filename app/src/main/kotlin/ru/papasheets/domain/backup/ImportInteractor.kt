@@ -11,6 +11,7 @@ import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.FieldRepository
+import ru.papasheets.data.repo.FieldValueColorRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.exportkit.backup.BackupPhotoKind
@@ -26,7 +27,8 @@ import ru.papasheets.photos.PhotoStore
  * двусторонний sync.
  *
  * Порядок вставки внутри транзакции продиктован внешними ключами и менять его нельзя:
- * журналы → подрядчики → определения полей → пресеты → фото → записи → значения записей.
+ * журналы → подрядчики → определения полей → пресеты и цвета значений → фото → записи →
+ * значения записей.
  *
  * Бэкап любой поддерживаемой версии формата приходит сюда уже в текущей форме — приводит его
  * `BackupUpgrade` внутри [BackupReader], так что здесь про версии знать не нужно.
@@ -37,6 +39,7 @@ class ImportInteractor(
     private val recordRepository: RecordRepository,
     private val fieldPresetRepository: FieldPresetRepository,
     private val fieldRepository: FieldRepository,
+    private val fieldValueColorRepository: FieldValueColorRepository,
     private val photoStore: PhotoStore,
     private val transactionRunner: TransactionRunner,
     private val context: Context,
@@ -53,6 +56,7 @@ class ImportInteractor(
             val existingJournalIds = journalRepository.getAll().mapTo(HashSet()) { it.id }
             val existingPresetIds = fieldPresetRepository.getAll().mapTo(HashSet()) { it.id }
             val existingFieldIds = fieldRepository.getAll().mapTo(HashSet()) { it.id }
+            val existingColorKeys = fieldValueColorRepository.getAll().mapTo(HashSet()) { it.fieldId to it.value }
             val existingPhotoIds = photoStore.getAllMeta().mapTo(HashSet()) { it.id }
             val existingRecordUpdatedAt = recordRepository.getAll().associate { it.id to it.updatedAt }
 
@@ -95,6 +99,13 @@ class ImportInteractor(
                 fieldPresetRepository.upsertFromBackup(preset.toEntity())
                 acc + action
             }
+            // Цвета значений — тоже после определений полей и по той же причине (FK на field_defs).
+            // Ключ здесь составной (поле + значение), а не id, поэтому «уже есть» считается по паре.
+            val colorStats = contents.data.fieldValueColors.fold(MergeStats()) { acc, color ->
+                val action = MergeRules.forReplaceable(color.fieldId to color.value in existingColorKeys)
+                fieldValueColorRepository.upsertFromBackup(color.toEntity())
+                acc + action
+            }
             // Фото-строки — до записей: RecordEntity.photoId ссылается на них по внешнему ключу.
             val photoStats = contents.data.photos.fold(MergeStats()) { acc, photo ->
                 val action = MergeRules.forImmutable(photo.id in existingPhotoIds)
@@ -124,6 +135,7 @@ class ImportInteractor(
                 contractors = contractorStats,
                 fieldDefs = fieldStats,
                 fieldPresets = presetStats,
+                fieldValueColors = colorStats,
                 records = recordStats,
                 recordValues = valueStats,
                 photos = photoStats,

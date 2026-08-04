@@ -305,6 +305,7 @@ private fun ImportResultDialog(result: BackupImportResult, onDismiss: () -> Unit
                 ImportResultRow(R.string.import_result_presets, result.fieldPresets)
                 ImportResultRow(R.string.import_result_records, result.records)
                 ImportResultRow(R.string.import_result_values, result.recordValues)
+                ImportResultRow(R.string.import_result_colors, result.fieldValueColors)
                 ImportResultRow(R.string.import_result_photos, result.photos)
             }
         },

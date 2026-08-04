@@ -62,6 +62,7 @@
     <string name="import_result_presets">Готовые значения</string>
     <string name="import_result_records">Записи</string>
     <string name="import_result_values">Значения полей</string>
+    <string name="import_result_colors">Цвета значений</string>
     <string name="import_result_photos">Фото</string>
 
     <string name="xlsx_preview_title">Что будет импортировано</string>

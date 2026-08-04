@@ -107,13 +107,13 @@ class AppGraph(context: Context) {
     val backupInteractor: BackupInteractor by lazy {
         BackupInteractor(
             journalRepository, contractorRepository, recordRepository, fieldPresetRepository,
-            fieldRepository, photoStore, appContext,
+            fieldRepository, fieldValueColorRepository, photoStore, appContext,
         )
     }
     val importInteractor: ImportInteractor by lazy {
         ImportInteractor(
             journalRepository, contractorRepository, recordRepository, fieldPresetRepository,
-            fieldRepository, photoStore, transactionRunner, appContext,
+            fieldRepository, fieldValueColorRepository, photoStore, transactionRunner, appContext,
         )
     }
     val xlsxImportInteractor: XlsxImportInteractor by lazy {

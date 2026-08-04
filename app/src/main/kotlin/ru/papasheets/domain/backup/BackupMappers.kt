@@ -3,12 +3,14 @@ package ru.papasheets.domain.backup
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.db.entity.FieldPresetEntity
+import ru.papasheets.data.db.entity.FieldValueColorEntity
 import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.data.db.entity.RecordValueEntity
 import ru.papasheets.exportkit.backup.BackupContractor
 import ru.papasheets.exportkit.backup.BackupFieldDef
 import ru.papasheets.exportkit.backup.BackupFieldPreset
+import ru.papasheets.exportkit.backup.BackupFieldValueColor
 import ru.papasheets.exportkit.backup.BackupJournal
 import ru.papasheets.exportkit.backup.BackupPhoto
 import ru.papasheets.exportkit.backup.BackupRecord
@@ -62,3 +64,6 @@ fun BackupFieldDef.toEntity() = FieldDefEntity(
 
 fun RecordValueEntity.toBackup() = BackupRecordValue(recordId, fieldId, value)
 fun BackupRecordValue.toEntity() = RecordValueEntity(recordId, fieldId, value)
+
+fun FieldValueColorEntity.toBackup() = BackupFieldValueColor(fieldId, value, colorIndex)
+fun BackupFieldValueColor.toEntity() = FieldValueColorEntity(fieldId, value, colorIndex)

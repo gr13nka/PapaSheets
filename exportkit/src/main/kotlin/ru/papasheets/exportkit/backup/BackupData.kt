@@ -26,6 +26,7 @@ data class BackupData(
     val fieldPresets: List<BackupFieldPreset> = emptyList(),
     val fieldDefs: List<BackupFieldDef> = emptyList(),
     val recordValues: List<BackupRecordValue> = emptyList(),
+    val fieldValueColors: List<BackupFieldValueColor> = emptyList(),
 )
 
 @Serializable
@@ -126,4 +127,18 @@ data class BackupRecordValue(
     val recordId: String,
     val fieldId: String,
     val value: String,
+)
+
+/**
+ * Цвет, которым помечено значение поля (формат v6) — поле в поле с `FieldValueColorEntity`.
+ *
+ * Со значением по умолчанию у [BackupData.fieldValueColors] — этого достаточно, чтобы бэкапы ≤ v5
+ * читались без шага в [BackupUpgrade]: цветов в них и не было, а пустой список — ровно то, во что
+ * они разворачиваются.
+ */
+@Serializable
+data class BackupFieldValueColor(
+    val fieldId: String,
+    val value: String,
+    val colorIndex: Int,
 )

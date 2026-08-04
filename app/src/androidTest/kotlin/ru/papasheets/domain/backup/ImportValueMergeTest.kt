@@ -23,6 +23,7 @@ import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.data.db.entity.RecordValueEntity
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldRepository
+import ru.papasheets.data.repo.FieldValueColorRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.RecordRepository
@@ -72,7 +73,8 @@ class ImportValueMergeTest {
         recordRepository = RecordRepository(db.recordDao(), db.recordValueDao(), transactionRunner)
         importInteractor = ImportInteractor(
             journalRepository, contractorRepository, recordRepository, fieldPresetRepository,
-            fieldRepository, PhotoStore(context, db.photoDao()), transactionRunner, context,
+            fieldRepository, FieldValueColorRepository(db.fieldValueColorDao()),
+            PhotoStore(context, db.photoDao()), transactionRunner, context,
         )
 
         backupFile = File(context.cacheDir, "value-merge-test.psbackup")

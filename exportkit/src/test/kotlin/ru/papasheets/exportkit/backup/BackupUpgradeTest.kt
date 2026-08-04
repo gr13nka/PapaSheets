@@ -200,6 +200,25 @@ class BackupUpgradeTest {
         assertEquals(3, field.maxLines)
     }
 
+    /**
+     * Ступеньки v5 → v6 нет намеренно: цвета значений пришли отдельным списком со значением по
+     * умолчанию, и отсутствие ключа в старом файле разбор обязан прочитать как «цветов нет».
+     *
+     * Тест держит именно это обещание. Не будь значения по умолчанию, разбор упал бы на пропущенном
+     * поле — и обнаружилось бы это у прораба, восстанавливающего бэкап после неудачного обновления,
+     * то есть ровно тогда, когда бэкап и нужен.
+     */
+    @Test
+    fun `v5 archive without value colors is read as having none`() {
+        val contents = BackupReader.read(
+            ByteArrayInputStream(archive(v1ManifestJson(formatVersion = 5), v3DataJson)),
+        ) { _, _, _ -> }
+
+        assertTrue(contents.data.fieldValueColors.isEmpty())
+        // Разбор не свалился на полпути: остальное содержимое файла на месте.
+        assertEquals(BuiltInFields.LOCATION_ID, contents.data.fieldDefs.single().id)
+    }
+
     @Test
     fun `format version newer than current is rejected`() {
         val tooNew = BackupManifest.CURRENT_FORMAT_VERSION + 1

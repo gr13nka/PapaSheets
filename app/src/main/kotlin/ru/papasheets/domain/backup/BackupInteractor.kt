@@ -12,6 +12,7 @@ import ru.papasheets.data.db.APP_DATABASE_VERSION
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.FieldRepository
+import ru.papasheets.data.repo.FieldValueColorRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.exportkit.backup.BackupData
@@ -35,6 +36,7 @@ class BackupInteractor(
     private val recordRepository: RecordRepository,
     private val fieldPresetRepository: FieldPresetRepository,
     private val fieldRepository: FieldRepository,
+    private val fieldValueColorRepository: FieldValueColorRepository,
     private val photoStore: PhotoStore,
     private val context: Context,
 ) {
@@ -48,6 +50,7 @@ class BackupInteractor(
             // Определения полей — вместе со значениями и всегда: без них значения нечем истолковать.
             fieldDefs = fieldRepository.getAll().map { it.toBackup() },
             recordValues = recordRepository.getAllValues().map { it.toBackup() },
+            fieldValueColors = fieldValueColorRepository.getAll().map { it.toBackup() },
         )
         val manifest = BackupManifest(
             formatVersion = BackupManifest.CURRENT_FORMAT_VERSION,

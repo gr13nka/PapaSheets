@@ -62,6 +62,11 @@ class BackupRoundTripTest {
             BackupRecordValue("r1", BuiltInFields.LOCATION_ID, "1-01"),
             BackupRecordValue("r1", "f-custom", "12 м²"),
         ),
+        fieldValueColors = listOf(
+            BackupFieldValueColor(BuiltInFields.WORK_ID, "Штукатурка", 3),
+            // Значение с кавычками и амперсандом — ключ таблицы это текст, а не id.
+            BackupFieldValueColor("f-custom", "12 м² & \"брутто\"", 7),
+        ),
     )
 
     private fun photoBytes(id: String, kind: BackupPhotoKind): ByteArray = "$id/${kind.zipDir}-bytes".toByteArray()

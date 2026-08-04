@@ -24,6 +24,7 @@ import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldPresetRepository
 import ru.papasheets.data.repo.FieldRepository
+import ru.papasheets.data.repo.FieldValueColorRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.exportkit.backup.BackupData
@@ -69,6 +70,7 @@ class ImportPhotoFileTest {
             RecordRepository(db.recordDao(), db.recordValueDao(), transactionRunner),
             FieldPresetRepository(db.fieldPresetDao()),
             FieldRepository(db.fieldDefDao()),
+            FieldValueColorRepository(db.fieldValueColorDao()),
             photoStore,
             transactionRunner,
             context,

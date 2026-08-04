@@ -6,6 +6,7 @@ data class BackupImportResult(
     val contractors: MergeStats,
     val fieldDefs: MergeStats,
     val fieldPresets: MergeStats,
+    val fieldValueColors: MergeStats,
     val records: MergeStats,
     /** Значения считаются построчно, но действие берут у своей записи (см. [MergeRules]). */
     val recordValues: MergeStats,
