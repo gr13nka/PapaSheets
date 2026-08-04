@@ -377,7 +377,7 @@ class RecordEditViewModel(
     }
 
     /** Явное «Сохранить»: строгая проверка, все жалобы разом. */
-    fun save(onSaved: () -> Unit) {
+    fun save(onSaved: (recordId: String) -> Unit) {
         val state = _uiState.value
         val validation = validate(state)
         if (!validation.isValid) {
@@ -399,7 +399,7 @@ class RecordEditViewModel(
      * при [RecordCloseAction.Save] закрываться нужно из [onSaved], когда запись уже в БД, при
      * [RecordCloseAction.KeepOpen] — не закрываться вовсе (жалоба уже выставлена в состоянии).
      */
-    fun onCloseRequested(onSaved: () -> Unit): RecordCloseAction {
+    fun onCloseRequested(onSaved: (recordId: String) -> Unit): RecordCloseAction {
         val state = _uiState.value
         val action = recordCloseAction(validate(state))
         when (action) {
@@ -420,18 +420,21 @@ class RecordEditViewModel(
     /**
      * Запись в БД и уборка отвязанных фото; вызывается только после проверки.
      *
+     * [onSaved] получает id сохранённой записи: при создании его знает только репозиторий, а форме
+     * он нужен, чтобы после сворачивания продолжить редактировать ЭТУ запись, а не завести вторую.
+     *
      * Повторный вызов, пока предыдущий не закончил, игнорируется: закрытие формы сохраняет, а
      * дотянуться до него дважды подряд (второй «Назад» раньше, чем закроется лист) легко — при
      * создании это завело бы вторую такую же запись. Закроет форму первый вызов.
      */
-    private fun persist(state: RecordEditUiState, onSaved: () -> Unit) {
+    private fun persist(state: RecordEditUiState, onSaved: (recordId: String) -> Unit) {
         if (persisting) return
         persisting = true
         val contractorId = requireNotNull(state.selectedContractorId)
         val photoId = state.photoIds.getOrNull(0)
         val photoId2 = state.photoIds.getOrNull(1)
         viewModelScope.launch {
-            if (recordId == null) {
+            val savedId = if (recordId == null) {
                 recordRepository.createRecord(
                     journalId = requireNotNull(journalId) { "journalId обязателен при создании записи" },
                     dateEpochDay = state.date.toEpochDay(),
@@ -451,6 +454,7 @@ class RecordEditViewModel(
                         photoId2 = photoId2,
                     )
                 }
+                recordId
             }
             // Старые фото убираем только теперь, когда новые ссылки точно сохранены: те из прежних,
             // что новая запись уже не держит ни в одном слоте.
@@ -460,7 +464,7 @@ class RecordEditViewModel(
             // и удалила бы их при "заменить"/"убрать" ещё до сохранения, отвязав от записи через FK.
             originalPhotoIds = state.photoIds
             persisting = false
-            onSaved()
+            onSaved(savedId)
         }
     }
 

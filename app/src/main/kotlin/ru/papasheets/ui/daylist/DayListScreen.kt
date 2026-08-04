@@ -152,6 +152,10 @@ fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (record
             mode = mode,
             onDismiss = { sheetMode = null },
             onSaved = { sheetMode = null },
+            // Свёрнутой полоски у debug-списка нет: сворачивать здесь незачем — экран и так плоский
+            // список тех же записей. Запись к этому моменту сохранена, так что закрытие ничего не
+            // теряет и повторяет прежнее поведение свайпа.
+            onMinimize = { _, _ -> sheetMode = null },
         )
     }
 

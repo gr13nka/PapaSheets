@@ -55,6 +55,7 @@ import ru.papasheets.matrixgrid.MatrixView
 import ru.papasheets.matrixgrid.rememberMatrixState
 import ru.papasheets.ui.LocalAppGraph
 import ru.papasheets.ui.export.ExportDialog
+import ru.papasheets.ui.record.MinimizedRecordBar
 import ru.papasheets.ui.record.RecordSheet
 import ru.papasheets.ui.record.RecordSheetMode
 import ru.papasheets.ui.record.RecordSheetModeSaver
@@ -108,6 +109,24 @@ fun JournalScreen(
     val context = LocalContext.current
 
     var sheetMode by rememberSaveable(stateSaver = RecordSheetModeSaver) { mutableStateOf<RecordSheetMode?>(null) }
+    // Свёрнутая запись: та же [sheetMode], но показанная полоской внизу вместо листа. Запись к этому
+    // моменту уже в БД, поэтому оба поля переживают смерть процесса без спасения черновика —
+    // достаточно вернуться к режиму Edit и перечитать её.
+    var minimized by rememberSaveable { mutableStateOf(false) }
+    var minimizedSummary by rememberSaveable { mutableStateOf("") }
+    fun closeSheet() {
+        sheetMode = null
+        minimized = false
+    }
+    /**
+     * Открыть форму. Свёрнутость снимается здесь, а не у каждого вызывающего: полоска показывает
+     * ровно ту запись, что лежит в [sheetMode], и открыть другую, не сняв её, значило бы оставить
+     * полоску с чужой подписью, разворачивающуюся в совсем другую форму.
+     */
+    fun openSheet(mode: RecordSheetMode) {
+        sheetMode = mode
+        minimized = false
+    }
     var recordPendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportDialog by rememberSaveable { mutableStateOf(false) }
@@ -130,7 +149,7 @@ fun JournalScreen(
     val callbacks = remember {
         object : MatrixCallbacks {
             override fun onCellTap(recordId: String) {
-                sheetMode = RecordSheetMode.Edit(recordId)
+                openSheet(RecordSheetMode.Edit(recordId))
             }
 
             override fun onPhotoTap(recordId: String, slot: Int) {
@@ -138,11 +157,13 @@ fun JournalScreen(
             }
 
             override fun onEmptySlotTap(dateEpochDay: Long, contractorId: String) {
-                sheetMode = RecordSheetMode.Create(
-                    journalId = journalId,
-                    defaultDate = LocalDate.ofEpochDay(dateEpochDay),
-                    sessionId = UUID.randomUUID().toString(),
-                    contractorId = contractorId,
+                openSheet(
+                    RecordSheetMode.Create(
+                        journalId = journalId,
+                        defaultDate = LocalDate.ofEpochDay(dateEpochDay),
+                        sessionId = UUID.randomUUID().toString(),
+                        contractorId = contractorId,
+                    ),
                 )
             }
 
@@ -246,13 +267,26 @@ fun JournalScreen(
                 )
             }
         },
+        bottomBar = {
+            // В bottomBar, а не поверх содержимого: Scaffold сам поднимет над полоской и FAB, и
+            // содержимое, так что она ничего не закрывает.
+            if (minimized) {
+                MinimizedRecordBar(
+                    summary = minimizedSummary,
+                    onExpand = { minimized = false },
+                    onClose = { closeSheet() },
+                )
+            }
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    sheetMode = RecordSheetMode.Create(
-                        journalId = journalId,
-                        defaultDate = defaultDateFor(journal),
-                        sessionId = UUID.randomUUID().toString(),
+                    openSheet(
+                        RecordSheetMode.Create(
+                            journalId = journalId,
+                            defaultDate = defaultDateFor(journal),
+                            sessionId = UUID.randomUUID().toString(),
+                        ),
                     )
                 },
             ) {
@@ -276,7 +310,7 @@ fun JournalScreen(
                     sort = query.sort,
                     photoStore = graph.photoStore,
                     onSortBy = viewModel::sortBy,
-                    onRecordClick = { sheetMode = RecordSheetMode.Edit(it) },
+                    onRecordClick = { openSheet(RecordSheetMode.Edit(it)) },
                     onRecordLongClick = { recordPendingDelete = it },
                     // Плоский debug-список показывает только первое фото записи — открываем его же.
                     onPhotoClick = { onOpenLightbox(it, 0) },
@@ -307,11 +341,22 @@ fun JournalScreen(
     }
 
     sheetMode?.let { mode ->
-        RecordSheet(
-            mode = mode,
-            onDismiss = { sheetMode = null },
-            onSaved = { sheetMode = null },
-        )
+        // Свёрнутая форма уходит из композиции целиком: у ModalBottomSheet своё окно с затемнением,
+        // и оставленный «просто невидимым» лист перехватывал бы касания по матрице под ним.
+        if (!minimized) {
+            RecordSheet(
+                mode = mode,
+                onDismiss = { closeSheet() },
+                onSaved = { closeSheet() },
+                onMinimize = { recordId, summary ->
+                    // Дальше правим уже сохранённую запись, а не создаём новую: иначе второе
+                    // сворачивание той же формы завело бы её дубль.
+                    sheetMode = RecordSheetMode.Edit(recordId)
+                    minimizedSummary = summary
+                    minimized = true
+                },
+            )
+        }
     }
 
     recordPendingDelete?.let { recordId ->
@@ -322,6 +367,9 @@ fun JournalScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteRecord(recordId)
+                    // Свёрнута могла быть как раз она: полоска, пережившая свою запись,
+                    // разворачивалась бы в форму, которой нечего загрузить, — и висела бы крутилкой.
+                    if ((sheetMode as? RecordSheetMode.Edit)?.recordId == recordId) closeSheet()
                     recordPendingDelete = null
                 }) {
                     Text(stringResource(R.string.action_delete))

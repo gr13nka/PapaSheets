@@ -16,6 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +29,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
@@ -78,7 +82,12 @@ import ru.papasheets.ui.common.formInsets
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Unit) {
+fun RecordSheet(
+    mode: RecordSheetMode,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit,
+    onMinimize: (recordId: String, summary: String) -> Unit,
+) {
     val graph = LocalAppGraph.current
     val viewModelKey = when (mode) {
         is RecordSheetMode.Create -> "create-${mode.sessionId}"
@@ -121,12 +130,21 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
     }
 
     /**
-     * Закрытие формы (свайп, «Назад», тап по затемнению) сохраняет начатую запись — решение целиком
-     * за [RecordEditViewModel.onCloseRequested]. Без подрядчика сохранять некуда, и лист, уже
-     * уехавший вниз по свайпу, приходится возвращать: жалоба видна только на открытой форме.
+     * Свайп вниз, «Назад», тап по затемнению и шеврон «свернуть» — всё это сохраняет начатую запись
+     * и сворачивает форму в полоску внизу ([MinimizedRecordBar]), а не закрывает её насовсем: на
+     * объекте форму сворачивают, чтобы свериться с таблицей, и разыскивать потом начатую запись в
+     * матрице прораб не должен.
+     *
+     * Что делать, решает по-прежнему [RecordEditViewModel.onCloseRequested] на общем
+     * [ru.papasheets.domain.recordCloseAction]; свернуть можно ровно то, что удалось сохранить:
+     * - [RecordCloseAction.Save] — запись в БД, дальше полоска (форма ждёт `onSaved`, а не
+     *   сворачивается сразу: id создаваемой записи известен только после вставки);
+     * - [RecordCloseAction.Discard] — пустую форму сворачивать нечего, закрываем совсем;
+     * - [RecordCloseAction.KeepOpen] — без подрядчика запись негде хранить (FK), и уехавший вниз
+     *   лист приходится возвращать: жалоба видна только на открытой форме.
      */
-    fun closeRequested() {
-        when (viewModel.onCloseRequested(onSaved = { closeSheet(onSaved) })) {
+    fun minimizeRequested() {
+        when (viewModel.onCloseRequested(onSaved = { id -> closeSheet { onMinimize(id, summaryOf(state)) } })) {
             RecordCloseAction.Save -> Unit
             RecordCloseAction.Discard -> discard()
             RecordCloseAction.KeepOpen -> scope.launch { sheetState.show() }
@@ -165,7 +183,7 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
         galleryLauncher.launch(GalleryPick.request)
     }
 
-    ModalBottomSheet(onDismissRequest = { closeRequested() }, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = { minimizeRequested() }, sheetState = sheetState) {
         if (!state.isLoaded) {
             Box(
                 modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -187,12 +205,22 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(
-                    if (mode is RecordSheetMode.Edit) R.string.record_title_edit else R.string.record_title_create,
-                ),
-                style = MaterialTheme.typography.titleLarge,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(
+                        if (mode is RecordSheetMode.Edit) R.string.record_title_edit else R.string.record_title_create,
+                    ),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                // Свайп вниз делает то же самое, но догадаться о нём неоткуда — кнопка видна.
+                IconButton(onClick = { minimizeRequested() }) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = stringResource(R.string.record_minimize_action),
+                    )
+                }
+            }
 
             var showDatePicker by remember { mutableStateOf(false) }
             OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
@@ -383,6 +411,18 @@ fun RecordSheet(mode: RecordSheetMode, onDismiss: () -> Unit, onSaved: () -> Uni
         )
     }
 }
+
+/**
+ * Подпись для свёрнутой полоски: подрядчик и первое непустое значение — «ГП · Штукатурка».
+ *
+ * Собирается здесь, а не в полоске: только форма знает и выбранного подрядчика, и порядок полей.
+ * Пустой она не бывает — сворачивается лишь то, что прошло [ru.papasheets.domain.recordCloseAction],
+ * а там пустая запись отсеяна, и подрядчик обязателен.
+ */
+private fun summaryOf(state: RecordEditUiState): String = listOfNotNull(
+    state.contractors.firstOrNull { it.id == state.selectedContractorId }?.shortName,
+    state.fields.firstNotNullOfOrNull { field -> state.valueOf(field.id).trim().ifBlank { null } },
+).joinToString(" · ")
 
 /**
  * Одна строка формы по определению поля. Вид ввода целиком выводится из определения: подсказки —
