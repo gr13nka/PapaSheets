@@ -39,7 +39,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import ru.papasheets.R
 import ru.papasheets.data.db.entity.ContractorEntity
-import ru.papasheets.matrixgrid.ContractorPalette
+import ru.papasheets.matrixgrid.MatrixPalette
 import ru.papasheets.ui.LocalAppGraph
 import ru.papasheets.ui.common.ContractorDialog
 
@@ -180,7 +180,7 @@ private fun ContractorRow(
             modifier = Modifier
                 .size(20.dp)
                 .clip(CircleShape)
-                .background(ContractorPalette.color(contractor.colorIndex, isSystemInDarkTheme())),
+                .background(MatrixPalette.color(contractor.colorIndex, isSystemInDarkTheme())),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(contractor.name, style = MaterialTheme.typography.bodyLarge, color = textColor)

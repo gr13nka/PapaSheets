@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import ru.papasheets.domain.RecordSort
 import ru.papasheets.domain.SortKey
-import ru.papasheets.matrixgrid.ContractorPalette
+import ru.papasheets.matrixgrid.MatrixPalette
 import ru.papasheets.photos.PhotoStore
 
 /** Ширина фото-колонки — единственный фиксированный размер таблицы; всё остальное делится по весам. */
@@ -148,7 +148,7 @@ private fun RecordListRow(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(ContractorPalette.color(row.contractorColorIndex, isSystemInDarkTheme())),
+                        .background(MatrixPalette.color(row.contractorColorIndex, isSystemInDarkTheme())),
                 )
             }
         }

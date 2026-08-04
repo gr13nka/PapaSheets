@@ -56,7 +56,7 @@ import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.data.db.entity.RecordEntity
 import ru.papasheets.photos.PhotoStore
 import ru.papasheets.ui.LocalAppGraph
-import ru.papasheets.matrixgrid.ContractorPalette
+import ru.papasheets.matrixgrid.MatrixPalette
 import ru.papasheets.ui.record.RecordSheet
 import ru.papasheets.ui.record.RecordSheetMode
 import ru.papasheets.ui.record.RecordSheetModeSaver
@@ -223,7 +223,7 @@ private fun RecordCard(
                     modifier = Modifier
                         .size(12.dp)
                         .clip(CircleShape)
-                        .background(ContractorPalette.color(item.contractor?.colorIndex ?: 0, isSystemInDarkTheme())),
+                        .background(MatrixPalette.color(item.contractor?.colorIndex ?: 0, isSystemInDarkTheme())),
                 )
             }
             Column(modifier = Modifier.weight(1f)) {

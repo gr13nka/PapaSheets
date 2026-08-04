@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.sp
 /**
  * Цвета матрицы. Модуль зависит только от compose ui/foundation (без material3), поэтому палитра
  * задана здесь, а не берётся из MaterialTheme. Светлую/тёмную ветку выбирает [MatrixView] по
- * isSystemInDarkTheme(). Цвета подрядчиков берутся из общего [ContractorPalette] — единый источник
+ * isSystemInDarkTheme(). Цвета подрядчиков берутся из общего [MatrixPalette] — единый источник
  * и для матрицы, и для списка записей в app.
  */
 internal class MatrixColors private constructor(
@@ -32,7 +32,7 @@ internal class MatrixColors private constructor(
     val emptyPhotoAlpha: Float = 0.12f
 
     /** Цвет подрядчика (с учётом темы). Полная непрозрачность — блок «картины месяца» LOD2. */
-    fun contractor(colorIndex: Int): Color = ContractorPalette.color(colorIndex, dark)
+    fun contractor(colorIndex: Int): Color = MatrixPalette.color(colorIndex, dark)
 
     companion object {
         fun of(dark: Boolean): MatrixColors = if (dark) {

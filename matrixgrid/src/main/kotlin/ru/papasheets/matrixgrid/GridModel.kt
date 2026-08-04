@@ -49,7 +49,7 @@ class ContractorColumn(
     val name: String,
     /** Короткое имя для шапки на сильном отдалении (LOD2). */
     val shortName: String,
-    /** Индекс в палитре модуля (см. [ContractorPalette]) — цвет блоков LOD2 и тонировки ячеек. */
+    /** Индекс в палитре модуля (см. [MatrixPalette]) — цвет блоков LOD2 и тонировки ячеек. */
     val colorIndex: Int,
     /** Архивный подрядчик, оставленный колонкой только из-за записей в этом журнале — имя в шапке приглушено. */
     val isArchived: Boolean = false,
