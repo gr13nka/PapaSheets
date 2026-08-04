@@ -25,6 +25,7 @@ import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldRepository
+import ru.papasheets.data.repo.FieldValueColorRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.data.repo.ValueSuggester
@@ -68,6 +69,8 @@ sealed interface ExportEvent {
 data class RecordRow(
     val recordId: String,
     val cells: List<String>,
+    /** Цвета ячеек параллельно [cells], `null` = не покрашено. Дата и подрядчик цвета не имеют. */
+    val cellColors: List<Int?>,
     /** Цвет подрядчика — метка строки без фото; в столбцы не входит. */
     val contractorColorIndex: Int,
     val photoId: String?,
@@ -115,6 +118,7 @@ class JournalViewModel(
     contractorRepository: ContractorRepository,
     private val fieldRepository: FieldRepository,
     private val valueSuggester: ValueSuggester,
+    private val valueColorRepository: FieldValueColorRepository,
     photoStore: PhotoStore,
     private val exportInteractor: ExportInteractor,
     appContext: Context,
@@ -151,13 +155,14 @@ class JournalViewModel(
         recordRepository.observeByJournal(journalId),
         contractorRepository.observeAll(),
         fieldRepository.observeActive(),
+        valueColorRepository.observeAll(),
         _query,
-    ) { records, contractors, fields, query ->
+    ) { records, contractors, fields, valueColors, query ->
         withContext(Dispatchers.Default) {
             val filtered = applyFilter(records, query.filter)
             val contractorsById = contractors.associateBy { it.id }
             JournalContent(
-                grid = buildGridModel(filtered, contractors, fields, query.sort.matrixDatesDesc),
+                grid = buildGridModel(filtered, contractors, fields, valueColors, query.sort.matrixDatesDesc),
                 columns = listOf(
                     ListColumn(dateColumnTitle, SortKey.Date, DATE_COLUMN_WEIGHT),
                     ListColumn(contractorColumnTitle, SortKey.Contractor, CONTRACTOR_COLUMN_WEIGHT),
@@ -170,6 +175,9 @@ class JournalViewModel(
                             JournalDates.shortMonth(LocalDate.ofEpochDay(entry.record.dateEpochDay)),
                             contractor?.name.orEmpty(),
                         ) + fields.map { entry.valueOf(it.id) },
+                        // Первые два столбца — дата и подрядчик, значений полей у них нет.
+                        cellColors = listOf(null, null) +
+                            fields.map { valueColors[it.id]?.get(entry.valueOf(it.id)) },
                         contractorColorIndex = contractor?.colorIndex ?: 0,
                         photoId = entry.record.photoId,
                     )

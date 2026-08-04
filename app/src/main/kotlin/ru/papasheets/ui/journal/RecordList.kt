@@ -153,18 +153,31 @@ private fun RecordListRow(
             }
         }
         columns.forEachIndexed { index, column ->
-            Cell(text = row.cells[index], weight = column.weight)
+            Cell(text = row.cells[index], colorIndex = row.cellColors[index], weight = column.weight)
         }
     }
 }
 
+/** Ячейка списка. Заливка — тем же цветом и той же прозрачностью, что подколонка в матрице. */
 @Composable
-private fun RowScope.Cell(text: String, weight: Float) {
+private fun RowScope.Cell(text: String, colorIndex: Int?, weight: Float) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier
             .weight(weight)
+            .then(
+                if (colorIndex == null) {
+                    Modifier
+                } else {
+                    Modifier.background(
+                        MatrixPalette.color(colorIndex, isSystemInDarkTheme()).copy(alpha = VALUE_FILL_ALPHA),
+                    )
+                },
+            )
             .padding(horizontal = 6.dp),
     )
 }
+
+/** Совпадает с `MatrixColors.valueFillAlpha`: список и матрица показывают один и тот же цвет. */
+private const val VALUE_FILL_ALPHA = 0.22f

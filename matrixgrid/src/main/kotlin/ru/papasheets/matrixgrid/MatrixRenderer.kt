@@ -209,6 +209,22 @@ internal class MatrixRenderer(
                         }
                     }
 
+                    // Заливка подколонки цветом её значения — до текста, чтобы он лёг поверх.
+                    //
+                    // Рисуется на обоих ярусах и для ВСЕХ полей, включая скрытые на LOD1
+                    // (`showAtCompactLod = false`, как у «Вида работ»): этот флаг сдерживает замер и
+                    // отрисовку текста — то, что дорого, — а не саму подколонку. Один drawRect
+                    // ничего не стоит, зато именно на LOD1, где текст уже не прочесть, цвет и
+                    // остаётся единственным способом различить виды работ.
+                    for (i in fields.indices) {
+                        val colorIndex = cell.valueColors.getOrNull(i) ?: continue
+                        drawRect(
+                            color = colors.value(colorIndex).copy(alpha = colors.valueFillAlpha),
+                            topLeft = Offset(geometry.fieldLeft(i), 0f),
+                            size = Size(geometry.fieldWidth(i), rowHeight),
+                        )
+                    }
+
                     val pad = geometry.cellPad
                     for (i in fields.indices) {
                         val field = fields[i]

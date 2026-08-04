@@ -36,7 +36,7 @@ class GridModelBuilderTest {
             record("a3", day2, "A", createdAt = 300),
         )
 
-        val model = buildGridModel(records, contractors, builtInFields, sortDesc = false)
+        val model = buildGridModel(records, contractors, builtInFields, emptyMap(), sortDesc = false)
 
         assertEquals(listOf("A", "B"), model.contractors.map { it.id })
         // День 1: max(2,1)=2 строки; день 2: max(1,0)=1 строка.
@@ -66,7 +66,7 @@ class GridModelBuilderTest {
         val contractors = listOf(contractor("A", 0))
         val records = listOf(record("a1", day1, "A", createdAt = 100))
 
-        val model = buildGridModel(records, contractors, builtInFields, sortDesc = false)
+        val model = buildGridModel(records, contractors, builtInFields, emptyMap(), sortDesc = false)
 
         assertEquals(listOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID), model.fields.map { it.id })
         assertEquals(listOf("Л", "ВИД РАБОТ"), model.fields.map { it.title })
@@ -87,7 +87,7 @@ class GridModelBuilderTest {
             testRecord("r1", contractorId = "A", dateEpochDay = day1, values = mapOf("volume" to "12 м²", "note" to "переделать")),
         )
 
-        val model = buildGridModel(records, listOf(contractor("A", 0)), fields, sortDesc = false)
+        val model = buildGridModel(records, listOf(contractor("A", 0)), fields, emptyMap(), sortDesc = false)
 
         assertEquals(listOf("ОБЪЁМ", "ЗАМЕЧАНИЕ"), model.fields.map { it.title })
         assertEquals(listOf(72, 120), model.fields.map { it.widthDp })
@@ -102,12 +102,45 @@ class GridModelBuilderTest {
         val contractors = listOf(contractor("A", 0))
         val records = listOf(record("a1", day1, "A", createdAt = 100, location = ""))
 
-        val model = buildGridModel(records, contractors, builtInFields, sortDesc = false)
+        val model = buildGridModel(records, contractors, builtInFields, emptyMap(), sortDesc = false)
 
         val values = model.rows[0].cells[0]!!.values
         assertEquals(model.fields.size, values.size)
         assertEquals("", values[0])
         assertEquals("работа a1", values[1])
+    }
+
+    /**
+     * Цвета раскладываются по подколонкам ровно так же, как значения: по позиции поля, а не по имени.
+     * Ошибка здесь означала бы, что вид работ красится цветом локации, — и увидеть это можно было бы
+     * только глазами на устройстве.
+     */
+    @Test
+    fun `value colors land in the same subcolumns as their values`() {
+        val contractors = listOf(contractor("A", 0))
+        val records = listOf(record("a1", day1, "A", createdAt = 100, location = "1-01"))
+        val colors = mapOf(
+            BuiltInFields.WORK_ID to mapOf("работа a1" to 3),
+            BuiltInFields.LOCATION_ID to mapOf("1-01" to 5),
+        )
+
+        val model = buildGridModel(records, contractors, builtInFields, colors, sortDesc = false)
+
+        val cell = model.rows[0].cells[0]!!
+        assertEquals(model.fields.size, cell.valueColors.size)
+        assertEquals(listOf(5, 3), cell.valueColors)
+    }
+
+    @Test
+    fun `unpainted values and values of another field get no color`() {
+        val contractors = listOf(contractor("A", 0))
+        val records = listOf(record("a1", day1, "A", createdAt = 100, location = "1-01"))
+        // Цвет заведён для «Вида работ», но у ДРУГОГО значения; локация не покрашена вовсе.
+        val colors = mapOf(BuiltInFields.WORK_ID to mapOf("работа b2" to 3))
+
+        val model = buildGridModel(records, contractors, builtInFields, colors, sortDesc = false)
+
+        assertEquals(listOf(null, null), model.rows[0].cells[0]!!.valueColors)
     }
 
     @Test
@@ -118,7 +151,7 @@ class GridModelBuilderTest {
             record("a2", day2, "A", createdAt = 200),
         )
 
-        val model = buildGridModel(records, contractors, builtInFields, sortDesc = true)
+        val model = buildGridModel(records, contractors, builtInFields, emptyMap(), sortDesc = true)
 
         assertEquals(day2, model.rows.first().dateEpochDay)
         assertEquals(day1, model.rows.last().dateEpochDay)
@@ -129,7 +162,7 @@ class GridModelBuilderTest {
         val contractors = listOf(contractor("A", 0), contractor("B", 1, archived = true))
         val records = listOf(record("a1", day1, "A", createdAt = 100))
 
-        val model = buildGridModel(records, contractors, builtInFields, sortDesc = false)
+        val model = buildGridModel(records, contractors, builtInFields, emptyMap(), sortDesc = false)
 
         assertEquals(listOf("A"), model.contractors.map { it.id })
         assertEquals(1, model.rows[0].cells.size)
@@ -146,7 +179,7 @@ class GridModelBuilderTest {
             record("c1", day1, "C", createdAt = 200),
         )
 
-        val model = buildGridModel(records, contractors, builtInFields, sortDesc = false)
+        val model = buildGridModel(records, contractors, builtInFields, emptyMap(), sortDesc = false)
 
         // Активные (A, C) по orderIndex первыми, архивный с записями (B) — в конце.
         assertEquals(listOf("A", "C", "B"), model.contractors.map { it.id })

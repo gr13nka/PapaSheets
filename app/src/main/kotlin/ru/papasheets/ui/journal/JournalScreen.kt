@@ -90,6 +90,7 @@ fun JournalScreen(
                     contractorRepository = graph.contractorRepository,
                     fieldRepository = graph.fieldRepository,
                     valueSuggester = graph.valueSuggester,
+                    valueColorRepository = graph.fieldValueColorRepository,
                     photoStore = graph.photoStore,
                     exportInteractor = graph.exportInteractor,
                     appContext = graph.appContext,

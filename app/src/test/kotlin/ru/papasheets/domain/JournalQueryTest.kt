@@ -193,7 +193,7 @@ class JournalQueryTest {
         for (filter in filters) {
             val filtered = applyFilter(all, filter)
 
-            val grid = buildGridModel(filtered, contractors, fields, sortDesc = false)
+            val grid = buildGridModel(filtered, contractors, fields, emptyMap(), sortDesc = false)
             val inMatrix = grid.rows.flatMap { row -> row.cells.filterNotNull().map { it.recordId } }.toSet()
 
             val inList = sortRecords(filtered, RecordSort(SortKey.Field("work")), contractors)

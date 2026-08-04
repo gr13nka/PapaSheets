@@ -31,8 +31,18 @@ internal class MatrixColors private constructor(
     /** Прозрачность блока «фото ещё не добавлено» в заполненной ячейке без photoId. */
     val emptyPhotoAlpha: Float = 0.12f
 
+    /**
+     * Прозрачность заливки подколонки цветом её значения. Заметно сильнее тонировки подрядчика
+     * ([cellTintAlpha]) — иначе цвет вида работ терялся бы на её фоне, — но приглушено: поверх
+     * заливки читается текст самого значения.
+     */
+    val valueFillAlpha: Float = 0.22f
+
     /** Цвет подрядчика (с учётом темы). Полная непрозрачность — блок «картины месяца» LOD2. */
     fun contractor(colorIndex: Int): Color = MatrixPalette.color(colorIndex, dark)
+
+    /** Цвет значения поля (с учётом темы) — из той же палитры, что и цвета подрядчиков. */
+    fun value(colorIndex: Int): Color = MatrixPalette.color(colorIndex, dark)
 
     companion object {
         fun of(dark: Boolean): MatrixColors = if (dark) {

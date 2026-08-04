@@ -34,7 +34,10 @@ fun buildJournalSnapshot(
     contractors: List<ContractorEntity>,
     fields: List<FieldDefEntity>,
 ): JournalSnapshot {
-    val grid = buildGridModel(records, contractors, fields, sortDesc = false)
+    // Без цветов значений намеренно: xlsx их не несёт. Заливок в StylesXml нет вовсе (spec, M6), а
+    // тесты писателя — побайтовый регресс-гейт. Цвет — способ читать матрицу на телефоне, и в файле
+    // для заказчика ему делать нечего.
+    val grid = buildGridModel(records, contractors, fields, valueColors = emptyMap(), sortDesc = false)
 
     val days = ArrayList<SnapshotDay>()
     var index = 0

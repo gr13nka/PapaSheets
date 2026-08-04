@@ -4,6 +4,7 @@ import java.time.LocalDate
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.db.entity.RecordWithValues
+import ru.papasheets.data.repo.FieldValueColors
 import ru.papasheets.matrixgrid.ContractorColumn
 import ru.papasheets.matrixgrid.GridCell
 import ru.papasheets.matrixgrid.GridField
@@ -19,6 +20,8 @@ import ru.papasheets.matrixgrid.GridRow
  *   исчезли бы из уже сведённого месяца) — колонка помечена [ContractorColumn.isArchived], архивный
  *   без записей в колонки не попадает;
  * - [fields] в своём порядке становятся подколонками внутри группы подрядчика;
+ * - [valueColors] раскладываются по подколонкам заранее: рендерер проходит по видимым ячейкам
+ *   каждый кадр жеста, и искать цвет по тексту значения там нельзя;
  * - записи группируются по дню; дни сортируются по [sortDesc];
  * - строк в дне = max(1, максимум записей одного подрядчика за этот день);
  * - записи подрядчика раскладываются сверху вниз по `createdAt` ASC;
@@ -30,6 +33,7 @@ fun buildGridModel(
     records: List<RecordWithValues>,
     contractors: List<ContractorEntity>,
     fields: List<FieldDefEntity>,
+    valueColors: FieldValueColors,
     sortDesc: Boolean,
 ): GridModel {
     val active = contractors.filter { !it.isArchived }.sortedBy { it.orderIndex }
@@ -65,7 +69,13 @@ fun buildGridModel(
                 val record = perColumn[column]?.getOrNull(rowInDay)
                 cells.add(
                     record?.let { entry ->
-                        GridCell(entry.record.id, entry.record.photoIds, fields.map { entry.valueOf(it.id) })
+                        val values = fields.map { entry.valueOf(it.id) }
+                        GridCell(
+                            recordId = entry.record.id,
+                            thumbKeys = entry.record.photoIds,
+                            values = values,
+                            valueColors = fields.mapIndexed { i, field -> valueColors[field.id]?.get(values[i]) },
+                        )
                     },
                 )
             }
