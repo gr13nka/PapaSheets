@@ -254,6 +254,43 @@ class MigrationTest {
     }
 
     /**
+     * v6 → v7: таблица цветов значений заводится рядом, ничего не трогая.
+     *
+     * Проверяется не только появление таблицы, но и два свойства, ради которых она так устроена:
+     * ключ (поле, значение) перекрашивает значение вместо того, чтобы завести вторую строку, и
+     * цвета умирают вместе со своим полем — иначе удаление поля оставляло бы мусор навсегда.
+     */
+    @Test
+    fun migration6To7_addsValueColorsCascadingWithFields() {
+        helper.createDatabase(TEST_DB, 6).use { it.seedV6Fixtures() }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, Migrations.MIGRATION_6_7)
+
+        // Таблица пуста: до v7 цвет значению назначить было негде, переливать нечего.
+        assertEquals(0L, db.queryLong("SELECT COUNT(*) FROM field_value_colors"))
+        // И существующие данные шаг не двигал.
+        assertEquals(2L, db.queryLong("SELECT COUNT(*) FROM records"))
+
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL(
+            "INSERT INTO field_value_colors VALUES (?, 'Штукатурка', 3)",
+            arrayOf(BuiltInFields.WORK_ID),
+        )
+
+        // (fieldId, value) — первичный ключ: повторная покраска того же значения его меняет.
+        db.execSQL(
+            "INSERT OR REPLACE INTO field_value_colors VALUES (?, 'Штукатурка', 7)",
+            arrayOf(BuiltInFields.WORK_ID),
+        )
+        assertEquals(1L, db.queryLong("SELECT COUNT(*) FROM field_value_colors"))
+        assertEquals(7L, db.queryLong("SELECT colorIndex FROM field_value_colors"))
+
+        // Цвета — часть определения поля и уходят вместе с ним (ON DELETE CASCADE).
+        db.execSQL("DELETE FROM field_defs WHERE id = ?", arrayOf(BuiltInFields.WORK_ID))
+        assertEquals(0L, db.queryLong("SELECT COUNT(*) FROM field_value_colors"))
+    }
+
+    /**
      * Путь с самой первой версии до текущей одним прогоном.
      *
      * Отдельные тесты шагов не покрывают именно этот сценарий: у прораба может стоять сборка,
@@ -423,6 +460,22 @@ class MigrationTest {
         // v5-схема записи: 7 колонок, photoId2 ещё нет.
         execSQL("INSERT INTO records VALUES ('r-1', 'j1', 20000, 'c1', 'ph1', 0, 0)")
         execSQL("INSERT INTO records VALUES ('r-2', 'j1', 20000, 'c1', NULL, 0, 0)")
+    }
+
+    private fun SupportSQLiteDatabase.seedV6Fixtures() {
+        execSQL("INSERT INTO journals VALUES ('j1', 2026, 7, 'Июль', 0)")
+        execSQL("INSERT INTO contractors VALUES ('c1', 'Г.П.', 'ГП', 0, 0, 0, 0)")
+        // Владелец будущих цветов: без поля цвету не на что ссылаться.
+        execSQL(
+            "INSERT INTO field_defs VALUES (?, 'ВИД РАБОТ', 'Вид работ', 1, 0, 1, 1, 1, 168, 0, 0, 0)",
+            arrayOf(BuiltInFields.WORK_ID),
+        )
+        execSQL("INSERT INTO records (id, journalId, dateEpochDay, contractorId, createdAt, updatedAt) VALUES ('r-1', 'j1', 20000, 'c1', 0, 0)")
+        execSQL("INSERT INTO records (id, journalId, dateEpochDay, contractorId, createdAt, updatedAt) VALUES ('r-2', 'j1', 20000, 'c1', 0, 0)")
+        execSQL(
+            "INSERT INTO record_values VALUES ('r-1', ?, 'Штукатурка')",
+            arrayOf(BuiltInFields.WORK_ID),
+        )
     }
 
     private fun SupportSQLiteDatabase.insertV1Record(id: String, location: String, work: String) {

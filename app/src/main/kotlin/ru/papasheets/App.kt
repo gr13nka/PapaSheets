@@ -16,6 +16,7 @@ import ru.papasheets.data.db.AppDatabase
 import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldPresetRepository
+import ru.papasheets.data.repo.FieldValueColorRepository
 import ru.papasheets.data.repo.FieldRepository
 import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
@@ -85,6 +86,9 @@ class AppGraph(context: Context) {
     }
     val valueSuggester: ValueSuggester by lazy { ValueSuggester(database.recordValueDao(), database.fieldPresetDao()) }
     val fieldPresetRepository: FieldPresetRepository by lazy { FieldPresetRepository(database.fieldPresetDao()) }
+    val fieldValueColorRepository: FieldValueColorRepository by lazy {
+        FieldValueColorRepository(database.fieldValueColorDao())
+    }
     val photoStore: PhotoStore by lazy { PhotoStore(appContext, database.photoDao()) }
     private val exportFolder: ExportFolder by lazy { ExportFolder(appContext) }
     val exportInteractor: ExportInteractor by lazy {

@@ -132,12 +132,25 @@ object Migrations {
     }
 
     /**
+     * v6 → v7: цвета значений полей (`field_value_colors`).
+     *
+     * Самый дешёвый вид шага — новая таблица рядом, ни одной существующей строки не двигается.
+     * Переливать нечего: до этой версии цвет значению нигде не назначался, и пустая таблица —
+     * ровно то состояние, в котором её застаёт прораб после обновления.
+     */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            MIGRATION_6_7_DDL.forEach(db::execSQL)
+        }
+    }
+
+    /**
      * Полная цепочка в порядке версий. Существует затем, чтобы список миграций был ровно один:
      * [AppDatabase] и тест цепочки берут его отсюда, поэтому забытая в сборке миграция валит тест,
      * а не телефон прораба, пропустившего пару версий.
      */
     val ALL: Array<Migration> =
-        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 }
 
 /**
@@ -295,4 +308,19 @@ internal val MIGRATION_5_6_DDL: List<String> = listOf(
     "ALTER TABLE `records` ADD COLUMN `photoId2` TEXT REFERENCES `photos`(`id`) " +
         "ON UPDATE NO ACTION ON DELETE SET NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS `index_records_photoId2` ON `records` (`photoId2`)",
+)
+
+/**
+ * Цвета значений полей. `createSql` скопирован дословно из `app/schemas/.../7.json` (подстановка
+ * `${TABLE_NAME}` раскрыта) — Room сверяет фактическую схему с ожидаемой по хешу при первом
+ * открытии, и расхождение хоть в действии внешнего ключа роняет приложение.
+ *
+ * Отдельного индекса по `fieldId` нет намеренно: он крайняя левая колонка составного первичного
+ * ключа, то есть его индекс и обслуживает внешний ключ. Room это видит и не требует второго — в
+ * схеме `indices` у таблицы пуст, и дописать индекс здесь значило бы разойтись с ней.
+ */
+internal val MIGRATION_6_7_DDL: List<String> = listOf(
+    "CREATE TABLE IF NOT EXISTS `field_value_colors` (`fieldId` TEXT NOT NULL, " +
+        "`value` TEXT NOT NULL, `colorIndex` INTEGER NOT NULL, PRIMARY KEY(`fieldId`, `value`), " +
+        "FOREIGN KEY(`fieldId`) REFERENCES `field_defs`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
 )
