@@ -74,8 +74,10 @@ class XlsxWriterTest {
         val cols = sheet.elements("col")
         assertEquals("10.5", cols[0].getAttribute("width"))
         // Обе Ф считаются от стороны фото-квадрата (PHOTO_BOX_PT = 56pt), а не задаются отдельно.
-        assertEquals("9.95", cols[1].getAttribute("width"))
-        assertEquals("9.95", cols[2].getAttribute("width"))
+        // 9.95 → 10.72 (2026-08-06): Widths.ptToChars вычитала 5px полей ячейки, которые в единицу
+        // ширины уже входят, и колонка выходила 70px при фото в 74.67px. Инвариант — PhotoFitTest.
+        assertEquals("10.72", cols[1].getAttribute("width"))
+        assertEquals("10.72", cols[2].getAttribute("width"))
         assertEquals("7.75", cols[3].getAttribute("width"))
         assertEquals("50.75", cols[4].getAttribute("width"))
 
