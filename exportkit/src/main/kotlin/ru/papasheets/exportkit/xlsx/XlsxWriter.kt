@@ -15,7 +15,10 @@ import ru.papasheets.exportkit.model.PhotoBytesProvider
  * в памяти (сотни строк листа — это десятки-сотни КБ текста, не проблема), фото копируются побайтово
  * из [PhotoBytesProvider] без перекодирования — единственное, что могло бы раздуть память на сотнях фото.
  *
- * `photos == null` → лист без фото: та же раскладка данных, но без `xl/drawings` и `xl/media`.
+ * Журнал без единого фото даёт тот же лист, но без `xl/drawings` и `xl/media`: частей нет ровно
+ * тогда, когда рисовать нечего. Отдельного режима «выгрузить без фото» у писателя нет — он был
+ * (`photos = null`) и убран вместе с одноимённым пунктом диалога экспорта.
+ *
  * Заканчивает запись ([ZipOutputStream.finish]), но не закрывает [out] — закрытие остаётся за
  * вызывающей стороной (она открыла поток, ей и решать, когда его отпустить).
  *
@@ -33,8 +36,8 @@ object XlsxWriter {
      */
     private val ENTRY_TIME_MS = GregorianCalendar(1980, Calendar.JANUARY, 1, 0, 0, 0).timeInMillis
 
-    fun write(snapshot: JournalSnapshot, photos: PhotoBytesProvider?, out: OutputStream, log: (String) -> Unit = {}) {
-        val anchors = if (photos != null) collectAnchors(snapshot, photos, log) else emptyList()
+    fun write(snapshot: JournalSnapshot, photos: PhotoBytesProvider, out: OutputStream, log: (String) -> Unit = {}) {
+        val anchors = collectAnchors(snapshot, photos, log)
         val hasDrawing = anchors.isNotEmpty()
         val zip = ZipOutputStream(out)
 
@@ -45,7 +48,7 @@ object XlsxWriter {
         putEntry(zip, "xl/styles.xml", StylesXml.build())
         putEntry(zip, "xl/worksheets/sheet1.xml", SheetXml.build(snapshot, hasDrawing))
 
-        if (hasDrawing && photos != null) {
+        if (hasDrawing) {
             putEntry(zip, "xl/worksheets/_rels/sheet1.xml.rels", RelsXml.sheet())
             putEntry(zip, "xl/drawings/drawing1.xml", DrawingXml.build(anchors))
             putEntry(zip, "xl/drawings/_rels/drawing1.xml.rels", RelsXml.drawing(anchors))

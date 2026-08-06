@@ -22,7 +22,10 @@ class XlsxWriterTest {
 
     private fun writeZip(withPhotos: Boolean): Map<String, ByteArray> {
         val out = ByteArrayOutputStream()
-        XlsxWriter.write(TestFixtures.snapshot(), if (withPhotos) TestFixtures.photoProvider() else null, out)
+        // Лист без фото получается из снимка без photoId, а не из «режима без фото»: такого режима
+        // у писателя больше нет — см. TestFixtures.snapshotWithoutPhotos.
+        val snapshot = if (withPhotos) TestFixtures.snapshot() else TestFixtures.snapshotWithoutPhotos()
+        XlsxWriter.write(snapshot, TestFixtures.photoProvider(), out)
         val entries = LinkedHashMap<String, ByteArray>()
         ZipInputStream(ByteArrayInputStream(out.toByteArray())).use { zip ->
             var entry = zip.nextEntry

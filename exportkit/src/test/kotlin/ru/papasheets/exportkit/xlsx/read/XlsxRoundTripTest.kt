@@ -21,7 +21,7 @@ import ru.papasheets.exportkit.xlsx.XlsxWriter
  */
 class XlsxRoundTripTest {
 
-    private fun writeThenRead(snapshot: JournalSnapshot, photos: PhotoBytesProvider?): ParsedSheet {
+    private fun writeThenRead(snapshot: JournalSnapshot, photos: PhotoBytesProvider): ParsedSheet {
         val file = File.createTempFile("papasheets-roundtrip", ".xlsx")
         file.deleteOnExit()
         file.outputStream().use { XlsxWriter.write(snapshot, photos, it) }
@@ -94,7 +94,7 @@ class XlsxRoundTripTest {
 
     @Test
     fun `a journal without photos reads back without them`() {
-        val sheet = writeThenRead(TestFixtures.snapshot(), photos = null)
+        val sheet = writeThenRead(TestFixtures.snapshotWithoutPhotos(), TestFixtures.photoProvider())
 
         assertTrue(sheet.rows.flatMap { it.cells }.filterNotNull().all { it.photos.isEmpty() })
     }

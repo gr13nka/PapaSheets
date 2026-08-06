@@ -158,7 +158,7 @@ class SheetLayoutTest {
 
     private fun workbookXml(snapshot: JournalSnapshot): String {
         val out = ByteArrayOutputStream()
-        XlsxWriter.write(snapshot, null, out)
+        XlsxWriter.write(snapshot, TestFixtures.photoProvider(), out)
         var workbook: ByteArray? = null
         ZipInputStream(ByteArrayInputStream(out.toByteArray())).use { zip ->
             var entry = zip.nextEntry

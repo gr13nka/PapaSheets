@@ -74,6 +74,28 @@ object TestFixtures {
     )
 
     /**
+     * Тот же снимок, но без единого photoId — журнал, в котором фото просто не заводили. Теперь это
+     * единственный способ получить лист без drawing: у писателя нет режима «выгрузить без фото»,
+     * фото-провайдер он требует всегда, а частей не создаёт, когда рисовать нечего.
+     */
+    fun snapshotWithoutPhotos(): JournalSnapshot {
+        val original = snapshot()
+        return JournalSnapshot(
+            title = original.title,
+            contractors = original.contractors,
+            fields = original.fields,
+            days = original.days.map { day ->
+                SnapshotDay(
+                    dateLabel = day.dateLabel,
+                    rows = day.rows.map { row ->
+                        SnapshotRow(cells = row.cells.map { cell -> cell?.let { SnapshotCell(it.values, emptyList()) } })
+                    },
+                )
+            },
+        )
+    }
+
+    /**
      * Снимок с произвольным числом полей: 2 подрядчика, один день, одна строка, фото у второго
      * подрядчика — минимум, на котором видно и шаг колонок, и колонку якоря фото.
      */
