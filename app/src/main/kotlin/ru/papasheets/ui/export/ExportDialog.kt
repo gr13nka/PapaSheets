@@ -92,13 +92,6 @@ fun ExportDialog(
                         Text(stringResource(R.string.export_option_xlsx_photos))
                     }
                     TextButton(
-                        onClick = { onExport(ExportFormat.XLSX_NO_PHOTOS) },
-                        enabled = folderReady,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.export_option_xlsx_no_photos))
-                    }
-                    TextButton(
                         onClick = { onExport(ExportFormat.CSV) },
                         enabled = folderReady,
                         modifier = Modifier.fillMaxWidth(),

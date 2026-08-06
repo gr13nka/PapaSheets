@@ -86,7 +86,7 @@ PK везде TEXT UUID; `createdAt`/`updatedAt` millis; даты как epochDa
 3. **RecordSheet** — дата (default сегодня), подрядчик (dropdown), локация (автодополнение), вид работ (multiline), фото (камера/галерея), «Продолжить вчерашнее» (копирует подрядчика/локацию/текст, фото — новое). Без фото не сохраняем.
 4. **LightboxScreen** — fullscreen medium-фото с пинч-зумом, подпись, «Редактировать запись».
 5. **ContractorsScreen** — CRUD, drag-reorder, цвет, архив. **LocationsScreen** — CRUD пресетов.
-6. **ExportDialog** — xlsx/CSV/бэкап + прогресс (xlsx на сотни фото — секунды, 50–75 МБ; предупреждение + опция «без фото»).
+6. **ExportDialog** — xlsx/CSV/бэкап + прогресс (xlsx на сотни фото — секунды, 50–75 МБ). Опция «без фото» была задумана как ответ на размер файла, но не пригодилась и убрана 2026-08-06.
 
 ## Милстоуны (каждый — проверяемый на устройстве)
 
@@ -105,7 +105,7 @@ PK везде TEXT UUID; `createdAt`/`updatedAt` millis; даты как epochDa
 1. Память битмапов → LRU по байтам, декод под LOD-размер, medium не грузится в матрицу, RGB_565-опция.
 2. Recomposition на жестах → чтение pan/zoom только в draw-лямбдах.
 3. TextMeasurer — главная цена Canvas → LOD2 без текста, кэш, дискретные ярусы, ноль аллокаций в горячем пути.
-4. xlsx-капризы Excel (rId/Content_Types строже Sheets), EMU-математика, размер файла 50–75 МБ → предупреждение и «без фото».
+4. xlsx-капризы Excel (rId/Content_Types строже Sheets), EMU-математика, размер файла 50–75 МБ → предупреждение (опция «без фото» не пригодилась, см. п.6 выше).
 5. EXIF/Samsung; TakePicture при убитом процессе → temp-uri в SavedStateHandle.
 6. PickVisualMedia на API 26 → проверить фолбэк GET_CONTENT.
 7. Жест-конфликты tap/pan/pinch → slop-пороги, fling прерывается касанием.

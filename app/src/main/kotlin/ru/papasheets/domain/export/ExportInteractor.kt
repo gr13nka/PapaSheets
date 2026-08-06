@@ -16,8 +16,11 @@ import ru.papasheets.exportkit.xlsx.XlsxWriter
 import ru.papasheets.logging.AppLog
 import ru.papasheets.photos.PhotoStore
 
-/** Что писать в выбранный пользователем файл — три варианта диалога экспорта (M6). */
-enum class ExportFormat { XLSX_WITH_PHOTOS, XLSX_NO_PHOTOS, CSV }
+/**
+ * Что писать в выбранный пользователем файл. Вариант «xlsx без фото» был третьим (M6) и убран:
+ * фото — то, ради чего журнал вообще выгружают, и лист без них никому не понадобился.
+ */
+enum class ExportFormat { XLSX_WITH_PHOTOS, CSV }
 
 /**
  * Собирает [JournalSnapshot] журнала из Room (на [Dispatchers.IO] — сотни записей не должны дёргать
@@ -54,7 +57,6 @@ class ExportInteractor(
         exportFolder.replace(defaultFileName(journal.title, format), mimeType(format)).use { stream ->
             when (format) {
                 ExportFormat.CSV -> CsvWriter.write(snapshot, stream)
-                ExportFormat.XLSX_NO_PHOTOS -> XlsxWriter.write(snapshot, photos = null, out = stream, log = { appLog.d(TAG, it) })
                 ExportFormat.XLSX_WITH_PHOTOS ->
                     XlsxWriter.write(snapshot, photoBytesProvider(collectPhotoSizes(snapshot)), stream, log = { appLog.d(TAG, it) })
             }

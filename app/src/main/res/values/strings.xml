@@ -34,7 +34,6 @@
 
     <string name="export_dialog_title">Экспорт журнала</string>
     <string name="export_option_xlsx_photos">Excel (.xlsx) с фото</string>
-    <string name="export_option_xlsx_no_photos">Excel (.xlsx) без фото</string>
     <string name="export_option_csv">Таблица CSV</string>
     <string name="export_filter_warning">Фильтр на экране не влияет на выгрузку: в файл пойдёт весь журнал.</string>
     <string name="export_folder_current">Папка: %1$s</string>
