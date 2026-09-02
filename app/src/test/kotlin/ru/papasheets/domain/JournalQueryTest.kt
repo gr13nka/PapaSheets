@@ -1,6 +1,8 @@
 package ru.papasheets.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.testing.testField
@@ -202,5 +204,28 @@ class JournalQueryTest {
 
             assertEquals("фильтр $filter", inList, inMatrix)
         }
+    }
+
+    /**
+     * Правило, по которому сохраняется место в матрице ([ru.papasheets.domain.LastPlace]): раскладка
+     * считается «той же» только при виде матрицы, пустом фильтре и порядке дат по умолчанию — ровно с
+     * этими значениями откроется следующий запуск. Любое отличие меняет состав или порядок строк, и
+     * сохранённый вьюпорт указывал бы на другие дни.
+     */
+    @Test
+    fun `default matrix layout is the one a cold start will show`() {
+        assertTrue(JournalQuery().isDefaultMatrixLayout)
+        assertFalse(JournalQuery(viewMode = ViewMode.LIST).isDefaultMatrixLayout)
+        assertFalse(JournalQuery(filter = JournalFilter(contractorIds = setOf("a"))).isDefaultMatrixLayout)
+        assertFalse(JournalQuery(sort = RecordSort(SortKey.Date, desc = true)).isDefaultMatrixLayout)
+    }
+
+    /**
+     * Сортировка списка по чужому столбцу матрицу не перестраивает ([RecordSort.matrixDatesDesc]), и
+     * запрещать сохранение места из-за неё было бы ложной тревогой.
+     */
+    @Test
+    fun `list sort column does not disturb the matrix layout`() {
+        assertTrue(JournalQuery(sort = RecordSort(SortKey.Field("work"), desc = true)).isDefaultMatrixLayout)
     }
 }

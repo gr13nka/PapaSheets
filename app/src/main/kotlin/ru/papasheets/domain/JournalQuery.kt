@@ -13,7 +13,17 @@ data class JournalQuery(
     val filter: JournalFilter = JournalFilter(),
     val sort: RecordSort = RecordSort(),
     val viewMode: ViewMode = ViewMode.MATRIX,
-)
+) {
+    /**
+     * Даёт ли этот запрос ту же раскладку матрицы, что и следующий запуск приложения. Вид, фильтр и
+     * порядок дат живут в памяти экрана и на запуске сбрасываются к значениям по умолчанию, а вот
+     * положение вьюпорта [ru.papasheets.domain.LastPlace] хранит между запусками — и это положение
+     * осмысленно ровно тогда, когда строки под ним останутся теми же. Сохранённое под фильтром или
+     * обратным порядком дат, оно назавтра указывало бы на другие дни.
+     */
+    val isDefaultMatrixLayout: Boolean
+        get() = viewMode == ViewMode.MATRIX && filter.isEmpty && !sort.matrixDatesDesc
+}
 
 /** Как журнал показан: матрица «дата × подрядчик» или плоский список записей. */
 enum class ViewMode { MATRIX, LIST }

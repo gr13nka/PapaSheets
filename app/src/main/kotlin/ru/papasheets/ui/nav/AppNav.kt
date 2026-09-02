@@ -1,11 +1,17 @@
 package ru.papasheets.ui.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import ru.papasheets.ui.LocalAppGraph
 import ru.papasheets.ui.daylist.DayListScreen
 import ru.papasheets.ui.journal.JournalScreen
 import ru.papasheets.ui.journals.JournalListScreen
@@ -27,7 +33,25 @@ private const val ROUTE_LIGHTBOX = "lightbox/{$ARG_RECORD_ID}/{$ARG_PHOTO_SLOT}"
 
 @Composable
 fun AppNav() {
+    val graph = LocalAppGraph.current
     val navController = rememberNavController()
+
+    // Запуск открывает журнал, который смотрели последним: прораб продолжает вчерашнюю таблицу, а не
+    // ищет её в списке каждое утро. Стартовым маршрутом остаётся список — тогда «Назад» из журнала
+    // ведёт на него, а не выбрасывает из приложения; ценой этого список мелькает на кадр.
+    //
+    // Флаг переживает пересоздание активити (поворот): без него композиция после поворота повторила бы
+    // переход и положила второй экземпляр журнала поверх восстановленного стека.
+    var autoStarted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (autoStarted) return@LaunchedEffect
+        autoStarted = true
+        val journalId = graph.lastPlace.journalId() ?: return@LaunchedEffect
+        // Журнал мог исчезнуть (удалили, восстановили другой бэкап) — по мёртвому id открылся бы экран
+        // без названия и без записей.
+        if (graph.journalRepository.getById(journalId) != null) navController.navigate("journal/$journalId")
+    }
+
     NavHost(navController = navController, startDestination = ROUTE_JOURNALS) {
         composable(ROUTE_JOURNALS) {
             JournalListScreen(

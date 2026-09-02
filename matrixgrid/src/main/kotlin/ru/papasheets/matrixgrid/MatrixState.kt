@@ -16,12 +16,29 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
+ * Положение вьюпорта как значение — ровно то, что нужно, чтобы вернуть матрицу туда, где её оставили.
+ * Отделено от [MatrixState] намеренно: состояние живёт в композиции, а значение можно положить в
+ * `Bundle` ([MatrixState.Saver]) или в хранилище приложения и пережить им закрытие приложения.
+ */
+data class MatrixViewport(val panX: Float, val panY: Float, val zoom: Float) {
+    companion object {
+        /** Начало журнала на детальном зуме — вид, с которого матрица открывается впервые. */
+        val Start = MatrixViewport(panX = 0f, panY = 0f, zoom = 1f)
+    }
+}
+
+/**
  * Держатель состояния прокрутки/зума матрицы. Переживает не только рекомпозицию, но и поворот экрана
  * со смертью процесса: без этого разворот телефона выбрасывал прораба из места, куда он доскроллил,
  * обратно в начало журнала — а именно поворотом он и смотрит широкую матрицу.
+ *
+ * [initial] — откуда открыть матрицу, когда восстанавливать нечего (первый вход в журнал за запуск);
+ * так экран отдаёт сюда позицию, сохранённую с прошлого запуска. При повороте выигрывает [MatrixState.Saver]:
+ * [initial] читается только тогда, когда сохранённого состояния композиции нет.
  */
 @Composable
-fun rememberMatrixState(): MatrixState = rememberSaveable(saver = MatrixState.Saver) { MatrixState() }
+fun rememberMatrixState(initial: MatrixViewport = MatrixViewport.Start): MatrixState =
+    rememberSaveable(saver = MatrixState.Saver) { MatrixState(initial) }
 
 /**
  * Изменяемое состояние вьюпорта матрицы. Ключевое правило проекта: [panX]/[panY]/[zoom] —
@@ -38,10 +55,13 @@ fun rememberMatrixState(): MatrixState = rememberSaveable(saver = MatrixState.Sa
  * новое анимирование сперва отменяют предыдущее, чтобы два источника не писали pan вперемешку.
  */
 @Stable
-class MatrixState {
-    private val _panX = mutableFloatStateOf(0f)
-    private val _panY = mutableFloatStateOf(0f)
-    private val _zoom = mutableFloatStateOf(1f)
+class MatrixState(initial: MatrixViewport = MatrixViewport.Start) {
+    // Стартовая позиция кладётся как есть, мимо клампа: геометрии на этот момент ещё нет, а
+    // восстановленное значение считалось под другой вьюпорт. В границы его дотянет первый же
+    // [updateViewport] — тот самый путь, которым уже приходит в себя позиция после поворота.
+    private val _panX = mutableFloatStateOf(initial.panX)
+    private val _panY = mutableFloatStateOf(initial.panY)
+    private val _zoom = mutableFloatStateOf(initial.zoom)
 
     /** Смещение мира влево внутри тела, экранные px (с учётом зума). Читать только в draw/gesture. */
     val panX: Float get() = _panX.floatValue
@@ -114,6 +134,13 @@ class MatrixState {
     internal fun panBy(dx: Float, dy: Float) = setTransform(zoom, panX - dx, panY - dy)
 
     /**
+     * Снимок положения для сохранения между запусками. Читать ТОЛЬКО вне композиции (lifecycle-колбэк,
+     * `onDispose`): вызов из тела композиции подпишет экран на snapshot-float'ы, и каждый кадр
+     * прокрутки вызывал бы рекомпозицию — ровно то, чего избегает всё устройство этого класса.
+     */
+    fun viewport(): MatrixViewport = MatrixViewport(panX = panX, panY = panY, zoom = zoom)
+
+    /**
      * Сбрасывает pan к началу мира на текущем зуме, отменяя любую текущую инерцию/анимацию. Нужен
      * после перестройки раскладки, где старая позиция теряет смысл (например, разворот сортировки
      * дат меняет порядок строк местами) — публичный вход для UI, в отличие от [setTransform].
@@ -161,14 +188,14 @@ class MatrixState {
 
     companion object {
         /**
-         * Сохраняются только pan/zoom. Контекст клампинга (geometry, размеры кадра) не сохраняется
-         * намеренно: после поворота он другой, и восстановленную позицию всё равно пришлось бы
-         * пересчитывать — этим занимается [updateViewport] на первом же кадре.
+         * Сохраняется только [MatrixViewport]. Контекст клампинга (geometry, размеры кадра) не
+         * сохраняется намеренно: после поворота он другой, и восстановленную позицию всё равно
+         * пришлось бы пересчитывать — этим занимается [updateViewport] на первом же кадре.
          */
         val Saver = listSaver<MatrixState, Float>(
             save = { listOf(it.panX, it.panY, it.zoom) },
             restore = { saved ->
-                MatrixState().apply { setTransform(zoom = saved[2], panX = saved[0], panY = saved[1]) }
+                MatrixState(MatrixViewport(panX = saved[0], panY = saved[1], zoom = saved[2]))
             },
         )
     }

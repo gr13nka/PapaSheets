@@ -22,6 +22,7 @@ import ru.papasheets.data.repo.JournalRepository
 import ru.papasheets.data.repo.RecordRepository
 import ru.papasheets.data.repo.ValueSuggester
 import ru.papasheets.domain.DeleteJournalInteractor
+import ru.papasheets.domain.LastPlace
 import ru.papasheets.domain.backup.BackupInteractor
 import ru.papasheets.domain.backup.ImportInteractor
 import ru.papasheets.domain.export.ExportFolder
@@ -82,8 +83,9 @@ class AppGraph(context: Context) {
     val contractorRepository: ContractorRepository by lazy { ContractorRepository(database.contractorDao()) }
     val fieldRepository: FieldRepository by lazy { FieldRepository(database.fieldDefDao()) }
     val deleteJournalInteractor: DeleteJournalInteractor by lazy {
-        DeleteJournalInteractor(journalRepository, recordRepository, photoStore)
+        DeleteJournalInteractor(journalRepository, recordRepository, photoStore, lastPlace)
     }
+    val lastPlace: LastPlace by lazy { LastPlace(appContext) }
     val valueSuggester: ValueSuggester by lazy { ValueSuggester(database.recordValueDao(), database.fieldPresetDao()) }
     val fieldPresetRepository: FieldPresetRepository by lazy { FieldPresetRepository(database.fieldPresetDao()) }
     val fieldValueColorRepository: FieldValueColorRepository by lazy {

@@ -81,6 +81,45 @@ class MatrixStateTest {
         assertEquals(g.maxPanY(viewportH, 1f), s.panY, 0.5f)
     }
 
+    /**
+     * Позиция, отданная в конструктор (сохранённая с прошлого запуска), ложится как есть: геометрии в
+     * этот момент нет, а клампить по чужой — значит соврать. В границы её дотянет первый
+     * [MatrixState.updateViewport], что закреплено [firstViewportPublicationClampsRestoredTransform].
+     */
+    @Test
+    fun initialViewportIsStoredRaw() {
+        val s = MatrixState(MatrixViewport(panX = 1e6f, panY = 700f, zoom = 0.5f))
+        assertEquals(1e6f, s.panX, 1e-4f)
+        assertEquals(700f, s.panY, 1e-4f)
+        assertEquals(0.5f, s.zoom, 1e-4f)
+    }
+
+    /** [MatrixState.viewport] — снимок текущего трансформа: то, что уйдёт в хранилище, и ничего сверх. */
+    @Test
+    fun viewportSnapshotsCurrentTransform() {
+        val (s, _) = stateWithViewport()
+        s.setTransform(zoom = 1f, panX = 300f, panY = 400f)
+
+        val snapshot = s.viewport()
+
+        assertEquals(s.panX, snapshot.panX, 1e-4f)
+        assertEquals(s.panY, snapshot.panY, 1e-4f)
+        assertEquals(s.zoom, snapshot.zoom, 1e-4f)
+    }
+
+    /** Круг «снял позицию → открыл матрицу заново» возвращает ровно то же место. */
+    @Test
+    fun stateRestoredFromViewportRepeatsIt() {
+        val (s, _) = stateWithViewport()
+        s.setTransform(zoom = 0.8f, panX = 250f, panY = 900f)
+
+        val restored = MatrixState(s.viewport())
+
+        assertEquals(s.panX, restored.panX, 1e-4f)
+        assertEquals(s.panY, restored.panY, 1e-4f)
+        assertEquals(s.zoom, restored.zoom, 1e-4f)
+    }
+
     /** Смена размеров кадра (поворот) переклампливает pan по новым границам, а не ждёт жеста. */
     @Test
     fun viewportResizeReclampsPan() {

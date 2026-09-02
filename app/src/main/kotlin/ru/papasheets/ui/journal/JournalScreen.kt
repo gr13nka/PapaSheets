@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -52,6 +56,7 @@ import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.domain.ViewMode
 import ru.papasheets.matrixgrid.MatrixCallbacks
 import ru.papasheets.matrixgrid.MatrixView
+import ru.papasheets.matrixgrid.MatrixViewport
 import ru.papasheets.matrixgrid.rememberMatrixState
 import ru.papasheets.ui.LocalAppGraph
 import ru.papasheets.ui.export.ExportDialog
@@ -104,7 +109,12 @@ fun JournalScreen(
     val content by viewModel.content.collectAsState()
     val query by viewModel.query.collectAsState()
     val exporting by viewModel.exporting.collectAsState()
-    val matrixState = rememberMatrixState()
+    // Матрица открывается там, где журнал бросили в прошлый раз (после поворота экрана победит
+    // rememberSaveable внутри — аргумент читается только когда восстанавливать нечего).
+    val lastPlace = graph.lastPlace
+    val matrixState = rememberMatrixState(
+        initial = remember(journalId) { lastPlace.viewportOf(journalId) ?: MatrixViewport.Start },
+    )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -131,6 +141,32 @@ fun JournalScreen(
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportDialog by rememberSaveable { mutableStateOf(false) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+
+    // «Последний журнал» пишем на входе, а не на выходе: даже если процесс убьют, не дав сохранить
+    // положение, запуск приведёт хотя бы в тот же журнал.
+    LaunchedEffect(journalId) { lastPlace.rememberJournal(journalId) }
+
+    // Положение снимаем при уходе с экрана: ON_STOP — «домой» и переключение приложений (после него
+    // процесс могут убить без предупреждения), onDispose — возврат на список журналов. Сохраняем
+    // только в раскладке по умолчанию: вид, фильтр и порядок дат запуск не переживают, и снятое под
+    // фильтром положение назавтра указывало бы на другие строки.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentQuery = rememberUpdatedState(query)
+    DisposableEffect(lifecycleOwner, journalId, matrixState) {
+        // Читаем pan/zoom вне композиции — иначе экран подписался бы на них и рекомпозился каждый кадр.
+        fun save() {
+            if (currentQuery.value.isDefaultMatrixLayout) {
+                lastPlace.rememberViewport(journalId, matrixState.viewport())
+            }
+        }
+
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) save() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            save()
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.exportEvents.collect { event ->
