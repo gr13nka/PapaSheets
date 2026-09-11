@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -241,7 +242,7 @@ private fun fieldSummary(field: FieldDefEntity): String {
     val lines = if (field.maxLines == 0) {
         stringResource(R.string.fields_lines_unlimited)
     } else {
-        stringResource(R.string.fields_lines_limit, field.maxLines)
+        pluralStringResource(R.plurals.fields_lines_limit, field.maxLines, field.maxLines)
     }
     val parts = buildList {
         add(stringResource(R.string.fields_summary_head, field.title, field.columnWidthDp, lines))

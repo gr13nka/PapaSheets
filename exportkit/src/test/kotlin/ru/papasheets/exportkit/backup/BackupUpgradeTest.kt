@@ -228,7 +228,7 @@ class BackupUpgradeTest {
             ) { _, _, _ -> }
             fail("expected BackupFormatException")
         } catch (e: BackupFormatException) {
-            assertTrue(e.message!!.contains(tooNew.toString()))
+            assertEquals(BackupFormatReason.TooNew(tooNew), e.reason)
         }
     }
 }

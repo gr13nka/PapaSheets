@@ -3,8 +3,29 @@ package ru.papasheets.domain.xlsx
 import java.io.File
 import ru.papasheets.exportkit.xlsx.read.PhotoRef
 
-/** Импорт xlsx сорвался по причине, которую нужно показать пользователю дословно. */
-class XlsxImportException(message: String, cause: Throwable? = null) : Exception(message, cause)
+/**
+ * Почему таблицу нельзя импортировать. Каждой причине UI сопоставляет свою строку ресурсов, а текст
+ * исключения до пользователя не доходит — он и `cause` уходят в файловый лог.
+ */
+enum class XlsxImportReason {
+    /** Системный выбор файлов вернул Uri, который не открывается. */
+    FILE_NOT_OPENED,
+
+    /** Файл открылся, но дочитать его копию не удалось. */
+    FILE_NOT_READ,
+
+    /** Не xlsx, повреждён или устроен не как журнал-матрица; что именно — в `cause` ([ru.papasheets.exportkit.xlsx.read.XlsxFormatException]). */
+    UNREADABLE_SPREADSHEET,
+
+    /** Ни одной даты с годом: месяц журнала определить нечем, а угадывать нельзя. */
+    NO_DATES_WITH_YEAR,
+
+    /** Ни одной записи, в которой есть хоть значение или фото. */
+    NO_RECORDS,
+}
+
+/** Импорт xlsx отклонён по причине [reason]; сообщение исключения — имя причины, для лога. */
+class XlsxImportException(val reason: XlsxImportReason, cause: Throwable? = null) : Exception(reason.name, cause)
 
 /**
  * Что импорт сделает, если его подтвердить. Показывается пользователю до единой записи в БД:
@@ -63,5 +84,4 @@ class XlsxImportResult(
     val importedRecords: Int,
     val importedPhotos: Int,
 )
-
 

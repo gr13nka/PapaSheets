@@ -14,6 +14,10 @@ fun buildContractorOptions(all: List<ContractorEntity>, currentContractorId: Str
     return if (current != null && current.isArchived) active + current else active
 }
 
-/** Имя подрядчика для дропдауна с пометкой архивных — иначе неясно, почему он единственный вне списка активных. */
-fun contractorDisplayName(contractor: ContractorEntity): String =
-    if (contractor.isArchived) "${contractor.name} (архив)" else contractor.name
+/**
+ * Имя подрядчика для дропдауна с пометкой архивных — иначе неясно, почему он единственный вне списка
+ * активных. [archivedTemplate] — шаблон пометки из ресурсов (`record_contractor_archived`, `%1$s` — имя):
+ * где встанет имя, решает перевод, а не код.
+ */
+fun contractorDisplayName(contractor: ContractorEntity, archivedTemplate: String): String =
+    if (contractor.isArchived) archivedTemplate.format(contractor.name) else contractor.name

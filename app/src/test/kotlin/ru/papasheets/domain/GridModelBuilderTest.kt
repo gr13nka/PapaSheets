@@ -16,6 +16,9 @@ class GridModelBuilderTest {
 
     private val day1 = LocalDate.of(2026, 7, 17).toEpochDay()
     private val day2 = LocalDate.of(2026, 7, 18).toEpochDay()
+    private val russianShortMonths = listOf(
+        "янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
+    )
 
     private fun contractor(id: String, order: Int, archived: Boolean = false) =
         ContractorEntity(id = id, name = "Подрядчик $id", shortName = id, colorIndex = order, orderIndex = order, isArchived = archived, createdAt = 0)
@@ -36,7 +39,14 @@ class GridModelBuilderTest {
             record("a3", day2, "A", createdAt = 300),
         )
 
-        val model = buildGridModel(records, contractors, builtInFields, emptyMap(), sortDesc = false)
+        val model = buildGridModel(
+            records,
+            contractors,
+            builtInFields,
+            emptyMap(),
+            sortDesc = false,
+            dateLabel = { JournalDates.shortMonth(it, russianShortMonths) },
+        )
 
         assertEquals(listOf("A", "B"), model.contractors.map { it.id })
         // День 1: max(2,1)=2 строки; день 2: max(1,0)=1 строка.
@@ -59,6 +69,23 @@ class GridModelBuilderTest {
         assertEquals(day2, d2row0.dateEpochDay)
         assertEquals("a3", d2row0.cells[0]?.recordId)
         assertNull(d2row0.cells[1])
+    }
+
+    @Test
+    fun `date label uses the supplied locale month names`() {
+        val englishMonths = listOf(
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        )
+        val model = buildGridModel(
+            records = listOf(record("a1", day1, "A", createdAt = 100)),
+            contractors = listOf(contractor("A", 0)),
+            fields = builtInFields,
+            valueColors = emptyMap(),
+            sortDesc = false,
+            dateLabel = { JournalDates.shortMonth(it, englishMonths) },
+        )
+
+        assertEquals("17 Jul", model.rows.single().dayLabel)
     }
 
     @Test

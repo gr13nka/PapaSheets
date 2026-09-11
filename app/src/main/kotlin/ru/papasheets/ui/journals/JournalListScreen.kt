@@ -1,5 +1,6 @@
 package ru.papasheets.ui.journals
 
+import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -61,6 +62,8 @@ import ru.papasheets.domain.backup.BackupImportResult
 import ru.papasheets.domain.backup.MergeStats
 import ru.papasheets.domain.xlsx.ImportFileTypeDetector
 import ru.papasheets.domain.xlsx.XlsxImportPreview
+import ru.papasheets.domain.xlsx.XlsxImportReason
+import ru.papasheets.exportkit.backup.BackupFormatReason
 import ru.papasheets.ui.LocalAppGraph
 
 private const val MIME_BACKUP = "application/octet-stream"
@@ -71,6 +74,7 @@ fun JournalListScreen(
     onOpenJournal: (String) -> Unit,
     onOpenContractors: () -> Unit,
     onOpenFields: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val graph = LocalAppGraph.current
     val viewModel: JournalListViewModel = viewModel(
@@ -80,6 +84,7 @@ fun JournalListScreen(
                     graph.journalRepository, graph.backupInteractor, graph.importInteractor,
                     graph.xlsxImportInteractor, graph.deleteJournalInteractor,
                     detectFileType = { uri -> ImportFileTypeDetector.detect(graph.appContext, uri) },
+                    appLog = graph.appLog,
                 )
             }
         },
@@ -105,24 +110,48 @@ fun JournalListScreen(
             when (event) {
                 is BackupUiEvent.BackupDone -> {
                     val message = if (event.skippedPhotoFiles > 0) {
-                        context.getString(R.string.backup_saved_photos_skipped, event.skippedPhotoFiles)
+                        context.resources.getQuantityString(
+                            R.plurals.backup_saved_photos_skipped,
+                            event.skippedPhotoFiles,
+                            event.skippedPhotoFiles,
+                        )
                     } else {
                         context.getString(R.string.backup_saved)
                     }
                     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                 }
-                is BackupUiEvent.BackupFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
                 is BackupUiEvent.ImportDone -> importResult = event.result
-                is BackupUiEvent.ImportFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
-                is BackupUiEvent.DeleteFailed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
+                is BackupUiEvent.Failure -> Toast.makeText(
+                    context,
+                    context.getString(event.kind.messageRes()),
+                    Toast.LENGTH_LONG,
+                ).show()
+                is BackupUiEvent.BackupRejected -> Toast.makeText(
+                    context,
+                    event.reason.message(context),
+                    Toast.LENGTH_LONG,
+                ).show()
+                is BackupUiEvent.XlsxRejected -> Toast.makeText(
+                    context,
+                    context.getString(event.reason.messageRes()),
+                    Toast.LENGTH_LONG,
+                ).show()
                 is BackupUiEvent.XlsxPreviewReady -> xlsxPreview = event.preview
                 is BackupUiEvent.XlsxImportDone -> Toast.makeText(
                     context,
                     context.getString(
                         R.string.xlsx_import_done,
                         event.result.journalTitle,
-                        event.result.importedRecords,
-                        event.result.importedPhotos,
+                        context.resources.getQuantityString(
+                            R.plurals.xlsx_import_done_records,
+                            event.result.importedRecords,
+                            event.result.importedRecords,
+                        ),
+                        context.resources.getQuantityString(
+                            R.plurals.xlsx_import_done_photos,
+                            event.result.importedPhotos,
+                            event.result.importedPhotos,
+                        ),
                     ),
                     Toast.LENGTH_LONG,
                 ).show()
@@ -162,6 +191,10 @@ fun JournalListScreen(
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.settings_fields)) },
                             onClick = { menuExpanded = false; onOpenFields() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.settings_title)) },
+                            onClick = { menuExpanded = false; onOpenSettings() },
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.backup_menu_save)) },
@@ -289,6 +322,32 @@ fun JournalListScreen(
             },
         )
     }
+}
+
+private fun BackupUiFailure.messageRes(): Int = when (this) {
+    BackupUiFailure.DELETE_JOURNAL -> R.string.journal_delete_failed
+    BackupUiFailure.SAVE_BACKUP -> R.string.backup_save_failed
+    BackupUiFailure.IMPORT_BACKUP -> R.string.backup_import_failed
+    BackupUiFailure.IMPORT_XLSX -> R.string.xlsx_import_failed
+}
+
+/** Строка, а не id ресурса: у двух причин в тексте версия формата. */
+private fun BackupFormatReason.message(context: Context): String = when (this) {
+    BackupFormatReason.NotABackup -> context.getString(R.string.backup_rejected_not_a_backup)
+    BackupFormatReason.MissingManifest -> context.getString(R.string.backup_rejected_missing_manifest)
+    BackupFormatReason.MissingData -> context.getString(R.string.backup_rejected_missing_data)
+    BackupFormatReason.CorruptManifest -> context.getString(R.string.backup_rejected_corrupt_manifest)
+    BackupFormatReason.CorruptData -> context.getString(R.string.backup_rejected_corrupt_data)
+    is BackupFormatReason.TooNew -> context.getString(R.string.backup_rejected_too_new, formatVersion)
+    is BackupFormatReason.TooOld -> context.getString(R.string.backup_rejected_too_old, formatVersion)
+}
+
+private fun XlsxImportReason.messageRes(): Int = when (this) {
+    XlsxImportReason.FILE_NOT_OPENED -> R.string.xlsx_rejected_file_not_opened
+    XlsxImportReason.FILE_NOT_READ -> R.string.xlsx_rejected_file_not_read
+    XlsxImportReason.UNREADABLE_SPREADSHEET -> R.string.xlsx_read_failed
+    XlsxImportReason.NO_DATES_WITH_YEAR -> R.string.xlsx_rejected_no_dates_with_year
+    XlsxImportReason.NO_RECORDS -> R.string.xlsx_rejected_no_records
 }
 
 /** Диалог с итогом импорта: по строке на таблицу — добавлено/обновлено/пропущено (см. [BackupImportResult]). */

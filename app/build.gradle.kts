@@ -26,6 +26,7 @@ android {
         versionCode = 4
         versionName = "1.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += listOf("en", "ru")
     }
 
     signingConfigs {
@@ -56,6 +57,17 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    androidResources {
+        generateLocaleConfig = true
+    }
+
+    // Встроенный picker должен уметь переключить язык без докачки split APK из Play.
+    bundle {
+        language {
+            enableSplit = false
+        }
     }
 
     testOptions {
@@ -89,6 +101,7 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(libs.navigation.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)

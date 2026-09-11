@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -117,6 +121,11 @@ fun JournalScreen(
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val localeTag = LocalConfiguration.current.locales.toLanguageTags()
+
+    LaunchedEffect(localeTag) {
+        viewModel.refreshDisplayStrings()
+    }
 
     var sheetMode by rememberSaveable(stateSaver = RecordSheetModeSaver) { mutableStateOf<RecordSheetMode?>(null) }
     // Свёрнутая запись: та же [sheetMode], но показанная полоской внизу вместо листа. Запись к этому
@@ -173,7 +182,7 @@ fun JournalScreen(
             showExportDialog = false
             val message = when (event) {
                 is ExportEvent.Success -> context.getString(R.string.export_success)
-                is ExportEvent.Failure -> event.message
+                is ExportEvent.Failure -> context.getString(R.string.export_failed)
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
@@ -325,8 +334,13 @@ fun JournalScreen(
                         ),
                     )
                 },
+                modifier = Modifier.size(56.dp),
+                shape = CircleShape,
             ) {
-                Text(stringResource(R.string.day_list_add_record))
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.day_list_add_record),
+                )
             }
         },
     ) { padding ->

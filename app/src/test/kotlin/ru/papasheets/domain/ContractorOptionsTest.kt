@@ -1,7 +1,10 @@
 package ru.papasheets.domain
 
+import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.w3c.dom.Element
 import ru.papasheets.data.db.entity.ContractorEntity
 
 class ContractorOptionsTest {
@@ -48,8 +51,28 @@ class ContractorOptionsTest {
     }
 
     @Test
-    fun `display name marks archived contractors`() {
-        assertEquals("Подрядчик A", contractorDisplayName(contractor("A")))
-        assertEquals("Подрядчик B (архив)", contractorDisplayName(contractor("B", archived = true)))
+    fun `display name keeps active contractors bare and puts archived ones into the template`() {
+        assertEquals("Подрядчик A", contractorDisplayName(contractor("A"), "%1\$s (архив)"))
+        assertEquals("Подрядчик B (архив)", contractorDisplayName(contractor("B", archived = true), "%1\$s (архив)"))
+    }
+
+    /** Шаблон из настоящих strings.xml: тест ловит и правку функции, и поломку перевода. */
+    @Test
+    fun `record_contractor_archived marks archived contractors in English and Russian`() {
+        val archived = contractor("B", archived = true)
+
+        assertEquals("Подрядчик B (archived)", contractorDisplayName(archived, archivedTemplate("values")))
+        assertEquals("Подрядчик B (архив)", contractorDisplayName(archived, archivedTemplate("values-ru")))
+    }
+
+    /** Рабочий каталог JVM-тестов — модуль `app`, отсюда относительный путь к ресурсам. */
+    private fun archivedTemplate(valuesDir: String): String {
+        val strings = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(File("src/main/res/$valuesDir/strings.xml"))
+            .getElementsByTagName("string")
+        return (0 until strings.length)
+            .map { strings.item(it) as Element }
+            .single { it.getAttribute("name") == "record_contractor_archived" }
+            .textContent
     }
 }

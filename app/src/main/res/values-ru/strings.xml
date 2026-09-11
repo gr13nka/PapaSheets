@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PapaSheets</string>
+    <string name="journals_title">Журналы</string>
+    <string name="journals_empty">Пока нет журналов</string>
+    <string name="journals_add">Добавить журнал</string>
+
+    <string name="action_cancel">Отмена</string>
+    <string name="action_ok">ОК</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_back">Назад</string>
+    <string name="action_delete">Удалить</string>
+
+    <string name="month_picker_title">Выберите месяц</string>
+
+    <string name="day_list_add_record">Добавить запись</string>
+    <string name="day_list_empty">Пока нет записей</string>
+
+    <string name="matrix_zoom_overview">Месяц</string>
+    <string name="matrix_zoom_detail">1:1</string>
+    <string name="matrix_sort_desc">↓ даты</string>
+    <string name="matrix_sort_asc">↑ даты</string>
+    <string name="journal_view_matrix">Матрица</string>
+    <string name="journal_view_list">Список</string>
+    <string name="journal_column_date">Дата</string>
+    <string name="journal_column_contractor">Подрядчик</string>
+    <string name="journal_filter">Фильтр</string>
+    <string name="journal_filter_active">Фильтр (%d)</string>
+    <string name="journal_filter_clear">Сбросить</string>
+    <string name="journal_filter_search">Поиск по тексту</string>
+    <string name="journal_filter_empty">Под фильтр не попала ни одна запись</string>
+    <string name="matrix_menu_action">Ещё</string>
+    <string name="matrix_menu_export">Экспорт</string>
+
+    <string name="export_dialog_title">Экспорт журнала</string>
+    <string name="export_option_xlsx_photos">Excel (.xlsx) с фото</string>
+    <string name="export_option_csv">Таблица CSV</string>
+    <string name="export_filter_warning">Фильтр на экране не влияет на выгрузку: в файл пойдёт весь журнал.</string>
+    <string name="export_folder_current">Папка: %1$s</string>
+    <string name="export_folder_none">Папка не выбрана</string>
+    <string name="export_choose_folder">Выбрать папку</string>
+    <string name="export_change_folder">Изменить папку</string>
+    <string name="export_in_progress">Экспортируем…</string>
+    <string name="export_success">Сохранено</string>
+    <string name="export_failed">Не удалось экспортировать журнал</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="settings_language">Язык</string>
+    <string name="settings_language_system">Как в системе</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_russian">Русский</string>
+    <string name="settings_contractors">Подрядчики</string>
+    <string name="settings_contractors_hint">Большие колонки таблицы: добавить, переименовать, порядок</string>
+    <string name="settings_fields">Поля записи</string>
+    <string name="settings_fields_hint">Подколонки внутри подрядчика: Локация, Вид работ, свои</string>
+
+    <string name="backup_menu_save">Сохранить бэкап</string>
+    <string name="backup_menu_import">Импорт бэкапа</string>
+    <string name="backup_busy">Обрабатываем…</string>
+    <string name="backup_saved">Бэкап сохранён</string>
+    <plurals name="backup_saved_photos_skipped">
+        <item quantity="one">Бэкап сохранён, но %d файл фото не найден на диске</item>
+        <item quantity="few">Бэкап сохранён, но %d файла фото не найдено на диске</item>
+        <item quantity="many">Бэкап сохранён, но %d файлов фото не найдено на диске</item>
+        <item quantity="other">Бэкап сохранён, но %d файла фото не найдено на диске</item>
+    </plurals>
+    <string name="backup_save_failed">Не удалось сохранить бэкап</string>
+    <string name="backup_import_failed">Не удалось импортировать бэкап</string>
+    <string name="backup_rejected_not_a_backup">Файл повреждён или не является бэкапом PapaSheets</string>
+    <string name="backup_rejected_missing_manifest">В архиве нет manifest.json</string>
+    <string name="backup_rejected_missing_data">В архиве нет data.json</string>
+    <string name="backup_rejected_corrupt_manifest">manifest.json повреждён</string>
+    <string name="backup_rejected_corrupt_data">data.json повреждён</string>
+    <string name="backup_rejected_too_new">Бэкап создан более новой версией приложения (формат %1$d) — обновите PapaSheets</string>
+    <string name="backup_rejected_too_old">Формат бэкапа (версия %1$d) слишком старый и больше не поддерживается</string>
+    <string name="journal_delete_failed">Не удалось удалить журнал</string>
+    <string name="xlsx_read_failed">Не удалось прочитать таблицу</string>
+    <string name="xlsx_import_failed">Не удалось импортировать таблицу</string>
+    <string name="xlsx_rejected_file_not_opened">Не удалось открыть выбранный файл</string>
+    <string name="xlsx_rejected_file_not_read">Не удалось прочитать выбранный файл</string>
+    <string name="xlsx_rejected_no_dates_with_year">В таблице не удалось распознать даты с годом — импортировать такой файл нельзя</string>
+    <string name="xlsx_rejected_no_records">В таблице не нашлось ни одной записи, которую можно перенести</string>
+    <string name="import_result_title">Импорт завершён</string>
+    <string name="import_result_row">%1$s — добавлено %2$d, обновлено %3$d, пропущено %4$d</string>
+    <string name="import_result_journals">Журналы</string>
+    <string name="import_result_contractors">Подрядчики</string>
+    <string name="import_result_fields">Поля</string>
+    <string name="import_result_presets">Готовые значения</string>
+    <string name="import_result_records">Записи</string>
+    <string name="import_result_values">Значения полей</string>
+    <string name="import_result_colors">Цвета значений</string>
+    <string name="import_result_photos">Фото</string>
+
+    <string name="xlsx_preview_title">Что будет импортировано</string>
+    <string name="xlsx_preview_journal_new">Будет создан журнал «%1$s»</string>
+    <string name="xlsx_preview_journal_existing">Записи добавятся в журнал «%1$s»</string>
+    <string name="xlsx_preview_totals">Дней: %1$d, записей: %2$d, фото: %3$d</string>
+    <string name="xlsx_preview_contractors_matched">Подрядчиков найдено среди существующих: %1$d</string>
+    <string name="xlsx_preview_contractors_new">Будет создано подрядчиков: %1$d (%2$s)</string>
+    <string name="xlsx_preview_fields_matched">Колонок легло на существующие поля: %1$d</string>
+    <string name="xlsx_preview_fields_new">Будет создано полей: %1$d (%2$s)</string>
+    <string name="xlsx_preview_skipped_unnamed">Пропущено без названия: подрядчиков %1$d, колонок %2$d</string>
+    <string name="xlsx_preview_confirm">Импортировать</string>
+    <string name="xlsx_import_done">Импортировано в «%1$s»: %2$s, %3$s</string>
+    <!-- «записей N» / «фото N» — подпись перед числом не согласуется с ним, форма одна на все количества. -->
+    <plurals name="xlsx_import_done_records">
+        <item quantity="one">записей %d</item>
+        <item quantity="few">записей %d</item>
+        <item quantity="many">записей %d</item>
+        <item quantity="other">записей %d</item>
+    </plurals>
+    <plurals name="xlsx_import_done_photos">
+        <item quantity="one">фото %d</item>
+        <item quantity="few">фото %d</item>
+        <item quantity="many">фото %d</item>
+        <item quantity="other">фото %d</item>
+    </plurals>
+    <string name="backup_menu_import_any">Импорт бэкапа или таблицы</string>
+    <string name="share_logs_menu">Отправить логи</string>
+    <string name="share_logs_chooser_title">Отправить логи</string>
+    <string name="share_logs_failed">Не удалось отправить логи</string>
+
+    <string name="record_delete_confirm_title">Удалить запись?</string>
+    <string name="record_delete_confirm_message">Это действие нельзя отменить.</string>
+    <string name="journal_delete_confirm_title">Удалить журнал?</string>
+    <string name="journal_delete_confirm_message">Журнал «%1$s» со всеми записями (%2$d) и фотографиями будет удалён без возможности восстановления.</string>
+
+    <string name="record_title_create">Новая запись</string>
+    <string name="record_title_edit">Редактировать запись</string>
+    <string name="record_contractor_label">Подрядчик</string>
+    <string name="record_contractor_create">+ Создать нового подрядчика</string>
+    <string name="record_contractor_archived">%1$s (архив)</string>
+    <string name="color_picker_title">Цвет значения «%1$s»</string>
+    <string name="color_picker_none">Без цвета</string>
+    <string name="record_minimize_action">Свернуть</string>
+    <string name="record_minimized_title">Запись свёрнута — сохранена</string>
+    <string name="record_minimized_close">Скрыть</string>
+    <string name="record_discard">Не сохранять</string>
+    <string name="record_validation_required">Обязательное поле</string>
+    <string name="record_validation_blank">Запись пустая: заполните хотя бы одно поле или добавьте фото</string>
+    <string name="record_photo_camera">Камера</string>
+    <string name="record_photo_gallery">Галерея</string>
+    <string name="record_photo_replace">Заменить</string>
+    <string name="record_photo_remove">Убрать</string>
+    <string name="record_photo_processing">Обработка фото…</string>
+    <string name="record_photo_import_error">Не удалось обработать фото, попробуйте ещё раз</string>
+    <string name="record_continue_yesterday">Продолжить вчерашнее</string>
+    <string name="record_continue_yesterday_dialog_title">Выберите запись</string>
+
+    <string name="lightbox_close">Закрыть</string>
+
+    <string name="contractors_title">Подрядчики</string>
+    <string name="contractors_archived_section">Архив (%d)</string>
+    <string name="contractors_archive_action">В архив</string>
+    <string name="contractors_unarchive_action">Вернуть</string>
+    <string name="contractors_rename_action">Изменить</string>
+    <string name="contractors_add_title">Новый подрядчик</string>
+    <string name="contractors_edit_title">Изменить подрядчика</string>
+    <string name="contractors_name_label">Имя</string>
+    <string name="contractors_short_name_label">Короткое имя (до 4 символов)</string>
+    <string name="contractors_empty">Пока нет подрядчиков</string>
+
+    <string name="fields_title">Поля записи</string>
+    <string name="fields_archived_section">Архив (%d)</string>
+    <string name="fields_archive_action">В архив</string>
+    <string name="fields_unarchive_action">Вернуть</string>
+    <string name="fields_add_title">Новое поле</string>
+    <string name="fields_edit_title">Изменить поле</string>
+    <string name="fields_label_label">Название в форме записи</string>
+    <string name="fields_title_label">Подпись в шапке (коротко)</string>
+    <string name="fields_width_label">Ширина, dp</string>
+    <string name="fields_max_lines_label">Строк (0 — без ограничения)</string>
+    <string name="fields_required_label">Обязательное</string>
+    <string name="fields_suggest_label">Подсказывать при вводе</string>
+    <string name="fields_compact_label">Показывать в сжатом виде</string>
+    <string name="fields_compact_hint">В сжатом виде («картина месяца») колонки узкие: там разборчивы одна-две, остальные только съедят место.</string>
+    <string name="fields_presets_section">Готовые значения</string>
+    <string name="fields_presets_disabled_hint">Подсказки выключены — эти значения предлагаться не будут.</string>
+    <string name="fields_preset_new_label">Новое значение</string>
+    <string name="fields_delete_action">Удалить поле</string>
+    <string name="fields_delete_refused_title">Поле нельзя удалить</string>
+    <string name="fields_delete_refused_built_in">«%1$s» — встроенное поле, его можно только убрать в архив.</string>
+    <string name="fields_delete_refused_in_use">«%1$s» заполнено в записях (%2$d) — удаление стёрло бы их содержимое. Поле можно убрать в архив: записи сохранятся, а колонка исчезнет.</string>
+    <string name="fields_lines_unlimited">без ограничения</string>
+    <plurals name="fields_lines_limit">
+        <item quantity="one">%d стр.</item>
+        <item quantity="few">%d стр.</item>
+        <item quantity="many">%d стр.</item>
+        <item quantity="other">%d стр.</item>
+    </plurals>
+    <string name="fields_summary_head">«%1$s» · %2$d dp · %3$s</string>
+    <string name="fields_flag_required">обязательное</string>
+    <string name="fields_flag_suggest">подсказки</string>
+    <string name="fields_flag_compact">в сжатом виде</string>
+    <string name="fields_no_active">Все поля в архиве: в журнале останутся только даты, подрядчики и фото.</string>
+
+    <string-array name="month_names_nominative">
+        <item>Январь</item><item>Февраль</item><item>Март</item><item>Апрель</item>
+        <item>Май</item><item>Июнь</item><item>Июль</item><item>Август</item>
+        <item>Сентябрь</item><item>Октябрь</item><item>Ноябрь</item><item>Декабрь</item>
+    </string-array>
+    <string-array name="month_names_genitive">
+        <item>января</item><item>февраля</item><item>марта</item><item>апреля</item>
+        <item>мая</item><item>июня</item><item>июля</item><item>августа</item>
+        <item>сентября</item><item>октября</item><item>ноября</item><item>декабря</item>
+    </string-array>
+    <string-array name="month_names_short">
+        <item>янв</item><item>фев</item><item>мар</item><item>апр</item>
+        <item>май</item><item>июн</item><item>июл</item><item>авг</item>
+        <item>сен</item><item>окт</item><item>ноя</item><item>дек</item>
+    </string-array>
+    <string-array name="weekday_names_nominative">
+        <item>понедельник</item><item>вторник</item><item>среда</item><item>четверг</item>
+        <item>пятница</item><item>суббота</item><item>воскресенье</item>
+    </string-array>
+
+    <plurals name="journal_records_count">
+        <item quantity="one">%d запись</item>
+        <item quantity="few">%d записи</item>
+        <item quantity="many">%d записей</item>
+        <item quantity="other">%d записи</item>
+    </plurals>
+</resources>

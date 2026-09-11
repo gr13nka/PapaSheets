@@ -262,6 +262,7 @@ fun RecordSheet(
 
             var contractorExpanded by remember { mutableStateOf(false) }
             val selectedContractor = state.contractors.find { it.id == state.selectedContractorId }
+            val archivedTemplate = stringResource(R.string.record_contractor_archived)
             // Новый подрядчик заводится не выходя из формы: уход в настройки стоил бы набранного.
             var showNewContractorDialog by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(
@@ -269,7 +270,7 @@ fun RecordSheet(
                 onExpandedChange = { contractorExpanded = it },
             ) {
                 OutlinedTextField(
-                    value = selectedContractor?.let(::contractorDisplayName) ?: "",
+                    value = selectedContractor?.let { contractorDisplayName(it, archivedTemplate) } ?: "",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text(stringResource(R.string.record_contractor_label)) },
@@ -290,7 +291,7 @@ fun RecordSheet(
                 ) {
                     state.contractors.forEach { contractor ->
                         DropdownMenuItem(
-                            text = { Text(contractorDisplayName(contractor)) },
+                            text = { Text(contractorDisplayName(contractor, archivedTemplate)) },
                             onClick = {
                                 viewModel.onContractorSelected(contractor.id)
                                 contractorExpanded = false

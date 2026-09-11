@@ -44,6 +44,7 @@ import ru.papasheets.logging.AppLog
 import ru.papasheets.matrixgrid.GridModel
 import ru.papasheets.photos.BitmapThumbnailSource
 import ru.papasheets.photos.PhotoStore
+import ru.papasheets.localization.withAppLanguage
 
 private const val TAG = "JournalViewModel"
 
@@ -54,7 +55,7 @@ private const val CONTRACTOR_COLUMN_WEIGHT = 88f
 /** Итог одной попытки экспорта — одноразовое событие для тоста в UI (см. [JournalViewModel.exportEvents]). */
 sealed interface ExportEvent {
     data object Success : ExportEvent
-    data class Failure(val message: String) : ExportEvent
+    data object Failure : ExportEvent
 }
 
 /**
@@ -101,6 +102,12 @@ data class JournalContent(
     val isEmpty: Boolean get() = rows.isEmpty()
 }
 
+private data class JournalDisplayStrings(
+    val dateColumnTitle: String,
+    val contractorColumnTitle: String,
+    val shortMonths: List<String>,
+)
+
 /**
  * Модель экрана журнала. Держит потоки записей, подрядчиков, полей и текущий [JournalQuery] и сшивает
  * их в [JournalContent] на [Dispatchers.Default] (раскладка сотен строк не должна дёргать главный
@@ -125,12 +132,24 @@ class JournalViewModel(
     private val appLog: AppLog,
 ) : ViewModel() {
 
+    private val appContext = appContext.applicationContext
     val thumbnails = BitmapThumbnailSource(photoStore, viewModelScope, appContext)
 
-    // Подписи двух столбцов, которых нет среди полей: дата и подрядчик есть у каждой записи
-    // независимо от набора полей, поэтому их названия — ресурсы, а не строки field_defs.
-    private val dateColumnTitle = appContext.getString(R.string.journal_column_date)
-    private val contractorColumnTitle = appContext.getString(R.string.journal_column_contractor)
+    private val _displayStrings = MutableStateFlow(loadDisplayStrings())
+
+    /** AppCompat сохраняет ViewModel при смене языка, поэтому экран обновляет его ресурсы явно. */
+    fun refreshDisplayStrings() {
+        _displayStrings.value = loadDisplayStrings()
+    }
+
+    private fun loadDisplayStrings(): JournalDisplayStrings {
+        val resources = appContext.withAppLanguage().resources
+        return JournalDisplayStrings(
+            dateColumnTitle = resources.getString(R.string.journal_column_date),
+            contractorColumnTitle = resources.getString(R.string.journal_column_contractor),
+            shortMonths = resources.getStringArray(R.array.month_names_short).toList(),
+        )
+    }
 
     override fun onCleared() {
         thumbnails.dispose()
@@ -150,29 +169,42 @@ class JournalViewModel(
     val fields: StateFlow<List<FieldDefEntity>> = fieldRepository.observeActive()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val presentation = combine(_query, _displayStrings) { query, strings -> query to strings }
+
     // null до первой готовой раскладки — экран показывает загрузку.
     val content: StateFlow<JournalContent?> = combine(
         recordRepository.observeByJournal(journalId),
         contractorRepository.observeAll(),
         fieldRepository.observeActive(),
         valueColorRepository.observeAll(),
-        _query,
-    ) { records, contractors, fields, valueColors, query ->
+        presentation,
+    ) { records, contractors, fields, valueColors, presentation ->
         withContext(Dispatchers.Default) {
+            val (query, strings) = presentation
             val filtered = applyFilter(records, query.filter)
             val contractorsById = contractors.associateBy { it.id }
             JournalContent(
-                grid = buildGridModel(filtered, contractors, fields, valueColors, query.sort.matrixDatesDesc),
+                grid = buildGridModel(
+                    filtered,
+                    contractors,
+                    fields,
+                    valueColors,
+                    query.sort.matrixDatesDesc,
+                    dateLabel = { JournalDates.shortMonth(it, strings.shortMonths) },
+                ),
                 columns = listOf(
-                    ListColumn(dateColumnTitle, SortKey.Date, DATE_COLUMN_WEIGHT),
-                    ListColumn(contractorColumnTitle, SortKey.Contractor, CONTRACTOR_COLUMN_WEIGHT),
+                    ListColumn(strings.dateColumnTitle, SortKey.Date, DATE_COLUMN_WEIGHT),
+                    ListColumn(strings.contractorColumnTitle, SortKey.Contractor, CONTRACTOR_COLUMN_WEIGHT),
                 ) + fields.map { ListColumn(it.title, SortKey.Field(it.id), it.columnWidthDp.toFloat()) },
                 rows = sortRecords(filtered, query.sort, contractors).map { entry ->
                     val contractor = contractorsById[entry.record.contractorId]
                     RecordRow(
                         recordId = entry.record.id,
                         cells = listOf(
-                            JournalDates.shortMonth(LocalDate.ofEpochDay(entry.record.dateEpochDay)),
+                            JournalDates.shortMonth(
+                                LocalDate.ofEpochDay(entry.record.dateEpochDay),
+                                strings.shortMonths,
+                            ),
                             contractor?.name.orEmpty(),
                         ) + fields.map { entry.valueOf(it.id) },
                         // Первые два столбца — дата и подрядчик, значений полей у них нет.
@@ -266,7 +298,7 @@ class JournalViewModel(
                 _exportEvents.emit(ExportEvent.Success)
             } catch (e: Exception) {
                 appLog.e(TAG, "экспорт не удался", e)
-                _exportEvents.emit(ExportEvent.Failure(e.message ?: "Не удалось экспортировать"))
+                _exportEvents.emit(ExportEvent.Failure)
             } finally {
                 _exporting.value = false
             }

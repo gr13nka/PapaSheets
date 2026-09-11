@@ -22,6 +22,7 @@ import ru.papasheets.exportkit.xlsx.read.XlsxReader
 import ru.papasheets.photos.PhotoImporter
 import ru.papasheets.photos.PhotoSource
 import ru.papasheets.photos.PhotoStore
+import ru.papasheets.localization.withAppLanguage
 
 /**
  * Затаскивает в журнал старую таблицу-месяц со встроенными фото — ту, что заказчик вёл в Google
@@ -56,7 +57,7 @@ class XlsxImportInteractor(
             plan(XlsxReader.read(file), file)
         } catch (e: XlsxFormatException) {
             file.delete()
-            throw XlsxImportException(e.message ?: "Не удалось прочитать таблицу", e)
+            throw XlsxImportException(XlsxImportReason.UNREADABLE_SPREADSHEET, e)
         } catch (e: Throwable) {
             file.delete()
             throw e
@@ -146,7 +147,7 @@ class XlsxImportInteractor(
     }
 
     private fun monthTitle(month: LocalDate): String {
-        val names = context.resources.getStringArray(ru.papasheets.R.array.month_names_nominative)
+        val names = context.withAppLanguage().resources.getStringArray(ru.papasheets.R.array.month_names_nominative)
         return "${names[month.monthValue - 1]} ${month.year}"
     }
 
@@ -196,13 +197,12 @@ class XlsxImportInteractor(
         val file = File(context.cacheDir, "xlsx-import-${System.currentTimeMillis()}.xlsx")
         try {
             val input = context.contentResolver.openInputStream(sourceUri)
-                ?: throw XlsxImportException("Не удалось открыть выбранный файл")
+                ?: throw XlsxImportException(XlsxImportReason.FILE_NOT_OPENED)
             input.use { stream -> file.outputStream().use { stream.copyTo(it) } }
         } catch (e: IOException) {
             file.delete()
-            throw XlsxImportException("Не удалось прочитать выбранный файл", e)
+            throw XlsxImportException(XlsxImportReason.FILE_NOT_READ, e)
         }
         return file
     }
 }
-

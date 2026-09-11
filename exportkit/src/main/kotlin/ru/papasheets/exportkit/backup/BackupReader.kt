@@ -54,11 +54,11 @@ object BackupReader {
                 }
             }
         } catch (e: IOException) {
-            throw BackupFormatException("Файл повреждён или не является бэкапом PapaSheets", e)
+            throw BackupFormatException(BackupFormatReason.NotABackup, e)
         }
 
-        val finalManifest = manifest ?: throw BackupFormatException("В архиве нет manifest.json")
-        val finalData = data ?: throw BackupFormatException("В архиве нет data.json")
+        val finalManifest = manifest ?: throw BackupFormatException(BackupFormatReason.MissingManifest)
+        val finalData = data ?: throw BackupFormatException(BackupFormatReason.MissingData)
         return BackupContents(finalManifest, BackupUpgrade.toCurrent(finalManifest.formatVersion, finalData))
     }
 
@@ -68,31 +68,27 @@ object BackupReader {
     private fun validateFormatVersion(manifest: BackupManifest) {
         val version = manifest.formatVersion
         if (version > BackupManifest.CURRENT_FORMAT_VERSION) {
-            throw BackupFormatException(
-                "Бэкап создан более новой версией приложения (формат $version) — обновите PapaSheets",
-            )
+            throw BackupFormatException(BackupFormatReason.TooNew(version))
         }
         if (version < BackupManifest.MIN_SUPPORTED_FORMAT_VERSION) {
-            throw BackupFormatException(
-                "Формат бэкапа (версия $version) слишком старый и больше не поддерживается",
-            )
+            throw BackupFormatException(BackupFormatReason.TooOld(version))
         }
     }
 
     private fun parseManifest(bytes: ByteArray): BackupManifest = try {
         json.decodeFromString(BackupManifest.serializer(), bytes.toString(Charsets.UTF_8))
     } catch (e: SerializationException) {
-        throw BackupFormatException("manifest.json повреждён", e)
+        throw BackupFormatException(BackupFormatReason.CorruptManifest, e)
     } catch (e: IllegalArgumentException) {
-        throw BackupFormatException("manifest.json повреждён", e)
+        throw BackupFormatException(BackupFormatReason.CorruptManifest, e)
     }
 
     private fun parseData(bytes: ByteArray): BackupData = try {
         json.decodeFromString(BackupData.serializer(), bytes.toString(Charsets.UTF_8))
     } catch (e: SerializationException) {
-        throw BackupFormatException("data.json повреждён", e)
+        throw BackupFormatException(BackupFormatReason.CorruptData, e)
     } catch (e: IllegalArgumentException) {
-        throw BackupFormatException("data.json повреждён", e)
+        throw BackupFormatException(BackupFormatReason.CorruptData, e)
     }
 
     /** close() — no-op: время жизни записи архива принадлежит циклу чтения в [read], не вызывающей стороне. */

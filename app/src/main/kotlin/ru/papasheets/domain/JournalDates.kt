@@ -3,11 +3,6 @@ package ru.papasheets.domain
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-/** Короткие русские месяцы для меток дат («17 июл»). Захардкожены, чтобы объект оставался чистым JVM. */
-private val SHORT_MONTHS = arrayOf(
-    "янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
-)
-
 private val NUMERIC_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")
 
 /**
@@ -25,8 +20,9 @@ object JournalDates {
     /** «17.07» — колонка даты в экспорте (xlsx/CSV) и кнопка выбора даты в форме записи. */
     fun numeric(date: LocalDate): String = date.format(NUMERIC_FORMAT)
 
-    /** «17 июл» — подпись даты в закреплённой колонке матрицы: словесный месяц читается быстрее цифр. */
-    fun shortMonth(date: LocalDate): String = "${date.dayOfMonth} ${SHORT_MONTHS[date.monthValue - 1]}"
+    /** «17 июл» / “17 Jul” — подпись даты в матрице; названия месяцев приходят из ресурсов UI. */
+    fun shortMonth(date: LocalDate, shortMonths: List<String>): String =
+        "${date.dayOfMonth} ${shortMonths[date.monthValue - 1]}"
 
     /** «17» — компактная подпись колонки дат матрицы на сильном отдалении (LOD2, «картина месяца»). */
     fun dayNumber(date: LocalDate): String = date.dayOfMonth.toString()

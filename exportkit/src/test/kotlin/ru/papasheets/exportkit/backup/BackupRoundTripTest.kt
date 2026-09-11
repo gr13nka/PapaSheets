@@ -122,7 +122,8 @@ class BackupRoundTripTest {
             BackupReader.read(garbage) { _, _, _ -> }
             fail("expected BackupFormatException")
         } catch (e: BackupFormatException) {
-            assertTrue(e.message!!.isNotBlank())
+            // Не-ZIP ZipInputStream читает как пустой архив, поэтому причина — нет manifest.json.
+            assertEquals(BackupFormatReason.MissingManifest, e.reason)
         }
     }
 
@@ -138,7 +139,7 @@ class BackupRoundTripTest {
             BackupReader.read(ByteArrayInputStream(out.toByteArray())) { _, _, _ -> }
             fail("expected BackupFormatException")
         } catch (e: BackupFormatException) {
-            assertTrue(e.message!!.contains("manifest"))
+            assertEquals(BackupFormatReason.MissingManifest, e.reason)
         }
     }
 
@@ -151,7 +152,7 @@ class BackupRoundTripTest {
             BackupReader.read(ByteArrayInputStream(out.toByteArray())) { _, _, _ -> }
             fail("expected BackupFormatException")
         } catch (e: BackupFormatException) {
-            assertTrue(e.message!!.contains("999"))
+            assertEquals(BackupFormatReason.TooNew(999), e.reason)
         }
     }
 }

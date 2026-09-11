@@ -18,10 +18,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
@@ -102,8 +105,13 @@ fun DayListScreen(journalId: String, onBack: () -> Unit, onOpenLightbox: (record
                 onClick = {
                     sheetMode = RecordSheetMode.Create(journalId, defaultDateFor(journal), sessionId = UUID.randomUUID().toString())
                 },
+                modifier = Modifier.size(56.dp),
+                shape = CircleShape,
             ) {
-                Text(stringResource(R.string.day_list_add_record))
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.day_list_add_record),
+                )
             }
         },
     ) { padding ->

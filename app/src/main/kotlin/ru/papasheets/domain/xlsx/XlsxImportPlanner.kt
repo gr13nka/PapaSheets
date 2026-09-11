@@ -2,6 +2,7 @@ package ru.papasheets.domain.xlsx
 
 import java.time.LocalDate
 import java.util.UUID
+import java.util.Locale
 import ru.papasheets.data.db.entity.ContractorEntity
 import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.db.entity.JournalEntity
@@ -98,7 +99,7 @@ internal object XlsxImportPlanner {
         }
 
         if (records.isEmpty()) {
-            throw XlsxImportException("В таблице не нашлось ни одной записи, которую можно перенести")
+            throw XlsxImportException(XlsxImportReason.NO_RECORDS)
         }
 
         return XlsxImportPlan(
@@ -128,9 +129,7 @@ internal object XlsxImportPlanner {
     private fun resolveMonth(sheet: ParsedSheet): LocalDate {
         val dates = sheet.days.mapNotNull { it.date }
         if (dates.isEmpty()) {
-            throw XlsxImportException(
-                "В таблице не удалось распознать даты с годом — импортировать такой файл нельзя",
-            )
+            throw XlsxImportException(XlsxImportReason.NO_DATES_WITH_YEAR)
         }
         return dates.groupingBy { LocalDate.of(it.year, it.monthValue, 1) }.eachCount()
             .maxByOrNull { it.value }!!.key
@@ -154,7 +153,7 @@ private class ContractorMatcher(existing: List<ContractorEntity>, names: List<St
         private set
 
     init {
-        val byName = existing.associateBy { it.name.trim().lowercase() }
+        val byName = existing.associateBy { it.name.trim().lowercase(Locale.ROOT) }
         var nextOrder = (existing.maxOfOrNull { it.orderIndex } ?: -1) + 1
         var nextColor = (existing.maxOfOrNull { it.colorIndex } ?: -1) + 1
         val createdByName = HashMap<String, String>()
@@ -164,7 +163,7 @@ private class ContractorMatcher(existing: List<ContractorEntity>, names: List<St
                 unnamedCount++
                 return@forEachIndexed
             }
-            val key = name.lowercase()
+            val key = name.lowercase(Locale.ROOT)
             val existingId = byName[key]?.id
             if (existingId != null) {
                 idByIndex[index] = existingId
@@ -212,7 +211,7 @@ private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>,
         private set
 
     init {
-        val byTitle = existing.associateBy { it.title.trim().lowercase() }
+        val byTitle = existing.associateBy { it.title.trim().lowercase(Locale.ROOT) }
         var nextOrder = (existing.maxOfOrNull { it.orderIndex } ?: -1) + 1
         titles.forEachIndexed { index, rawTitle ->
             val title = rawTitle.trim()
@@ -220,7 +219,7 @@ private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>,
                 unnamedCount++
                 return@forEachIndexed
             }
-            val match = byTitle[title.lowercase()]
+            val match = byTitle[title.lowercase(Locale.ROOT)]
             if (match != null) {
                 idByColumn[index] = match.id
                 matchedCount++

@@ -35,6 +35,7 @@ fun buildGridModel(
     fields: List<FieldDefEntity>,
     valueColors: FieldValueColors,
     sortDesc: Boolean,
+    dateLabel: (LocalDate) -> String = JournalDates::numeric,
 ): GridModel {
     val active = contractors.filter { !it.isArchived }.sortedBy { it.orderIndex }
     val recordedContractorIds = records.map { it.record.contractorId }.toSet()
@@ -61,7 +62,7 @@ fun buildGridModel(
 
         val rowCount = maxOf(1, perColumn.maxOf { it?.size ?: 0 })
         val date = LocalDate.ofEpochDay(day)
-        val label = JournalDates.shortMonth(date)
+        val label = dateLabel(date)
         val number = JournalDates.dayNumber(date)
         for (rowInDay in 0 until rowCount) {
             val cells = ArrayList<GridCell?>(columns.size)

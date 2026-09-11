@@ -24,8 +24,11 @@ import ru.papasheets.domain.xlsx.ImportFileTypeDetector
 import ru.papasheets.domain.xlsx.XlsxImportException
 import ru.papasheets.domain.xlsx.XlsxImportInteractor
 import ru.papasheets.domain.xlsx.XlsxImportPreview
+import ru.papasheets.domain.xlsx.XlsxImportReason
 import ru.papasheets.domain.xlsx.XlsxImportResult
 import ru.papasheets.exportkit.backup.BackupFormatException
+import ru.papasheets.exportkit.backup.BackupFormatReason
+import ru.papasheets.logging.AppLog
 
 private const val TAG = "JournalListViewModel"
 
@@ -33,14 +36,25 @@ private const val TAG = "JournalListViewModel"
 sealed interface BackupUiEvent {
     /** [skippedPhotoFiles] > 0 — часть файлов фото потеряна на диске, бэкап неполный, стоит предупредить. */
     data class BackupDone(val skippedPhotoFiles: Int) : BackupUiEvent
-    data class BackupFailed(val message: String) : BackupUiEvent
     data class ImportDone(val result: BackupImportResult) : BackupUiEvent
-    data class ImportFailed(val message: String) : BackupUiEvent
-    data class DeleteFailed(val message: String) : BackupUiEvent
+    data class Failure(val kind: BackupUiFailure) : BackupUiEvent
+
+    /** Файл не принят как бэкап, и [reason] говорит почему — например, его сделала более новая версия. */
+    data class BackupRejected(val reason: BackupFormatReason) : BackupUiEvent
+
+    /** Таблицу импортировать нельзя, и [reason] говорит почему — пользователь может выбрать другой файл. */
+    data class XlsxRejected(val reason: XlsxImportReason) : BackupUiEvent
 
     /** Таблица прочитана, но ещё не записана: показать разбор и спросить подтверждения. */
     data class XlsxPreviewReady(val preview: XlsxImportPreview) : BackupUiEvent
     data class XlsxImportDone(val result: XlsxImportResult) : BackupUiEvent
+}
+
+enum class BackupUiFailure {
+    DELETE_JOURNAL,
+    SAVE_BACKUP,
+    IMPORT_BACKUP,
+    IMPORT_XLSX,
 }
 
 class JournalListViewModel(
@@ -50,6 +64,7 @@ class JournalListViewModel(
     private val xlsxImportInteractor: XlsxImportInteractor,
     private val deleteJournalInteractor: DeleteJournalInteractor,
     private val detectFileType: (Uri) -> ImportFileType,
+    private val appLog: AppLog,
 ) : ViewModel() {
     val journals: StateFlow<List<JournalWithStats>> = journalRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -77,7 +92,7 @@ class JournalListViewModel(
                 deleteJournalInteractor.delete(journalId)
             } catch (e: Exception) {
                 Log.e(TAG, "deleteJournal failed: $journalId", e)
-                _events.emit(BackupUiEvent.DeleteFailed(e.message ?: "Не удалось удалить журнал"))
+                _events.emit(BackupUiEvent.Failure(BackupUiFailure.DELETE_JOURNAL))
             } finally {
                 _busy.value = false
             }
@@ -95,7 +110,7 @@ class JournalListViewModel(
                 _events.emit(BackupUiEvent.BackupDone(result.skippedPhotoFiles.size))
             } catch (e: Exception) {
                 Log.e(TAG, "backup failed", e)
-                _events.emit(BackupUiEvent.BackupFailed(e.message ?: "Не удалось сохранить бэкап"))
+                _events.emit(BackupUiEvent.Failure(BackupUiFailure.SAVE_BACKUP))
             } finally {
                 _busy.value = false
             }
@@ -114,24 +129,35 @@ class JournalListViewModel(
             _busy.value = true
             try {
                 when (detectFileType(uri)) {
-                    ImportFileType.XLSX -> _events.emit(BackupUiEvent.XlsxPreviewReady(xlsxImportInteractor.preview(uri)))
+                    ImportFileType.XLSX -> _events.emit(previewXlsx(uri))
                     // Неопознанный файл ведём по пути бэкапа: он и объяснит, что с ним не так.
                     ImportFileType.BACKUP, ImportFileType.UNKNOWN ->
                         _events.emit(BackupUiEvent.ImportDone(importInteractor.import(uri)))
                 }
-            } catch (e: XlsxImportException) {
-                Log.e(TAG, "xlsx import failed", e)
-                _events.emit(BackupUiEvent.ImportFailed(e.message ?: "Не удалось прочитать таблицу"))
             } catch (e: BackupFormatException) {
-                Log.e(TAG, "import failed: bad format", e)
-                _events.emit(BackupUiEvent.ImportFailed(e.message ?: "Некорректный файл бэкапа"))
+                appLog.w(TAG, "backup rejected: ${e.reason}", e)
+                _events.emit(BackupUiEvent.BackupRejected(e.reason))
             } catch (e: Exception) {
-                Log.e(TAG, "import failed", e)
-                _events.emit(BackupUiEvent.ImportFailed(e.message ?: "Не удалось импортировать бэкап"))
+                appLog.e(TAG, "import failed", e)
+                _events.emit(BackupUiEvent.Failure(BackupUiFailure.IMPORT_BACKUP))
             } finally {
                 _busy.value = false
             }
         }
+    }
+
+    /**
+     * Разбор таблицы на подтверждение. Её сбои ловятся здесь, а не общим catch в [importFrom]: там
+     * неожиданное исключение показалось бы провалом бэкапа, которого пользователь не выбирал.
+     */
+    private suspend fun previewXlsx(uri: Uri): BackupUiEvent = try {
+        BackupUiEvent.XlsxPreviewReady(xlsxImportInteractor.preview(uri))
+    } catch (e: XlsxImportException) {
+        appLog.w(TAG, "xlsx import rejected: ${e.reason}", e)
+        BackupUiEvent.XlsxRejected(e.reason)
+    } catch (e: Exception) {
+        appLog.e(TAG, "xlsx preview failed", e)
+        BackupUiEvent.Failure(BackupUiFailure.IMPORT_XLSX)
     }
 
     /** Пользователь посмотрел разбор таблицы и согласился — только теперь пишем в БД. */
@@ -142,8 +168,8 @@ class JournalListViewModel(
             try {
                 _events.emit(BackupUiEvent.XlsxImportDone(xlsxImportInteractor.apply(preview)))
             } catch (e: Exception) {
-                Log.e(TAG, "xlsx import failed", e)
-                _events.emit(BackupUiEvent.ImportFailed(e.message ?: "Не удалось импортировать таблицу"))
+                appLog.e(TAG, "xlsx import failed", e)
+                _events.emit(BackupUiEvent.Failure(BackupUiFailure.IMPORT_XLSX))
             } finally {
                 _busy.value = false
             }

@@ -322,7 +322,7 @@ class XlsxImportPlannerTest {
         )
 
         val error = assertThrows { plan(sheet) }
-        assertTrue(error.message!!.contains("даты с годом"))
+        assertEquals(XlsxImportReason.NO_DATES_WITH_YEAR, error.reason)
     }
 
     @Test
@@ -333,7 +333,7 @@ class XlsxImportPlannerTest {
         )
 
         val error = assertThrows { plan(sheet) }
-        assertTrue(error.message!!.contains("ни одной записи"))
+        assertEquals(XlsxImportReason.NO_RECORDS, error.reason)
     }
 
     /** Фото без байтов в архиве — не фото: эталон (docs/reference/iyun-xlsx) выглядит именно так. */
@@ -377,7 +377,7 @@ class XlsxImportPlannerTest {
             days = listOf(day(DATE, row(cell("", "", photo = PhotoRef("xl/media/i1.jpg", isPresent = false))))),
         )
         val error = assertThrows { plan(sheetWithoutBytes) }
-        assertTrue(error.message!!.contains("ни одной записи"))
+        assertEquals(XlsxImportReason.NO_RECORDS, error.reason)
     }
 
     // --- предпросмотр против записи ---------------------------------------------------------------
