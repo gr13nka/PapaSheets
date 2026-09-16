@@ -15,13 +15,21 @@ import ru.papasheets.matrixgrid.MatrixViewport
  * [android.content.SharedPreferences] по образцу [ru.papasheets.domain.export.ExportFolder]: три
  * float'а на журнал не стоят Room-сущности с миграцией.
  *
- * Чего этот стор НЕ помнит — вид (матрица/список), фильтр и порядок дат: они живут в
- * `JournalViewModel` и на запуске сбрасываются. Отсюда правило вызывающей стороны
+ * Чего этот стор НЕ помнит — вид (матрица/список) и фильтр: они живут в `JournalViewModel` и на
+ * запуске сбрасываются. Отсюда правило вызывающей стороны
  * ([JournalQuery.isDefaultMatrixLayout]): сохранять положение только в раскладке по умолчанию,
  * иначе восстановленный вьюпорт указывал бы на совсем другие строки.
  */
 class LastPlace(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    init {
+        if (!prefs.getBoolean("calendarRows", false)) {
+            val edit = prefs.edit().putBoolean("calendarRows", true)
+            prefs.all.keys.filter { it.startsWith(KEY_VIEWPORT_PREFIX) }.forEach { edit.remove(it) }
+            edit.apply()
+        }
+    }
 
     /** Журнал, который был открыт последним, или `null`, если журнал ещё ни разу не открывали. */
     fun journalId(): String? = prefs.getString(KEY_JOURNAL, null)

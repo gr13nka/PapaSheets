@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Upsert
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 import ru.papasheets.data.db.entity.JournalEntity
 
@@ -26,10 +27,30 @@ interface JournalDao {
         FROM journals j
         LEFT JOIN records r ON r.journalId = j.id
         GROUP BY j.id
-        ORDER BY j.year DESC, j.month DESC
+        ORDER BY j.year DESC, j.month DESC, j.createdAt DESC
         """,
     )
     fun observeAll(): Flow<List<JournalWithStats>>
+
+    @Query("UPDATE journals SET title = :title WHERE id = :id")
+    suspend fun rename(id: String, title: String)
+
+    @Query("DELETE FROM records WHERE journalId = :journalId")
+    suspend fun deleteRecords(journalId: String)
+
+    @Query("DELETE FROM field_defs WHERE journalId = :journalId")
+    suspend fun deleteFields(journalId: String)
+
+    @Query("DELETE FROM contractors WHERE journalId = :journalId")
+    suspend fun deleteGroups(journalId: String)
+
+    @Transaction
+    suspend fun deleteTable(journalId: String) {
+        deleteRecords(journalId)
+        deleteFields(journalId)
+        deleteGroups(journalId)
+        deleteById(journalId)
+    }
 
     @Query("SELECT * FROM journals WHERE id = :id")
     fun observeById(id: String): Flow<JournalEntity?>

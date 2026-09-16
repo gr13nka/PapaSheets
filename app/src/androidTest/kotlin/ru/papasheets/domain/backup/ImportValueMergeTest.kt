@@ -13,7 +13,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import ru.papasheets.data.DefaultSeed
 import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
 import ru.papasheets.data.db.TransactionRunner
@@ -61,7 +60,6 @@ class ImportValueMergeTest {
     fun setUp() {
         // inMemory + DefaultSeed: встроенные field_defs нужны как цель внешнего ключа record_values.
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
-            .addCallback(DefaultSeed.callback())
             .build()
         val transactionRunner = object : TransactionRunner {
             override suspend fun <T> run(block: suspend () -> T): T = db.withTransaction(block)
@@ -80,8 +78,13 @@ class ImportValueMergeTest {
         backupFile = File(context.cacheDir, "value-merge-test.psbackup")
         runBlocking {
             journalRepository.upsertFromBackup(JournalEntity(JOURNAL_ID, 2026, 7, "Июль 2026", 1))
+            BuiltInFields.ALL.forEach { spec ->
+                db.fieldDefDao().insert(ru.papasheets.data.db.entity.FieldDefEntity(spec.id, spec.title, spec.label,
+                    spec.orderIndex, false, false, spec.isRequired, spec.suggestFromHistory, spec.columnWidthDp,
+                    spec.maxLines, spec.showAtCompactLod, 0, JOURNAL_ID))
+            }
             contractorRepository.upsertFromBackup(
-                ContractorEntity(CONTRACTOR_ID, "Петров", "ПТР", 0, 0, false, 1),
+                ContractorEntity(CONTRACTOR_ID, "Петров", "ПТР", 0, 0, false, 1, JOURNAL_ID),
             )
         }
     }
@@ -157,7 +160,7 @@ class ImportValueMergeTest {
     private fun givenBackup(recordUpdatedAt: Long, values: List<Pair<String, String>>) {
         val data = BackupData(
             journals = listOf(BackupJournal(JOURNAL_ID, 2026, 7, "Июль 2026", 1)),
-            contractors = listOf(BackupContractor(CONTRACTOR_ID, "Петров", "ПТР", 0, 0, false, 1)),
+            contractors = listOf(BackupContractor(CONTRACTOR_ID, "Петров", "ПТР", 0, 0, false, 1, JOURNAL_ID)),
             records = listOf(
                 BackupRecord(
                     id = RECORD_ID, journalId = JOURNAL_ID, dateEpochDay = 100, contractorId = CONTRACTOR_ID,

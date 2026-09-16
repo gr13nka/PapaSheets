@@ -5,8 +5,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,19 +79,6 @@ class MatrixState(initial: MatrixViewport = MatrixViewport.Start) {
     private var viewportH = 0f
 
     /**
-     * «Обзор ли сейчас» — зум ближе к fit, чем к 1:1. Единственное состояние зума, которое МОЖНО читать
-     * в композиции (для метки кнопки «Месяц»/«1:1»): derived-значение флипается лишь на пороге обзора,
-     * а не каждый кадр пинча, поэтому рекомпозиция происходит редко, а не на каждом кадре зума.
-     */
-    val isOverview: Boolean by derivedStateOf {
-        // zoom читаем ПЕРВЫМ и всегда: иначе при geometry == null (первая композиция кнопки — рендерер
-        // ещё не рисовал кадр) derived вернулся бы без snapshot-зависимостей и «застыл» бы навсегда.
-        val z = zoom
-        val g = geometry ?: return@derivedStateOf false
-        z < (g.fitZoom(viewportW, viewportH) + 1f) / 2f
-    }
-
-    /**
      * Рендерер/жест публикуют контекст клампинга текущего кадра. Обычная запись полей — без
      * инвалидации draw.
      *
@@ -140,28 +125,11 @@ class MatrixState(initial: MatrixViewport = MatrixViewport.Start) {
      */
     fun viewport(): MatrixViewport = MatrixViewport(panX = panX, panY = panY, zoom = zoom)
 
-    /**
-     * Сбрасывает pan к началу мира на текущем зуме, отменяя любую текущую инерцию/анимацию. Нужен
-     * после перестройки раскладки, где старая позиция теряет смысл (например, разворот сортировки
-     * дат меняет порядок строк местами) — публичный вход для UI, в отличие от [setTransform].
-     */
-    fun jumpToStart() {
-        motionJob?.cancel()
-        setTransform(zoom, 0f, 0f)
-    }
-
     /** Клампит zoom по текущему контексту — нужен пивот-математике пинча, чтобы pan считался под тот же zoom, что запишется. */
     internal fun clampedZoom(zoom: Float): Float =
         geometry?.clampZoom(zoom, viewportW, viewportH) ?: zoom
 
-    /**
-     * Публичный вход для UI: анимированный тумблер «вся картина месяца» (fit) ↔ детальный зум (1:1) с
-     * фокусом в центре кадра. Тот же код-путь, что и double-tap ([toggleOverviewAt]) — кнопка topBar и
-     * жест ведут себя одинаково. Отменяет текущую инерцию/анимацию через общий [motionJob].
-     */
-    fun toggleOverview(scope: CoroutineScope) = toggleOverviewAt(scope, viewportW / 2f, viewportH / 2f)
-
-    /** Тумблер обзора с фокусом в точке (double-tap передаёт точку касания). */
+    /** Тумблер обзора с фокусом в точке (double-tap передаёт точку касания) — единственный вход в [animateToggleFit]. */
     internal fun toggleOverviewAt(scope: CoroutineScope, focusX: Float, focusY: Float) {
         motionJob?.cancel()
         motionJob = scope.launch { animateToggleFit(focusX, focusY) }

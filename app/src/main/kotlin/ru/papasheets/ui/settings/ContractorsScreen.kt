@@ -47,16 +47,16 @@ import ru.papasheets.ui.common.ContractorDialog
 private val ContractorRowHeight = 64.dp
 
 /**
- * Настройки → Подрядчики: список активных в порядке orderIndex с drag-reorder (перетаскивание за
- * ручку "≡"), архив — свёрнутая секция внизу. Порядок колонок матрицы следует orderIndex автоматически
- * ([ru.papasheets.domain.buildGridModel] сортирует по нему же).
+ * Настройки таблицы → Группы колонок: список активных в порядке orderIndex с drag-reorder
+ * (перетаскивание за ручку "≡"), архив — свёрнутая секция внизу. Порядок колонок матрицы следует
+ * orderIndex автоматически ([ru.papasheets.domain.buildGridModel] сортирует по нему же).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ContractorsScreen(onBack: () -> Unit) {
+fun ContractorsScreen(journalId: String, initialGroupId: String? = null, onBack: () -> Unit) {
     val graph = LocalAppGraph.current
     val viewModel: ContractorsViewModel = viewModel(
-        factory = viewModelFactory { initializer { ContractorsViewModel(graph.contractorRepository) } },
+        factory = viewModelFactory { initializer { ContractorsViewModel(journalId, graph.contractorRepository) } },
     )
     val contractors by viewModel.contractors.collectAsState()
     val active = remember(contractors) { contractors.filter { !it.isArchived }.sortedBy { it.orderIndex } }
@@ -65,6 +65,13 @@ fun ContractorsScreen(onBack: () -> Unit) {
     var showAddDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<ContractorEntity?>(null) }
     var archivedExpanded by remember { mutableStateOf(false) }
+    var initialOpened by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(contractors, initialGroupId) {
+        if (!initialOpened && initialGroupId != null && contractors.isNotEmpty()) {
+            editing = contractors.find { it.id == initialGroupId }
+            initialOpened = true
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -135,8 +142,8 @@ fun ContractorsScreen(onBack: () -> Unit) {
             initialShortName = "",
             titleRes = R.string.contractors_add_title,
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, shortName ->
-                viewModel.add(name, shortName)
+            onConfirm = { name, shortName, color ->
+                viewModel.add(name, shortName, color)
                 showAddDialog = false
             },
         )
@@ -146,10 +153,11 @@ fun ContractorsScreen(onBack: () -> Unit) {
         ContractorDialog(
             initialName = contractor.name,
             initialShortName = contractor.shortName,
+            initialColorIndex = contractor.colorIndex,
             titleRes = R.string.contractors_edit_title,
             onDismiss = { editing = null },
-            onConfirm = { name, shortName ->
-                viewModel.rename(contractor, name, shortName)
+            onConfirm = { name, shortName, color ->
+                viewModel.rename(contractor, name, shortName, color)
                 editing = null
             },
         )

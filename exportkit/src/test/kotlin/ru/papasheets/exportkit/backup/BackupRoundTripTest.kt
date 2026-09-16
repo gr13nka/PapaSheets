@@ -32,7 +32,7 @@ class BackupRoundTripTest {
         contractors = listOf(
             BackupContractor(
                 id = "c1", name = "Петров & \"Сыновья\"", shortName = "ПиС",
-                colorIndex = 0, orderIndex = 0, isArchived = false, createdAt = 1,
+                colorIndex = 0, orderIndex = 0, isArchived = false, createdAt = 1, journalId = "j1",
             ),
         ),
         records = listOf(
@@ -50,12 +50,12 @@ class BackupRoundTripTest {
             BackupFieldDef(
                 id = BuiltInFields.LOCATION_ID, title = "Л", label = "Локация",
                 orderIndex = 0, isArchived = false, isBuiltIn = true, isRequired = false,
-                suggestFromHistory = true, columnWidthDp = 56, maxLines = 2, showAtCompactLod = true, createdAt = 1,
+                suggestFromHistory = true, columnWidthDp = 56, maxLines = 2, showAtCompactLod = true, createdAt = 1, journalId = "j1",
             ),
             BackupFieldDef(
                 id = "f-custom", title = "ОБЪЁМ", label = "Объём & \"брутто\"",
                 orderIndex = 2, isArchived = true, isBuiltIn = false, isRequired = false,
-                suggestFromHistory = false, columnWidthDp = 80, maxLines = 1, showAtCompactLod = false, createdAt = 3,
+                suggestFromHistory = false, columnWidthDp = 80, maxLines = 1, showAtCompactLod = false, createdAt = 3, journalId = "j1",
             ),
         ),
         recordValues = listOf(
@@ -63,7 +63,7 @@ class BackupRoundTripTest {
             BackupRecordValue("r1", "f-custom", "12 м²"),
         ),
         fieldValueColors = listOf(
-            BackupFieldValueColor(BuiltInFields.WORK_ID, "Штукатурка", 3),
+            BackupFieldValueColor(BuiltInFields.LOCATION_ID, "Штукатурка", 3),
             // Значение с кавычками и амперсандом — ключ таблицы это текст, а не id.
             BackupFieldValueColor("f-custom", "12 м² & \"брутто\"", 7),
         ),

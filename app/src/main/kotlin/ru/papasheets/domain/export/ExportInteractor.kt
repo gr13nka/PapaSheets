@@ -40,8 +40,8 @@ class ExportInteractor(
     suspend fun export(journalId: String, format: ExportFormat): Unit = withContext(Dispatchers.IO) {
         val journal = requireNotNull(journalRepository.getById(journalId)) { "Журнал не найден: $journalId" }
         val records = recordRepository.observeByJournal(journalId).first()
-        val contractors = contractorRepository.observeAll().first()
-        val fields = fieldRepository.observeActive().first()
+        val contractors = contractorRepository.observeForJournal(journalId).first()
+        val fields = fieldRepository.observeActive(journalId).first()
 
         val photoIdCount = records.sumOf { it.record.photoIds.size }
         appLog.i(TAG, "экспорт начат: журнал=«${journal.title}» формат=$format записей=${records.size} фото=$photoIdCount")
@@ -54,7 +54,7 @@ class ExportInteractor(
         val snapshot = buildJournalSnapshot(journal.title, records, contractors, fields)
 
         // replace() уносит прежнюю версию в архив и открывает усекающий поток — см. ExportFolder.
-        exportFolder.replace(defaultFileName(journal.title, format), mimeType(format)).use { stream ->
+        exportFolder.replace(journalId, defaultFileName(journal.title, format), mimeType(format)).use { stream ->
             when (format) {
                 ExportFormat.CSV -> CsvWriter.write(snapshot, stream)
                 ExportFormat.XLSX_WITH_PHOTOS ->

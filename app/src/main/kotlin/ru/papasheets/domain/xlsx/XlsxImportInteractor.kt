@@ -76,7 +76,8 @@ class XlsxImportInteractor(
             val photoMetaByRecord = importPhotos(plan, preview.photoBytes)
 
             transactionRunner.run {
-                val journal = journalRepository.createOrGetJournal(plan.year, plan.month)
+                val journal = if (plan.journalExists) requireNotNull(journalRepository.getById(plan.journalId))
+                    else journalRepository.createJournal(plan.year, plan.month, preview.journalTitle, plan.journalId)
                 plan.newContractors.forEach { contractorRepository.insert(it) }
                 plan.newFields.forEach { fieldRepository.upsertFromBackup(it) }
                 photoMetaByRecord.values.flatten().forEach { photoStore.insertMetaIfAbsent(it) }
@@ -129,17 +130,22 @@ class XlsxImportInteractor(
      * Само сопоставление считает [XlsxImportPlanner] — здесь остаётся только то, ради чего нужны
      * `Context` и репозитории: человеческое название месяца и проверка, есть ли уже такой журнал.
      */
-    private suspend fun plan(sheet: ParsedSheet, file: File): XlsxImportPreview {
+    suspend fun retarget(preview: XlsxImportPreview, destinationJournalId: String?): XlsxImportPreview = withContext(Dispatchers.IO) {
+        plan(XlsxReader.read(preview.sourceFile), preview.sourceFile, destinationJournalId)
+    }
+
+    private suspend fun plan(sheet: ParsedSheet, file: File, destinationJournalId: String? = null): XlsxImportPreview {
         val plan = XlsxImportPlanner.plan(
             sheet = sheet,
-            existingContractors = contractorRepository.getAll(),
-            existingFields = fieldRepository.getAll(),
+            existingContractors = destinationJournalId?.let { contractorRepository.getForJournal(it) }.orEmpty(),
+            existingFields = destinationJournalId?.let { fieldRepository.getForJournal(it) }.orEmpty(),
             existingJournals = journalRepository.getAll(),
             now = System.currentTimeMillis(),
+            destinationJournalId = destinationJournalId,
         )
 
         return XlsxImportPreview(
-            journalTitle = monthTitle(LocalDate.of(plan.year, plan.month, 1)),
+            journalTitle = destinationJournalId?.let { journalRepository.getById(it)?.title } ?: monthTitle(LocalDate.of(plan.year, plan.month, 1)),
             plan = plan,
             sourceFile = file,
             photoBytes = { ref -> sheet.photoBytes(ref) },

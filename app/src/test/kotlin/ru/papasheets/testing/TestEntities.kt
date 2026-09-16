@@ -30,7 +30,7 @@ fun testField(
     maxLines = maxLines,
     showAtCompactLod = showAtCompactLod,
     createdAt = 0,
-)
+ journalId = "j1",)
 
 /**
  * Встроенные поля ровно такими, какими их заводит в БД `BuiltInFieldSeed` — на них проверяются
@@ -50,7 +50,7 @@ val builtInFields: List<FieldDefEntity> = BuiltInFields.ALL.map { spec ->
         maxLines = spec.maxLines,
         showAtCompactLod = spec.showAtCompactLod,
         createdAt = 0,
-    )
+     journalId = "j1",)
 }
 
 /** Запись со значениями; пустые значения не передаются — их и в БД не бывает (см. RecordValueEntity). */

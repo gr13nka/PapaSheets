@@ -47,6 +47,7 @@ data class BackupContractor(
     val orderIndex: Int,
     val isArchived: Boolean,
     val createdAt: Long,
+    val journalId: String = "",
 )
 
 @Serializable
@@ -115,6 +116,9 @@ data class BackupFieldDef(
     val maxLines: Int,
     val showAtCompactLod: Boolean,
     val createdAt: Long,
+    val journalId: String = "",
+    /** Missing definitions from early backups must not overwrite existing customization. */
+    val fallbackDefinition: Boolean = false,
 )
 
 /**

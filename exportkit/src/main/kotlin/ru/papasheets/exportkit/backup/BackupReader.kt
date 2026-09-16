@@ -59,7 +59,12 @@ object BackupReader {
 
         val finalManifest = manifest ?: throw BackupFormatException(BackupFormatReason.MissingManifest)
         val finalData = data ?: throw BackupFormatException(BackupFormatReason.MissingData)
-        return BackupContents(finalManifest, BackupUpgrade.toCurrent(finalManifest.formatVersion, finalData))
+        val current = try {
+            BackupUpgrade.toCurrent(finalManifest.formatVersion, finalData).also { it.validateOwnership() }
+        } catch (e: IllegalArgumentException) {
+            throw BackupFormatException(BackupFormatReason.CorruptData, e)
+        }
+        return BackupContents(finalManifest, current)
     }
 
     private fun photoIdFrom(entryName: String, prefix: String): String = entryName.removePrefix(prefix).removeSuffix(".jpg")

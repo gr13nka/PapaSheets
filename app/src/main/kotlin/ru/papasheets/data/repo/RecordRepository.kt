@@ -61,6 +61,7 @@ class RecordRepository(
         photoId: String?,
         photoId2: String?,
     ): String = transactionRunner.run {
+        validateScope(journalId, contractorId, values.keys)
         val now = System.currentTimeMillis()
         val id = UUID.randomUUID().toString()
         dao.insert(
@@ -87,6 +88,7 @@ class RecordRepository(
         photoId: String?,
         photoId2: String?,
     ) = transactionRunner.run {
+        validateScope(existing.journalId, contractorId, values.keys)
         dao.update(
             existing.copy(
                 dateEpochDay = dateEpochDay,
@@ -102,13 +104,25 @@ class RecordRepository(
     suspend fun delete(record: RecordEntity) = dao.delete(record)
 
     /** Пакетная вставка готовых записей одной транзакцией — используется генератором тестовых данных. */
-    suspend fun insertAll(records: List<RecordEntity>) = dao.insertAll(records)
+    suspend fun insertAll(records: List<RecordEntity>) = transactionRunner.run {
+        records.forEach { validateScope(it.journalId, it.contractorId, emptySet()) }
+        dao.insertAll(records)
+    }
 
     /** Значения готовых записей одной пачкой — тот же путь генератора тестовых данных. */
-    suspend fun insertValues(values: List<RecordValueEntity>) = valueDao.upsertAll(values)
+    suspend fun insertValues(values: List<RecordValueEntity>) = transactionRunner.run {
+        values.groupBy { it.recordId }.forEach { (id, rows) ->
+            val record = requireNotNull(dao.getById(id))
+            validateScope(record.journalId, record.contractorId, rows.map { it.fieldId }.toSet())
+        }
+        valueDao.upsertAll(values)
+    }
 
     /** Восстанавливает запись из бэкапа как есть (побеждающая версия уже решена [ru.papasheets.domain.backup.MergeRules]). */
-    suspend fun upsertFromBackup(record: RecordEntity) = dao.upsertFromBackup(record)
+    suspend fun upsertFromBackup(record: RecordEntity) {
+        validateScope(record.journalId, record.contractorId, emptySet())
+        dao.upsertFromBackup(record)
+    }
 
     /**
      * Значения записи, восстановленной из бэкапа: набор заменяется целиком — тем же путём, что и при
@@ -122,7 +136,14 @@ class RecordRepository(
     suspend fun replaceValuesFromBackup(recordId: String, values: List<RecordValueEntity>) =
         replaceValues(recordId, values.associate { it.fieldId to it.value })
 
+    private suspend fun validateScope(journalId: String, contractorId: String, fieldIds: Set<String>) {
+        require(dao.ownsGroup(journalId, contractorId) == 1) { "Group belongs to another table" }
+        require(fieldIds.isEmpty() || dao.ownedFieldCount(journalId, fieldIds.toList()) == fieldIds.size) { "Field belongs to another table" }
+    }
+
     private suspend fun replaceValues(recordId: String, values: Map<String, String>) {
+        val record = requireNotNull(dao.getById(recordId))
+        validateScope(record.journalId, record.contractorId, values.keys)
         valueDao.deleteForRecord(recordId)
         val rows = values.mapNotNull { (fieldId, raw) ->
             val value = raw.trim()

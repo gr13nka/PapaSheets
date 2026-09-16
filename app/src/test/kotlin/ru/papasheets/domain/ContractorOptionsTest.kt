@@ -12,7 +12,7 @@ class ContractorOptionsTest {
     private fun contractor(id: String, archived: Boolean = false) = ContractorEntity(
         id = id, name = "Подрядчик $id", shortName = id, colorIndex = 0, orderIndex = 0,
         isArchived = archived, createdAt = 0,
-    )
+     journalId = "j1",)
 
     @Test
     fun `create mode (no current contractor) returns only active`() {

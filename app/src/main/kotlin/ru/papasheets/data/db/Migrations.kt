@@ -149,8 +149,10 @@ object Migrations {
      * [AppDatabase] и тест цепочки берут его отсюда, поэтому забытая в сборке миграция валит тест,
      * а не телефон прораба, пропустившего пару версий.
      */
+    val MIGRATION_7_8: Migration = TableOwnershipMigration
+
     val ALL: Array<Migration> =
-        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
 }
 
 /**

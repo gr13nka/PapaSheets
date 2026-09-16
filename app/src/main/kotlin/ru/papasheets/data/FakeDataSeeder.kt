@@ -38,11 +38,14 @@ class FakeDataSeeder(
     private val fieldRepository: FieldRepository,
 ) {
     suspend fun seedAndGetJournalId(): String {
-        ensureContractors()
-        val journal = journalRepository.createOrGetJournal(FAKE_YEAR, FAKE_MONTH)
+        val journal = journalRepository.getAll().firstOrNull { it.title == "Render test" }
+            ?: journalRepository.createJournal(FAKE_YEAR, FAKE_MONTH, "Render test")
+        ensureContractors(journal.id)
+        if (fieldRepository.getForJournal(journal.id).isEmpty()) fieldRepository.create(journal.id,
+            ru.papasheets.data.repo.FieldDraft("Description", "Description", 168, 0, false, true, true))
         if (recordRepository.observeByJournal(journal.id).first().isNotEmpty()) return journal.id
 
-        val contractors = contractorRepository.observeActive().first().sortedBy { it.orderIndex }
+        val contractors = contractorRepository.observeForJournal(journal.id).first().filter { !it.isArchived }.sortedBy { it.orderIndex }
         val records = generateRecords(journal.id, contractors)
         recordRepository.insertAll(records)
         recordRepository.insertValues(generateValues(records))
@@ -54,7 +57,7 @@ class FakeDataSeeder(
      * подколонок, а не оставаться привязанной к двум встроенным полям.
      */
     private suspend fun generateValues(records: List<RecordEntity>): List<RecordValueEntity> {
-        val fields = fieldRepository.observeActive().first()
+        val fields = records.firstOrNull()?.let { fieldRepository.getForJournal(it.journalId) }.orEmpty()
         if (fields.isEmpty()) return emptyList()
         val random = Random(FAKE_YEAR)
         return records.flatMap { record ->
@@ -70,8 +73,8 @@ class FakeDataSeeder(
         }
     }
 
-    private suspend fun ensureContractors() {
-        val active = contractorRepository.observeActive().first()
+    private suspend fun ensureContractors(journalId: String) {
+        val active = contractorRepository.getForJournal(journalId).filter { !it.isArchived }
         if (active.size >= TARGET_CONTRACTORS) return
         val now = System.currentTimeMillis()
         var order = (active.maxOfOrNull { it.orderIndex } ?: -1) + 1
@@ -86,6 +89,7 @@ class FakeDataSeeder(
                     colorIndex = order,
                     orderIndex = order,
                     createdAt = now,
+                    journalId = journalId,
                 ),
             )
             order++

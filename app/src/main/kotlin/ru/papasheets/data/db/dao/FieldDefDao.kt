@@ -11,6 +11,15 @@ import ru.papasheets.data.db.entity.FieldDefEntity
 
 @Dao
 interface FieldDefDao {
+    @Query("SELECT * FROM field_defs WHERE journalId = :journalId ORDER BY orderIndex")
+    fun observeForJournal(journalId: String): Flow<List<FieldDefEntity>>
+
+    @Query("SELECT * FROM field_defs WHERE journalId = :journalId ORDER BY orderIndex")
+    suspend fun getForJournal(journalId: String): List<FieldDefEntity>
+
+    @Query("DELETE FROM field_defs WHERE journalId = :journalId")
+    suspend fun deleteForJournal(journalId: String)
+
     /** Все определения, включая архивные: отфильтровать дешевле, чем потерять поле из виду. */
     @Query("SELECT * FROM field_defs ORDER BY orderIndex")
     fun observeAll(): Flow<List<FieldDefEntity>>

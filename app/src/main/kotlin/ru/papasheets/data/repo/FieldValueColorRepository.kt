@@ -16,7 +16,7 @@ typealias FieldValueColors = Map<String, Map<String, Int>>
  * раскладывать список в карту у каждого из них означало бы делать это дважды и по-разному.
  */
 class FieldValueColorRepository(private val dao: FieldValueColorDao) {
-    fun observeAll(): Flow<FieldValueColors> = dao.observeAll().map { rows ->
+    fun observeForJournal(journalId: String): Flow<FieldValueColors> = dao.observeForJournal(journalId).map { rows ->
         rows.groupBy { it.fieldId }.mapValues { (_, forField) ->
             forField.associate { it.value to it.colorIndex }
         }

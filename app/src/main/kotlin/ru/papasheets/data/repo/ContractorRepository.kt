@@ -1,19 +1,17 @@
 package ru.papasheets.data.repo
 
 import java.util.UUID
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import ru.papasheets.data.db.dao.ContractorDao
 import ru.papasheets.data.db.entity.ContractorEntity
 
 /**
- * Подрядчики: глобальный пул, порядок и цвет — политика этого класса, не UI. [ContractorsScreen]
+ * Группы выбранной таблицы: порядок и цвет — политика этого класса, не UI. [ContractorsScreen]
  * (ui/settings) видит только команды create/rename/setArchived/reorder, не генерацию id/orderIndex/colorIndex.
  */
 class ContractorRepository(private val dao: ContractorDao) {
-    fun observeActive(): Flow<List<ContractorEntity>> = dao.observeActive()
-
-    fun observeAll(): Flow<List<ContractorEntity>> = dao.observeAll()
+    fun observeForJournal(journalId: String) = dao.observeForJournal(journalId)
+    suspend fun getForJournal(journalId: String) = dao.getForJournal(journalId)
 
     suspend fun getById(id: String): ContractorEntity? = dao.getById(id)
 
@@ -31,17 +29,18 @@ class ContractorRepository(private val dao: ContractorDao) {
      * @return id заведённого подрядчика — форма записи выбирает его сразу после создания, а искать
      * себя же по имени в списке ненадёжно (имена не уникальны).
      */
-    suspend fun create(name: String, shortName: String): String {
-        val all = dao.observeAll().first()
+    suspend fun create(journalId: String, name: String, shortName: String, colorIndex: Int? = null): String {
+        val all = dao.getForJournal(journalId)
         val nextOrder = (all.maxOfOrNull { it.orderIndex } ?: -1) + 1
         val nextColor = (all.maxOfOrNull { it.colorIndex } ?: -1) + 1
         val id = UUID.randomUUID().toString()
         dao.insert(
             ContractorEntity(
                 id = id,
+                journalId = journalId,
                 name = name,
                 shortName = shortName,
-                colorIndex = nextColor,
+                colorIndex = colorIndex ?: nextColor,
                 orderIndex = nextOrder,
                 createdAt = System.currentTimeMillis(),
             ),
@@ -49,8 +48,8 @@ class ContractorRepository(private val dao: ContractorDao) {
         return id
     }
 
-    suspend fun rename(contractor: ContractorEntity, name: String, shortName: String) =
-        dao.update(contractor.copy(name = name, shortName = shortName))
+    suspend fun rename(contractor: ContractorEntity, name: String, shortName: String, colorIndex: Int = contractor.colorIndex) =
+        dao.update(contractor.copy(name = name, shortName = shortName, colorIndex = colorIndex))
 
     /** Архив вместо удаления — на подрядчике могут быть записи (см. spec, схема Room). */
     suspend fun setArchived(contractor: ContractorEntity, archived: Boolean) =
@@ -63,12 +62,4 @@ class ContractorRepository(private val dao: ContractorDao) {
     /** Восстанавливает подрядчика из бэкапа как есть (id/поля уже решены [ru.papasheets.domain.backup.MergeRules]). */
     suspend fun upsertFromBackup(contractor: ContractorEntity) = dao.upsertFromBackup(contractor)
 
-    /**
-     * Стирает весь пул подрядчиков — узкий путь для [ru.papasheets.domain.backup.ImportInteractor]:
-     * восстановление бэкапа на нетронутом устройстве (ни одного журнала/записи) находит здесь только
-     * одноразовую заглушку [ru.papasheets.data.DefaultSeed], которую безопасно заменить целиком, а не
-     * сливать по id — иначе те же 5 подрядчиков задваивались бы под новыми UUID сида. Не для общего
-     * использования (не проверяет ссылки от записей).
-     */
-    suspend fun deleteAll() = dao.deleteAll()
 }

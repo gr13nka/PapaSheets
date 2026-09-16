@@ -40,6 +40,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,7 +88,7 @@ import ru.papasheets.ui.common.ColorSwatchButton
 import ru.papasheets.ui.common.ContractorDialog
 import ru.papasheets.ui.common.formInsets
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun RecordSheet(
     mode: RecordSheetMode,
@@ -118,6 +126,16 @@ fun RecordSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    var targetApplied by rememberSaveable(viewModelKey, mode.target) { mutableStateOf(false) }
+    val photoPosition = remember { BringIntoViewRequester() }
+    LaunchedEffect(state.recordLoaded, state.fieldsLoaded, mode.target) {
+        if (!targetApplied && state.recordLoaded && state.fieldsLoaded && mode.target.photoSlot != null) {
+            withFrameNanos { }
+            photoPosition.bringIntoView()
+            targetApplied = true
+        }
+    }
 
     fun closeSheet(after: () -> Unit) {
         scope.launch { sheetState.hide() }.invokeOnCompletion { after() }
@@ -314,8 +332,8 @@ fun RecordSheet(
                     initialShortName = "",
                     titleRes = R.string.contractors_add_title,
                     onDismiss = { showNewContractorDialog = false },
-                    onConfirm = { name, shortName ->
-                        viewModel.createContractor(name, shortName)
+                    onConfirm = { name, shortName, color ->
+                        viewModel.createContractor(name, shortName, color)
                         showNewContractorDialog = false
                     },
                 )
@@ -323,7 +341,19 @@ fun RecordSheet(
 
             state.fields.forEach { field ->
                 key(field.id) {
+                    val focus = remember { FocusRequester() }
+                    val position = remember { BringIntoViewRequester() }
+                    LaunchedEffect(state.recordLoaded, field.id, mode.target) {
+                        if (!targetApplied && state.recordLoaded && mode.target.fieldId == field.id) {
+                            withFrameNanos { }
+                            focus.requestFocus()
+                            position.bringIntoView()
+                            keyboard?.show()
+                            targetApplied = true
+                        }
+                    }
                     FieldInput(
+                        inputModifier = Modifier.focusRequester(focus).bringIntoViewRequester(position),
                         field = field,
                         value = state.valueOf(field.id),
                         suggestions = state.suggestionsFor(field.id),
@@ -338,7 +368,7 @@ fun RecordSheet(
 
             // Слоты фото: заполненные плюс один пустой «добавить», пока не упёрлись в потолок.
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().bringIntoViewRequester(photoPosition),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 for (slot in 0 until state.visiblePhotoSlots) {
@@ -446,6 +476,7 @@ private fun FieldInput(
     onValueChange: (String) -> Unit,
     onSuggestionPicked: (String) -> Unit,
     onColorPicked: (Int?) -> Unit,
+    inputModifier: Modifier = Modifier,
 ) {
     var showColorPicker by remember { mutableStateOf(false) }
     // По верху: поле «Вида работ» растёт на три строки, и кружок, вставший по центру такого поля,
@@ -456,7 +487,7 @@ private fun FieldInput(
         verticalAlignment = Alignment.Top,
     ) {
         Box(modifier = Modifier.weight(1f)) {
-            FieldValueInput(field, value, suggestions, isError, colorOf, onValueChange, onSuggestionPicked)
+            FieldValueInput(field, value, suggestions, isError, colorOf, onValueChange, onSuggestionPicked, inputModifier)
         }
         ColorSwatchButton(
             colorIndex = colorOf(value),
@@ -489,9 +520,10 @@ private fun FieldValueInput(
     colorOf: (String) -> Int?,
     onValueChange: (String) -> Unit,
     onSuggestionPicked: (String) -> Unit,
+    inputModifier: Modifier = Modifier,
 ) {
     if (!field.suggestFromHistory) {
-        FieldTextField(field, value, isError, onValueChange, Modifier.fillMaxWidth())
+        FieldTextField(field, value, isError, onValueChange, inputModifier.fillMaxWidth())
         return
     }
     var expanded by remember { mutableStateOf(false) }
@@ -505,7 +537,7 @@ private fun FieldValueInput(
                 onValueChange(it)
                 expanded = true
             },
-            modifier = Modifier
+            modifier = inputModifier
                 .menuAnchor(MenuAnchorType.PrimaryEditable)
                 .fillMaxWidth(),
         )

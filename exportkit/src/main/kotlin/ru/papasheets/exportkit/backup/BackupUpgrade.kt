@@ -31,6 +31,7 @@ internal object BackupUpgrade {
         // Шага v5 → v6 нет по той же причине: v6 добавила цвета значений отдельным списком со
         // значением по умолчанию (`BackupData.fieldValueColors`). Пустой список — верный ответ для
         // старого файла: цвет значению там назначить было негде.
+        if (formatVersion < 7) result = LegacyTableStructure.upgrade(result)
         return result
     }
 

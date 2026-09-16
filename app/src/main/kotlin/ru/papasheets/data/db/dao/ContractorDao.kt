@@ -10,6 +10,15 @@ import ru.papasheets.data.db.entity.ContractorEntity
 
 @Dao
 interface ContractorDao {
+    @Query("SELECT * FROM contractors WHERE journalId = :journalId ORDER BY orderIndex")
+    fun observeForJournal(journalId: String): Flow<List<ContractorEntity>>
+
+    @Query("SELECT * FROM contractors WHERE journalId = :journalId ORDER BY orderIndex")
+    suspend fun getForJournal(journalId: String): List<ContractorEntity>
+
+    @Query("DELETE FROM contractors WHERE journalId = :journalId")
+    suspend fun deleteForJournal(journalId: String)
+
     @Query("SELECT * FROM contractors WHERE isArchived = 0 ORDER BY orderIndex")
     fun observeActive(): Flow<List<ContractorEntity>>
 

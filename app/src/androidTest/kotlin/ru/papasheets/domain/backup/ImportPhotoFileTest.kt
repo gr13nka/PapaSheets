@@ -17,7 +17,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import ru.papasheets.data.DefaultSeed
 import ru.papasheets.data.MonthTitleFormatter
 import ru.papasheets.data.db.AppDatabase
 import ru.papasheets.data.db.TransactionRunner
@@ -58,7 +57,6 @@ class ImportPhotoFileTest {
     @Before
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
-            .addCallback(DefaultSeed.callback())
             .build()
         val transactionRunner = object : TransactionRunner {
             override suspend fun <T> run(block: suspend () -> T): T = db.withTransaction(block)

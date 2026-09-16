@@ -38,8 +38,8 @@ class DayListViewModel(
 
     val dayGroups: StateFlow<List<DayGroup>> = combine(
         recordRepository.observeByJournal(journalId),
-        contractorRepository.observeAll(),
-        fieldRepository.observeActive(),
+        contractorRepository.observeForJournal(journalId),
+        fieldRepository.observeActive(journalId),
     ) { records, contractors, fields ->
         val contractorsById = contractors.associateBy { it.id }
         // observeByJournal уже отсортирован по dateEpochDay DESC, createdAt ASC — groupBy сохраняет этот порядок.

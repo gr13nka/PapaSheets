@@ -38,7 +38,7 @@ class LightboxViewModel(
         viewModelScope.launch {
             val record = recordRepository.getWithValues(recordId) ?: return@launch
             val contractor = contractorRepository.getById(record.record.contractorId)
-            val fields = fieldRepository.observeActive().first()
+            val fields = fieldRepository.observeActive(record.record.journalId).first()
             _uiState.update {
                 it.copy(
                     // Слот вне диапазона (запись потеряла фото, пока лайтбокс открывался) → первое, если есть.

@@ -63,7 +63,7 @@ class XlsxImportPlannerTest {
         colorIndex = colorIndex,
         orderIndex = orderIndex,
         createdAt = 0,
-    )
+     journalId = "j1",)
 
     /** Один день, один подрядчик, одна заполненная запись — минимум, на котором план вообще строится. */
     private fun singleRecordSheet(
@@ -80,8 +80,9 @@ class XlsxImportPlannerTest {
         sheet: ParsedSheet,
         contractors: List<ContractorEntity> = emptyList(),
         fields: List<FieldDefEntity> = builtInFields,
-        journals: List<JournalEntity> = emptyList(),
-    ) = XlsxImportPlanner.plan(sheet, contractors, fields, journals, NOW)
+        journals: List<JournalEntity> = listOf(JournalEntity("j1", 2026, 7, "Target", 0)),
+        destination: String? = "j1",
+    ) = XlsxImportPlanner.plan(sheet, contractors, fields, journals, NOW, destination)
 
     // --- подрядчики -----------------------------------------------------------------------------
 
@@ -250,7 +251,7 @@ class XlsxImportPlannerTest {
     }
 
     @Test
-    fun `an existing journal for that month is reused`() {
+    fun `the explicitly selected journal is reused`() {
         val existing = JournalEntity(id = "j1", year = 2026, month = 7, title = "Июль 2026", createdAt = 0)
 
         val result = plan(singleRecordSheet("Оконщики"), journals = listOf(existing))
@@ -259,10 +260,10 @@ class XlsxImportPlannerTest {
     }
 
     @Test
-    fun `a journal for another month does not count as existing`() {
+    fun `new table destination never implicitly reuses a journal`() {
         val other = JournalEntity(id = "j1", year = 2026, month = 6, title = "Июнь 2026", createdAt = 0)
 
-        val result = plan(singleRecordSheet("Оконщики"), journals = listOf(other))
+        val result = plan(singleRecordSheet("Оконщики"), journals = listOf(other), destination = null)
 
         assertFalse(result.journalExists)
     }

@@ -16,8 +16,8 @@ import ru.papasheets.exportkit.xlsx.Widths
 
 /**
  * [JournalSnapshot] для экспорта — раскладка колонок, полей и строк ровно та же, что и в матрице
- * ([buildGridModel]): дни всегда по возрастанию (бумажный журнал читается сверху вниз, независимо
- * от тумблера сортировки в UI), порядок подрядчиков — активные по orderIndex + архивные-с-записями
+ * ([buildGridModel]): дни всегда по возрастанию (бумажный журнал читается сверху вниз), порядок
+ * подрядчиков — активные по orderIndex + архивные-с-записями
  * в конец. Никакой отдельной логики раскладки здесь нет — только перевод [ru.papasheets.matrixgrid.GridModel]
  * в формат, который понимает exportkit (без recordId, с готовой строкой даты и геометрией в единицах Excel).
  *
@@ -37,7 +37,7 @@ fun buildJournalSnapshot(
     // Без цветов значений намеренно: xlsx их не несёт. Заливок в StylesXml нет вовсе (spec, M6), а
     // тесты писателя — побайтовый регресс-гейт. Цвет — способ читать матрицу на телефоне, и в файле
     // для заказчика ему делать нечего.
-    val grid = buildGridModel(records, contractors, fields, valueColors = emptyMap(), sortDesc = false)
+    val grid = buildGridModel(records, contractors, fields, valueColors = emptyMap())
 
     val days = ArrayList<SnapshotDay>()
     var index = 0

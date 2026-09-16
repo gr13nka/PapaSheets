@@ -272,7 +272,7 @@ class MatrixGeometryTest {
 
         // Точки в клампленных шапке/колонке дат — не тело.
         assertTrue(g.hitTest(40f, 80f, 0f, 0f, zoom) is MatrixHit.Other) // x < dateColW
-        assertTrue(g.hitTest(200f, 30f, 0f, 0f, zoom) is MatrixHit.Other) // y < headerH
+        assertTrue(g.hitTest(200f, 30f, 0f, 0f, zoom) is MatrixHit.GroupHeader) // y < headerH
 
         // Точка в теле: worldX=30 → группа 0 (groupPx=59.2), worldY=20 → строка 1 (rowPx=15.2).
         val body = g.hitTest(98f, 80f, 0f, 0f, zoom)
@@ -322,13 +322,26 @@ class MatrixGeometryTest {
     }
 
     @Test
-    fun photoTilesGiveOneCenteredBoxOrTwoSideBySide() {
+    fun headersAndTextCellsIdentifyTheSameFieldAfterScrolling() {
+        val g = bigGeometry()
+        val zoom = 1f
+        val pan = g.groupW / 2
+        val x = g.groupScreenLeft(1, pan, zoom) + g.fieldLeft(1) + g.fieldWidth(1) / 2
+        assertEquals(MatrixHit.GroupHeader(1), g.hitTest(x, g.nameRowH(zoom) / 2, pan, 0f, zoom))
+        assertEquals(MatrixHit.FieldHeader(1), g.hitTest(x, g.nameRowH(zoom) + g.subHeaderH(zoom) / 2, pan, 0f, zoom))
+        val cell = g.hitTest(x, g.headerH(zoom) + 5f, pan, 0f, zoom) as MatrixHit.Body
+        assertEquals(1, cell.group)
+        assertEquals(1, cell.fieldIndex)
+    }
+
+    @Test
+    fun photoTilesReserveTheSecondSlotBeforeItIsFilled() {
         val g = bigGeometry() // density 2: photoColW=144, photoBoxPx=128, photoPadX=8, cellPad=12
 
         val single = g.photoTiles(1).single()
         assertEquals(8f, single.left, 0.01f)
         assertEquals(12f, single.top, 0.01f)
-        assertEquals(128f, single.size, 0.01f)
+        assertEquals(60f, single.size, 0.01f)
 
         // Два бокса делят подколонку поровну с зазором photoPadX: size=(144-8-8-8)/2=60.
         val pair = g.photoTiles(2)

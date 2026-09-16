@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 /** Один журнал = один календарный месяц. */
 @Entity(
     tableName = "journals",
-    indices = [Index(value = ["year", "month"], unique = true)],
+    indices = [Index(value = ["year", "month"], unique = false)],
 )
 data class JournalEntity(
     @PrimaryKey val id: String,

@@ -14,14 +14,16 @@ import java.time.LocalDate
  * [Create.contractorId] — предзаполнение подрядчика при создании из пустого слота матрицы (M3).
  */
 sealed interface RecordSheetMode {
+    val target: ru.papasheets.matrixgrid.MatrixCellTarget
     data class Create(
         val journalId: String,
         val defaultDate: LocalDate,
         val sessionId: String,
         val contractorId: String? = null,
+        override val target: ru.papasheets.matrixgrid.MatrixCellTarget = ru.papasheets.matrixgrid.MatrixCellTarget(),
     ) : RecordSheetMode
 
-    data class Edit(val recordId: String) : RecordSheetMode
+    data class Edit(val recordId: String, override val target: ru.papasheets.matrixgrid.MatrixCellTarget = ru.papasheets.matrixgrid.MatrixCellTarget()) : RecordSheetMode
 }
 
 /**
@@ -33,9 +35,9 @@ val RecordSheetModeSaver = listSaver<RecordSheetMode?, Any>(
         when (mode) {
             null -> emptyList()
             is RecordSheetMode.Create -> listOf(
-                "create", mode.journalId, mode.defaultDate.toEpochDay(), mode.sessionId, mode.contractorId ?: "",
+                "create", mode.journalId, mode.defaultDate.toEpochDay(), mode.sessionId, mode.contractorId ?: "", mode.target.fieldId ?: "", mode.target.photoSlot ?: -1,
             )
-            is RecordSheetMode.Edit -> listOf("edit", mode.recordId)
+            is RecordSheetMode.Edit -> listOf("edit", mode.recordId, mode.target.fieldId ?: "", mode.target.photoSlot ?: -1)
         }
     },
     restore = { saved ->
@@ -47,8 +49,9 @@ val RecordSheetModeSaver = listSaver<RecordSheetMode?, Any>(
                 defaultDate = LocalDate.ofEpochDay(saved[2] as Long),
                 sessionId = saved[3] as String,
                 contractorId = (saved[4] as String).ifEmpty { null },
+                target = ru.papasheets.matrixgrid.MatrixCellTarget((saved.getOrNull(5) as? String)?.ifEmpty { null }, (saved.getOrNull(6) as? Int)?.takeIf { it >= 0 }),
             )
-            "edit" -> RecordSheetMode.Edit(saved[1] as String)
+            "edit" -> RecordSheetMode.Edit(saved[1] as String, ru.papasheets.matrixgrid.MatrixCellTarget((saved.getOrNull(2) as? String)?.ifEmpty { null }, (saved.getOrNull(3) as? Int)?.takeIf { it >= 0 }))
             else -> null
         }
     },

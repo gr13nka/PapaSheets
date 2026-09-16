@@ -16,20 +16,15 @@
     <string name="day_list_add_record">Добавить запись</string>
     <string name="day_list_empty">Пока нет записей</string>
 
-    <string name="matrix_zoom_overview">Месяц</string>
-    <string name="matrix_zoom_detail">1:1</string>
-    <string name="matrix_sort_desc">↓ даты</string>
-    <string name="matrix_sort_asc">↑ даты</string>
     <string name="journal_view_matrix">Матрица</string>
     <string name="journal_view_list">Список</string>
     <string name="journal_column_date">Дата</string>
-    <string name="journal_column_contractor">Подрядчик</string>
+    <string name="journal_column_contractor">Группа</string>
     <string name="journal_filter">Фильтр</string>
     <string name="journal_filter_active">Фильтр (%d)</string>
     <string name="journal_filter_clear">Сбросить</string>
     <string name="journal_filter_search">Поиск по тексту</string>
     <string name="journal_filter_empty">Под фильтр не попала ни одна запись</string>
-    <string name="matrix_menu_action">Ещё</string>
     <string name="matrix_menu_export">Экспорт</string>
 
     <string name="export_dialog_title">Экспорт журнала</string>
@@ -49,13 +44,17 @@
     <string name="settings_language_system">Как в системе</string>
     <string name="settings_language_english">English</string>
     <string name="settings_language_russian">Русский</string>
-    <string name="settings_contractors">Подрядчики</string>
-    <string name="settings_contractors_hint">Большие колонки таблицы: добавить, переименовать, порядок</string>
-    <string name="settings_fields">Поля записи</string>
-    <string name="settings_fields_hint">Подколонки внутри подрядчика: Локация, Вид работ, свои</string>
+    <string name="settings_section_data">Данные</string>
+    <string name="settings_section_diagnostics">Диагностика</string>
+
+    <string name="table_settings_title">Настройки таблицы</string>
+    <string name="table_settings_shared_note">Изменения применяются только к этой таблице</string>
+    <string name="table_settings_column_groups">Группы колонок</string>
+    <string name="table_settings_column_groups_hint">Большие колонки таблицы: добавить, переименовать, порядок</string>
+    <string name="table_settings_group_fields">Колонки</string>
+    <string name="table_settings_group_fields_hint">Названия, порядок и отображение колонок этой таблицы</string>
 
     <string name="backup_menu_save">Сохранить бэкап</string>
-    <string name="backup_menu_import">Импорт бэкапа</string>
     <string name="backup_busy">Обрабатываем…</string>
     <string name="backup_saved">Бэкап сохранён</string>
     <plurals name="backup_saved_photos_skipped">
@@ -83,7 +82,7 @@
     <string name="import_result_title">Импорт завершён</string>
     <string name="import_result_row">%1$s — добавлено %2$d, обновлено %3$d, пропущено %4$d</string>
     <string name="import_result_journals">Журналы</string>
-    <string name="import_result_contractors">Подрядчики</string>
+    <string name="import_result_contractors">Группы</string>
     <string name="import_result_fields">Поля</string>
     <string name="import_result_presets">Готовые значения</string>
     <string name="import_result_records">Записи</string>
@@ -95,11 +94,11 @@
     <string name="xlsx_preview_journal_new">Будет создан журнал «%1$s»</string>
     <string name="xlsx_preview_journal_existing">Записи добавятся в журнал «%1$s»</string>
     <string name="xlsx_preview_totals">Дней: %1$d, записей: %2$d, фото: %3$d</string>
-    <string name="xlsx_preview_contractors_matched">Подрядчиков найдено среди существующих: %1$d</string>
-    <string name="xlsx_preview_contractors_new">Будет создано подрядчиков: %1$d (%2$s)</string>
+    <string name="xlsx_preview_contractors_matched">Групп найдено среди существующих: %1$d</string>
+    <string name="xlsx_preview_contractors_new">Будет создано групп: %1$d (%2$s)</string>
     <string name="xlsx_preview_fields_matched">Колонок легло на существующие поля: %1$d</string>
     <string name="xlsx_preview_fields_new">Будет создано полей: %1$d (%2$s)</string>
-    <string name="xlsx_preview_skipped_unnamed">Пропущено без названия: подрядчиков %1$d, колонок %2$d</string>
+    <string name="xlsx_preview_skipped_unnamed">Пропущено без названия: групп %1$d, колонок %2$d</string>
     <string name="xlsx_preview_confirm">Импортировать</string>
     <string name="xlsx_import_done">Импортировано в «%1$s»: %2$s, %3$s</string>
     <!-- «записей N» / «фото N» — подпись перед числом не согласуется с ним, форма одна на все количества. -->
@@ -127,8 +126,8 @@
 
     <string name="record_title_create">Новая запись</string>
     <string name="record_title_edit">Редактировать запись</string>
-    <string name="record_contractor_label">Подрядчик</string>
-    <string name="record_contractor_create">+ Создать нового подрядчика</string>
+    <string name="record_contractor_label">Группа</string>
+    <string name="record_contractor_create">+ Создать новую группу</string>
     <string name="record_contractor_archived">%1$s (архив)</string>
     <string name="color_picker_title">Цвет значения «%1$s»</string>
     <string name="color_picker_none">Без цвета</string>
@@ -149,31 +148,32 @@
 
     <string name="lightbox_close">Закрыть</string>
 
-    <string name="contractors_title">Подрядчики</string>
+    <string name="contractors_title">Группы колонок</string>
     <string name="contractors_archived_section">Архив (%d)</string>
     <string name="contractors_archive_action">В архив</string>
     <string name="contractors_unarchive_action">Вернуть</string>
-    <string name="contractors_rename_action">Изменить</string>
-    <string name="contractors_add_title">Новый подрядчик</string>
-    <string name="contractors_edit_title">Изменить подрядчика</string>
+    <string name="contractors_add_title">Новая группа</string>
+    <string name="contractors_edit_title">Изменить группу</string>
     <string name="contractors_name_label">Имя</string>
     <string name="contractors_short_name_label">Короткое имя (до 4 символов)</string>
-    <string name="contractors_empty">Пока нет подрядчиков</string>
+    <string name="contractors_empty">Пока нет групп</string>
 
     <string name="fields_title">Поля записи</string>
     <string name="fields_archived_section">Архив (%d)</string>
     <string name="fields_archive_action">В архив</string>
     <string name="fields_unarchive_action">Вернуть</string>
     <string name="fields_add_title">Новое поле</string>
-    <string name="fields_edit_title">Изменить поле</string>
     <string name="fields_label_label">Название в форме записи</string>
     <string name="fields_title_label">Подпись в шапке (коротко)</string>
-    <string name="fields_width_label">Ширина, dp</string>
-    <string name="fields_max_lines_label">Строк (0 — без ограничения)</string>
+    <string name="fields_width_label">Ширина</string>
+    <string name="fields_max_lines_label">Строк в ячейке</string>
+    <string name="fields_lines_all">Все</string>
     <string name="fields_required_label">Обязательное</string>
+    <string name="fields_required_hint">Кнопка «Сохранить» в записи напомнит, если поле пустое</string>
     <string name="fields_suggest_label">Подсказывать при вводе</string>
+    <string name="fields_suggest_hint">Предлагать значения из прошлых записей и заготовок</string>
     <string name="fields_compact_label">Показывать в сжатом виде</string>
-    <string name="fields_compact_hint">В сжатом виде («картина месяца») колонки узкие: там разборчивы одна-две, остальные только съедят место.</string>
+    <string name="fields_compact_hint">Текст колонки виден и при сильном отдалении таблицы</string>
     <string name="fields_presets_section">Готовые значения</string>
     <string name="fields_presets_disabled_hint">Подсказки выключены — эти значения предлагаться не будут.</string>
     <string name="fields_preset_new_label">Новое значение</string>
@@ -188,11 +188,20 @@
         <item quantity="many">%d стр.</item>
         <item quantity="other">%d стр.</item>
     </plurals>
-    <string name="fields_summary_head">«%1$s» · %2$d dp · %3$s</string>
+    <string name="fields_summary_head">«%1$s» · %2$s · %3$s</string>
     <string name="fields_flag_required">обязательное</string>
     <string name="fields_flag_suggest">подсказки</string>
     <string name="fields_flag_compact">в сжатом виде</string>
-    <string name="fields_no_active">Все поля в архиве: в журнале останутся только даты, подрядчики и фото.</string>
+    <string name="fields_no_active">Все поля в архиве: в журнале останутся только даты, группы и фото.</string>
+
+    <string name="column_width_narrow">Узкая</string>
+    <string name="column_width_medium">Средняя</string>
+    <string name="column_width_wide">Широкая</string>
+    <string name="column_width_extra_wide">Очень широкая</string>
+
+    <string name="group_settings_title">Колонки</string>
+    <string name="group_settings_add_field">+ Добавить поле</string>
+    <string name="group_preview_placeholder_group">Группа</string>
 
     <string-array name="month_names_nominative">
         <item>Январь</item><item>Февраль</item><item>Март</item><item>Апрель</item>
@@ -220,4 +229,26 @@
         <item quantity="many">%d записей</item>
         <item quantity="other">%d записи</item>
     </plurals>
+    <string name="table_new">Новая таблица</string>
+    <string name="table_name">Название таблицы</string>
+    <string name="table_structure">Структура</string>
+    <string name="table_simple">Простая таблица</string>
+    <string name="table_reuse">Использовать структуру другой таблицы</string>
+    <string name="table_copy_hint">Копируются колонки, группы, готовые значения и цвета. Записи и фото остаются в исходной таблице. Изменения здесь не затронут исходную таблицу.</string>
+    <string name="table_default_group">Общее</string>
+    <string name="table_default_description">Описание</string>
+    <string name="table_create">Создать таблицу</string>
+    <string name="table_create_failed">Не удалось создать таблицу. Попробуйте ещё раз.</string>
+    <string name="table_add_column">Добавить колонку</string>
+    <string name="table_add_group">Добавить группу</string>
+    <string name="table_more_settings">Дополнительные настройки</string>
+    <string name="table_columns_scope">Эти колонки повторяются в каждой группе этой таблицы.</string>
+    <string name="table_groups_hint">В каждой группе повторяются те же колонки. Группы могут обозначать разные бригады, участки или объекты.</string>
+    <string name="table_rename">Переименовать таблицу</string>
+    <string name="table_import_destination">Импортировать в</string>
+    <string name="table_import_new">Новую таблицу</string>
+    <string name="table_import_existing">Существующую таблицу</string>
+    <string name="table_short_heading">Короткий заголовок</string>
+    <string name="table_group_color">Цвет группы</string>
+    <string name="table_structure_failed">Не удалось сохранить изменение. Попробуйте ещё раз.</string>
 </resources>

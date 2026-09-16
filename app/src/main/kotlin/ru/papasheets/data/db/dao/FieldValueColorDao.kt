@@ -8,6 +8,9 @@ import ru.papasheets.data.db.entity.FieldValueColorEntity
 
 @Dao
 interface FieldValueColorDao {
+    @Query("SELECT c.* FROM field_value_colors c JOIN field_defs f ON f.id = c.fieldId WHERE f.journalId = :journalId")
+    fun observeForJournal(journalId: String): Flow<List<FieldValueColorEntity>>
+
     /**
      * Вся таблица разом, потоком. Потребителей двое — форма записи и матрица, — и обоим нужны цвета
      * не одного значения, а всех сразу: матрица красит тысячи ячеек в кадре. Строк тут столько,

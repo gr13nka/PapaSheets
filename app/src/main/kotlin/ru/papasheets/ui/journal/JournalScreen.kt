@@ -14,14 +14,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,7 +35,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -86,8 +83,9 @@ fun JournalScreen(
     journalId: String,
     onBack: () -> Unit,
     onOpenLightbox: (recordId: String, slot: Int) -> Unit,
-    onOpenContractors: () -> Unit,
-    onOpenFields: () -> Unit,
+    onOpenTableSettings: () -> Unit,
+    onEditColumn: (String) -> Unit,
+    onEditGroup: (String) -> Unit,
 ) {
     val graph = LocalAppGraph.current
     val viewModel: JournalViewModel = viewModel(
@@ -119,7 +117,6 @@ fun JournalScreen(
     val matrixState = rememberMatrixState(
         initial = remember(journalId) { lastPlace.viewportOf(journalId) ?: MatrixViewport.Start },
     )
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val localeTag = LocalConfiguration.current.locales.toLanguageTags()
 
@@ -147,7 +144,6 @@ fun JournalScreen(
         minimized = false
     }
     var recordPendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
-    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportDialog by rememberSaveable { mutableStateOf(false) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
 
@@ -157,8 +153,8 @@ fun JournalScreen(
 
     // Положение снимаем при уходе с экрана: ON_STOP — «домой» и переключение приложений (после него
     // процесс могут убить без предупреждения), onDispose — возврат на список журналов. Сохраняем
-    // только в раскладке по умолчанию: вид, фильтр и порядок дат запуск не переживают, и снятое под
-    // фильтром положение назавтра указывало бы на другие строки.
+    // только в раскладке по умолчанию: вид и фильтр запуск не переживают, и снятое под фильтром
+    // положение назавтра указывало бы на другие строки.
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentQuery = rememberUpdatedState(query)
     DisposableEffect(lifecycleOwner, journalId, matrixState) {
@@ -191,8 +187,18 @@ fun JournalScreen(
     // Стабильный экземпляр колбэков: детектор жестов в MatrixView не пересоздаётся на рекомпозиции,
     // поэтому его нельзя «кормить» новым объектом каждый кадр — иначе он держал бы устаревшие лямбды.
     val onOpenLightboxState = rememberUpdatedState(onOpenLightbox)
+    val onEditColumnState = rememberUpdatedState(onEditColumn)
+    val onEditGroupState = rememberUpdatedState(onEditGroup)
     val callbacks = remember {
         object : MatrixCallbacks {
+            override fun onGroupHeaderTap(groupId: String) { onEditGroupState.value(groupId) }
+            override fun onFieldHeaderTap(fieldId: String) { onEditColumnState.value(fieldId) }
+            override fun onCellTargetTap(recordId: String, target: ru.papasheets.matrixgrid.MatrixCellTarget) {
+                openSheet(RecordSheetMode.Edit(recordId, target))
+            }
+            override fun onEmptySlotTargetTap(dateEpochDay: Long, contractorId: String, target: ru.papasheets.matrixgrid.MatrixCellTarget) {
+                openSheet(RecordSheetMode.Create(journalId, LocalDate.ofEpochDay(dateEpochDay), UUID.randomUUID().toString(), contractorId, target))
+            }
             override fun onCellTap(recordId: String) {
                 openSheet(RecordSheetMode.Edit(recordId))
             }
@@ -220,9 +226,10 @@ fun JournalScreen(
 
     Scaffold(
         topBar = {
-            // Полоса режима отдельной строкой под шапкой, а не среди actions: в шапке уже четыре
-            // элемента, и втиснутый туда переключатель вида съел бы название журнала. Заодно вид и
-            // фильтр — два состояния всего экрана — стоят рядом и читаются как одна панель.
+            // Полоса режима отдельной строкой под шапкой, а не среди actions: в шапке уже три
+            // элемента (Назад, экспорт, настройки таблицы), и втиснутый туда переключатель вида съел
+            // бы название журнала. Заодно вид и фильтр — два состояния всего экрана — стоят рядом и
+            // читаются как одна панель.
             Column {
                 TopAppBar(
                     title = { Text(journal?.title ?: "") },
@@ -230,72 +237,18 @@ fun JournalScreen(
                         TextButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
                     },
                     actions = {
-                        // Сортировка дат и обзор — органы управления матрицы: в списке порядок задают
-                        // тапом по шапке столбца, а зума там нет вовсе.
-                        if (query.viewMode == ViewMode.MATRIX) {
-                            // Метка — текущий порядок дат сверху вниз (не целевой, в отличие от кнопки
-                            // обзора ниже): «↓» — новые сверху, «↑» — старые сверху. Перестройка раскладки
-                            // меняет порядок строк местами, поэтому pan сбрасывается к началу мира.
-                            TextButton(
-                                onClick = {
-                                    viewModel.toggleDateOrder()
-                                    matrixState.jumpToStart()
-                                },
-                            ) {
-                                Text(
-                                    stringResource(
-                                        if (query.sort.matrixDatesDesc) R.string.matrix_sort_desc
-                                        else R.string.matrix_sort_asc,
-                                    ),
-                                )
-                            }
-
-                            // Кнопка обзора: тот же код-путь, что double-tap. «Месяц» уводит в fit («вся
-                            // картина месяца»), «1:1» возвращает к детальному зуму. Метка следит за ярусом.
-                            if (content?.grid?.rows?.isNotEmpty() == true) {
-                                TextButton(onClick = { matrixState.toggleOverview(scope) }) {
-                                    Text(
-                                        stringResource(
-                                            if (matrixState.isOverview) R.string.matrix_zoom_detail
-                                            else R.string.matrix_zoom_overview,
-                                        ),
-                                    )
-                                }
-                            }
+                        IconButton(onClick = { showExportDialog = true }) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = stringResource(R.string.matrix_menu_export),
+                            )
                         }
-
-                        IconButton(onClick = { menuExpanded = true }) {
+                        // Настройка таблицы — отсюда же, из таблицы: искать её на экране списка
+                        // журналов неоткуда догадаться, когда правишь колонки прямо перед глазами.
+                        IconButton(onClick = onOpenTableSettings) {
                             Icon(
                                 Icons.Default.MoreVert,
-                                contentDescription = stringResource(R.string.matrix_menu_action),
-                            )
-                        }
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.matrix_menu_export)) },
-                                onClick = {
-                                    menuExpanded = false
-                                    showExportDialog = true
-                                },
-                            )
-                            HorizontalDivider()
-                            // Настройка таблицы — отсюда же, из таблицы: искать её на экране списка
-                            // журналов неоткуда догадаться, когда правишь колонки прямо перед глазами.
-                            MenuItemWithHint(
-                                title = stringResource(R.string.settings_contractors),
-                                hint = stringResource(R.string.settings_contractors_hint),
-                                onClick = {
-                                    menuExpanded = false
-                                    onOpenContractors()
-                                },
-                            )
-                            MenuItemWithHint(
-                                title = stringResource(R.string.settings_fields),
-                                hint = stringResource(R.string.settings_fields_hint),
-                                onClick = {
-                                    menuExpanded = false
-                                    onOpenFields()
-                                },
+                                contentDescription = stringResource(R.string.table_settings_title),
                             )
                         }
                     },
@@ -344,11 +297,13 @@ fun JournalScreen(
             }
         },
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            TableStructureActions(journalId)
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             val model = content
             when {
                 model == null -> CircularProgressIndicator()
-                model.isEmpty -> Text(
+                model.isEmpty && (query.viewMode == ViewMode.LIST || !query.filter.isEmpty) -> Text(
                     text = stringResource(
                         if (query.filter.isEmpty) R.string.day_list_empty else R.string.journal_filter_empty,
                     ),
@@ -373,6 +328,8 @@ fun JournalScreen(
                 )
             }
         }
+    }
+
     }
 
     if (showFilterSheet) {
@@ -496,30 +453,6 @@ private fun ModeBar(
             },
         )
     }
-}
-
-/**
- * Пункт меню с пояснением под названием.
- *
- * «Подрядчики» и «Поля» — слова из головы разработчика: по ним не видно, что первое задаёт большие
- * колонки таблицы, а второе — подколонки внутри каждой. Подпись снимает этот вопрос на месте,
- * вместо того чтобы заставлять зайти и посмотреть.
- */
-@Composable
-private fun MenuItemWithHint(title: String, hint: String, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = {
-            Column {
-                Text(title)
-                Text(
-                    text = hint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        onClick = onClick,
-    )
 }
 
 /** Сегодня — если журнал открыт на текущий месяц, иначе первое число месяца журнала (правило M1). */

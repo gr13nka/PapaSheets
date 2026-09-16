@@ -209,6 +209,15 @@ internal class MatrixRenderer(
                         }
                     }
 
+                    if (keys.size < MAX_PHOTOS_PER_CELL) {
+                        val tile = geometry.photoTiles(MAX_PHOTOS_PER_CELL)[keys.size]
+                        val center = Offset(tile.left + tile.size / 2, tile.top + tile.size / 2)
+                        val arm = tile.size * 0.16f
+                        drawRect(colors.contractor(colorIndex).copy(alpha = colors.emptyPhotoAlpha), Offset(tile.left, tile.top), Size(tile.size, tile.size))
+                        drawLine(colors.secondaryText, center - Offset(arm, 0f), center + Offset(arm, 0f), strokeWidth = 2f)
+                        drawLine(colors.secondaryText, center - Offset(0f, arm), center + Offset(0f, arm), strokeWidth = 2f)
+                    }
+
                     // Заливка подколонки цветом её значения — до текста, чтобы он лёг поверх.
                     //
                     // Рисуется на обоих ярусах и для ВСЕХ полей, включая скрытые на LOD1

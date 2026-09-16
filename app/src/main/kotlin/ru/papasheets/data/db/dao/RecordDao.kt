@@ -13,6 +13,12 @@ import ru.papasheets.data.db.entity.RecordWithValues
 
 @Dao
 interface RecordDao {
+    @Query("SELECT COUNT(*) FROM contractors WHERE id = :contractorId AND journalId = :journalId")
+    suspend fun ownsGroup(journalId: String, contractorId: String): Int
+
+    @Query("SELECT COUNT(*) FROM field_defs WHERE journalId = :journalId AND id IN (:fieldIds)")
+    suspend fun ownedFieldCount(journalId: String, fieldIds: List<String>): Int
+
     /** Отсортировано так, чтобы группировка по дате в UI сохраняла и порядок дат, и порядок внутри дня. */
     @Transaction
     @Query("SELECT * FROM records WHERE journalId = :journalId ORDER BY dateEpochDay DESC, createdAt ASC")

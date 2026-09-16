@@ -27,8 +27,8 @@ import ru.papasheets.photos.PhotoMeta
 fun JournalEntity.toBackup() = BackupJournal(id, year, month, title, createdAt)
 fun BackupJournal.toEntity() = JournalEntity(id, year, month, title, createdAt)
 
-fun ContractorEntity.toBackup() = BackupContractor(id, name, shortName, colorIndex, orderIndex, isArchived, createdAt)
-fun BackupContractor.toEntity() = ContractorEntity(id, name, shortName, colorIndex, orderIndex, isArchived, createdAt)
+fun ContractorEntity.toBackup() = BackupContractor(id, name, shortName, colorIndex, orderIndex, isArchived, createdAt, journalId)
+fun BackupContractor.toEntity() = ContractorEntity(id, name, shortName, colorIndex, orderIndex, isArchived, createdAt, journalId)
 
 /**
  * `BackupRecord.locationCode`/`workText` живут только в формате v1 и здесь не участвуют ни в одну
@@ -54,12 +54,12 @@ fun BackupFieldPreset.toEntity() = FieldPresetEntity(id, fieldId, code, orderInd
 
 fun FieldDefEntity.toBackup() = BackupFieldDef(
     id, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
-    suggestFromHistory, columnWidthDp, maxLines, showAtCompactLod, createdAt,
+    suggestFromHistory, columnWidthDp, maxLines, showAtCompactLod, createdAt, journalId,
 )
 
 fun BackupFieldDef.toEntity() = FieldDefEntity(
     id, title, label, orderIndex, isArchived, isBuiltIn, isRequired,
-    suggestFromHistory, columnWidthDp, maxLines, showAtCompactLod, createdAt,
+    suggestFromHistory, columnWidthDp, maxLines, showAtCompactLod, createdAt, journalId,
 )
 
 fun RecordValueEntity.toBackup() = BackupRecordValue(recordId, fieldId, value)

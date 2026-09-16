@@ -6,6 +6,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.time.LocalDate
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -101,6 +103,7 @@ data class RecordEditUiState(
  * отмена формы не должна портить уже сохранённую запись. Слотов два ([MAX_PHOTOS_PER_CELL]), и правило
  * «сирота — это фото, которого нет среди сохранённых» распространяется на оба разом ([originalPhotoIds]).
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class RecordEditViewModel(
     private val journalId: String?,
     private val recordId: String?,
@@ -136,6 +139,7 @@ class RecordEditViewModel(
      * [buildContractorOptions], даже если он тем временем архивирован. Не переезжает при выборе
      * пользователем другого подрядчика в форме — это личность ИСХОДНОЙ записи, а не текущий выбор.
      */
+    private val resolvedJournalId = MutableStateFlow(journalId)
     private val currentContractorId = MutableStateFlow<String?>(null)
 
     private var pendingCameraUri: String?
@@ -156,25 +160,26 @@ class RecordEditViewModel(
 
     init {
         viewModelScope.launch {
-            combine(contractorRepository.observeAll(), currentContractorId) { all, currentId ->
+            combine(resolvedJournalId.filterNotNull().flatMapLatest { contractorRepository.observeForJournal(it) }, currentContractorId) { all, currentId ->
                 buildContractorOptions(all, currentId)
             }.collect { options ->
                 _uiState.update { it.copy(contractors = options) }
             }
         }
         viewModelScope.launch {
-            fieldRepository.observeActive().collect { fields ->
+            resolvedJournalId.filterNotNull().flatMapLatest { fieldRepository.observeActive(it) }.collect { fields ->
                 _uiState.update { it.copy(fields = fields, fieldsLoaded = true) }
             }
         }
         viewModelScope.launch {
-            valueColorRepository.observeAll().collect { colors ->
+            resolvedJournalId.filterNotNull().flatMapLatest { valueColorRepository.observeForJournal(it) }.collect { colors ->
                 _uiState.update { it.copy(valueColors = colors) }
             }
         }
         if (recordId != null) {
             viewModelScope.launch {
                 recordRepository.getWithValues(recordId)?.let { existing ->
+                    resolvedJournalId.value = existing.record.journalId
                     originalPhotoIds = existing.record.photoIds
                     currentContractorId.value = existing.record.contractorId
                     _uiState.update {
@@ -219,9 +224,9 @@ class RecordEditViewModel(
      * посреди заполнения записи, и уход в настройки стоил бы ему набранного. В списке дропдауна новый
      * появится сам — он собран из [ContractorRepository.observeAll].
      */
-    fun createContractor(name: String, shortName: String) {
+    fun createContractor(name: String, shortName: String, colorIndex: Int) {
         viewModelScope.launch {
-            onContractorSelected(contractorRepository.create(name, shortName))
+            onContractorSelected(contractorRepository.create(requireNotNull(resolvedJournalId.value), name, shortName, colorIndex))
         }
     }
 

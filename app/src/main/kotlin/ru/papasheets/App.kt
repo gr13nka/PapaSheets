@@ -76,6 +76,7 @@ class AppGraph(context: Context) {
     private val database: AppDatabase by lazy { AppDatabase.build(appContext) }
     private val monthTitleFormatter: MonthTitleFormatter by lazy { MonthTitleFormatter(appContext) }
 
+    val tableStructureRepository by lazy { ru.papasheets.data.repo.TableStructureRepository(database) }
     val journalRepository: JournalRepository by lazy { JournalRepository(database.journalDao(), monthTitleFormatter) }
     val recordRepository: RecordRepository by lazy {
         RecordRepository(database.recordDao(), database.recordValueDao(), transactionRunner)

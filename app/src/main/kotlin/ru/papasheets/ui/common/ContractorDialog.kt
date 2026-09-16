@@ -31,11 +31,18 @@ fun ContractorDialog(
     initialShortName: String,
     titleRes: Int,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, shortName: String) -> Unit,
+    onConfirm: (name: String, shortName: String, colorIndex: Int) -> Unit,
+    initialColorIndex: Int = 0,
+    enabled: Boolean = true,
+    preview: @Composable (String) -> Unit = {},
 ) {
     var name by remember { mutableStateOf(initialName) }
     var shortName by remember { mutableStateOf(initialShortName) }
-    val isValid = name.isNotBlank() && shortName.isNotBlank()
+    var advanced by remember { mutableStateOf(false) }
+    var color by remember { mutableStateOf(initialColorIndex) }
+    var pickColor by remember { mutableStateOf(false) }
+    val isValid = name.isNotBlank() && enabled
+    if (pickColor) ColorPickerDialog(title = stringResource(R.string.table_group_color), selected = color, onPick = { color = it ?: 0; pickColor = false }, onDismiss = { pickColor = false })
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -45,11 +52,16 @@ fun ContractorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
+                    enabled = enabled,
                     label = { Text(stringResource(R.string.contractors_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                Text(stringResource(R.string.table_groups_hint))
+                preview(name)
+                ColorSwatchButton(colorIndex = color, enabled = enabled, onClick = { pickColor = true })
+                TextButton(onClick = { advanced = !advanced }) { Text(stringResource(R.string.table_more_settings)) }
+                if (advanced) OutlinedTextField(
                     value = shortName,
                     onValueChange = { shortName = it.take(4) },
                     label = { Text(stringResource(R.string.contractors_short_name_label)) },
@@ -59,7 +71,7 @@ fun ContractorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(name.trim(), shortName.trim()) }, enabled = isValid) {
+            TextButton(onClick = { onConfirm(name.trim(), shortName.trim().ifBlank { name.trim().take(12) }, color) }, enabled = isValid) {
                 Text(stringResource(R.string.action_save))
             }
         },

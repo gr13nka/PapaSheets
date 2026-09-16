@@ -21,7 +21,7 @@ class JournalQueryTest {
 
     private fun contractor(id: String, name: String, orderIndex: Int = 0) = ContractorEntity(
         id = id, name = name, shortName = name.take(3), colorIndex = 0, orderIndex = orderIndex, createdAt = 0,
-    )
+     journalId = "j1",)
 
     private val alpha = contractor("a", "Альфа", orderIndex = 0)
     private val beta = contractor("b", "Бета", orderIndex = 1)
@@ -195,7 +195,7 @@ class JournalQueryTest {
         for (filter in filters) {
             val filtered = applyFilter(all, filter)
 
-            val grid = buildGridModel(filtered, contractors, fields, emptyMap(), sortDesc = false)
+            val grid = buildGridModel(filtered, contractors, fields, emptyMap())
             val inMatrix = grid.rows.flatMap { row -> row.cells.filterNotNull().map { it.recordId } }.toSet()
 
             val inList = sortRecords(filtered, RecordSort(SortKey.Field("work")), contractors)
@@ -208,24 +208,26 @@ class JournalQueryTest {
 
     /**
      * Правило, по которому сохраняется место в матрице ([ru.papasheets.domain.LastPlace]): раскладка
-     * считается «той же» только при виде матрицы, пустом фильтре и порядке дат по умолчанию — ровно с
-     * этими значениями откроется следующий запуск. Любое отличие меняет состав или порядок строк, и
-     * сохранённый вьюпорт указывал бы на другие дни.
+     * считается «той же» только при виде матрицы и пустом фильтре — ровно с этими значениями откроется
+     * следующий запуск. Любое отличие меняет состав строк, и сохранённый вьюпорт указывал бы на другие дни.
      */
     @Test
     fun `default matrix layout is the one a cold start will show`() {
         assertTrue(JournalQuery().isDefaultMatrixLayout)
         assertFalse(JournalQuery(viewMode = ViewMode.LIST).isDefaultMatrixLayout)
         assertFalse(JournalQuery(filter = JournalFilter(contractorIds = setOf("a"))).isDefaultMatrixLayout)
-        assertFalse(JournalQuery(sort = RecordSort(SortKey.Date, desc = true)).isDefaultMatrixLayout)
     }
 
     /**
-     * Сортировка списка по чужому столбцу матрицу не перестраивает ([RecordSort.matrixDatesDesc]), и
-     * запрещать сохранение места из-за неё было бы ложной тревогой.
+     * Матрица всегда по возрастанию дат и не читает [RecordSort] вовсе — он управляет только видом
+     * «Список». Никакой ключ и никакое направление сортировки списка не должны запрещать сохранение
+     * места в матрице.
      */
     @Test
-    fun `list sort column does not disturb the matrix layout`() {
+    fun `no list sort disturbs the matrix layout`() {
+        assertTrue(JournalQuery(sort = RecordSort(SortKey.Date, desc = true)).isDefaultMatrixLayout)
+        assertTrue(JournalQuery(sort = RecordSort(SortKey.Contractor, desc = true)).isDefaultMatrixLayout)
         assertTrue(JournalQuery(sort = RecordSort(SortKey.Field("work"), desc = true)).isDefaultMatrixLayout)
+        assertTrue(JournalQuery(sort = RecordSort(SortKey.Field("work"), desc = false)).isDefaultMatrixLayout)
     }
 }

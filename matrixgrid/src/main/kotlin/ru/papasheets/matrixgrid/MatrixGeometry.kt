@@ -17,7 +17,9 @@ internal sealed interface MatrixHit {
      * какое открыть. Осмыслен только при [onPhoto]; вызывающая сторона всё равно зажимает его по
      * фактическому числу фото — геометрия про содержимое ячейки не знает.
      */
-    data class Body(val row: Int, val group: Int, val onPhoto: Boolean, val photoSlot: Int) : MatrixHit
+    data class Body(val row: Int, val group: Int, val onPhoto: Boolean, val photoSlot: Int, val fieldIndex: Int? = null) : MatrixHit
+    data class GroupHeader(val group: Int) : MatrixHit
+    data class FieldHeader(val fieldIndex: Int) : MatrixHit
     /** Шапка, колонка дат, угол или пустое поле за границей мира. */
     data object Other : MatrixHit
 }
@@ -134,19 +136,17 @@ internal class MatrixGeometry(
     // --- Плитки превью внутри Ф-подколонки. ---
 
     /**
-     * Прямоугольники превью для записи с [photoCount] фото (базовые единицы). Одно фото — полный
-     * квадрат [photoBoxPx] по центру подколонки, ровно как было до второго слота. Два — два равных
-     * бокса рядом с зазором в [photoPadX]: каждый мельче, зато оба видны целиком, а Ф-подколонка не
-     * расширяется (её ширина — константа модели, на ней держится вся виртуализация по X).
+     * Прямоугольники превью для записи с [photoCount] фото (базовые единицы).
+     * Каждый слот занимает одинаковую часть Ф-подколонки; пустой второй слот остаётся доступным
+     * для добавления фото. Ширина группы постоянна — на ней держится виртуализация по X.
      *
      * [photoCount] зажимается сверху [MAX_PHOTOS_PER_CELL]: больше плиток в подколонку не поместить,
      * и лишние молча отбрасываются здесь, а не наезжают на соседнюю группу.
      */
     fun photoTiles(photoCount: Int): List<PhotoTile> {
-        if (photoCount <= 1) return listOf(PhotoTile(photoPadX, cellPad, photoBoxPx))
         val boxes = MAX_PHOTOS_PER_CELL
         val size = (photoColW - 2 * photoPadX - (boxes - 1) * photoPadX) / boxes
-        return (0 until boxes).map { slot ->
+        return (0 until photoCount.coerceIn(0, boxes)).map { slot ->
             PhotoTile(left = photoPadX + slot * (size + photoPadX), top = cellPad, size = size)
         }
     }
@@ -313,8 +313,17 @@ internal class MatrixGeometry(
     fun hitTest(x: Float, y: Float, panX: Float, panY: Float, zoom: Float): MatrixHit {
         val headerH = headerH(zoom)
         val dateColW = dateColW(zoom)
-        if (y < headerH || x < dateColW) return MatrixHit.Other
-        if (rowCount == 0 || groupCount == 0) return MatrixHit.Other
+        if (x < dateColW || y < 0 || groupCount == 0) return MatrixHit.Other
+        val headerWorldX = x - dateColW + panX
+        if (headerWorldX < 0 || headerWorldX >= worldWidth * zoom) return MatrixHit.Other
+        val headerGroup = (headerWorldX / (groupW * zoom)).toInt()
+        val fieldIndex = fields.indices.firstOrNull { index ->
+            val local = headerWorldX / zoom - headerGroup * groupW
+            local >= fieldLeft(index) && local < fieldLeft(index) + fieldWidth(index)
+        }
+        if (y < nameRowH(zoom)) return MatrixHit.GroupHeader(headerGroup)
+        if (y < headerH) return if (fieldIndex != null && Lod.forZoom(zoom) != Lod.LOD2) MatrixHit.FieldHeader(fieldIndex) else MatrixHit.Other
+        if (rowCount == 0) return MatrixHit.Other
 
         val worldX = x - dateColW + panX
         val worldY = y - headerH + panY
@@ -332,6 +341,7 @@ internal class MatrixGeometry(
         val onPhoto = Lod.forZoom(zoom) != Lod.LOD2 && localX < photoColPx
         // Половина подколонки → слот. Зажатие по реальному числу фото — на стороне [MatrixView].
         val photoSlot = if (localX < photoColPx / 2f) 0 else 1
-        return MatrixHit.Body(row = row, group = group, onPhoto = onPhoto, photoSlot = photoSlot)
+        return MatrixHit.Body(row = row, group = group, onPhoto = onPhoto, photoSlot = photoSlot,
+            fieldIndex = fieldIndex.takeIf { Lod.forZoom(zoom) == Lod.LOD0 })
     }
 }

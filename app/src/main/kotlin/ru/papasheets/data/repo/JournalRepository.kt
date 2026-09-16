@@ -21,13 +21,12 @@ class JournalRepository(
     suspend fun getAll(): List<JournalEntity> = dao.getAll()
 
     /** Возвращает существующий журнал месяца, если он уже есть, иначе создаёт новый — never падает на unique(year,month). */
-    suspend fun createOrGetJournal(year: Int, month: Int): JournalEntity {
-        dao.getByYearMonth(year, month)?.let { return it }
+    suspend fun createJournal(year: Int, month: Int, title: String = monthTitleFormatter.title(year, month), id: String = UUID.randomUUID().toString()): JournalEntity {
         val journal = JournalEntity(
-            id = UUID.randomUUID().toString(),
+            id = id,
             year = year,
             month = month,
-            title = monthTitleFormatter.title(year, month),
+            title = title.trim(),
             createdAt = System.currentTimeMillis(),
         )
         dao.insert(journal)
@@ -38,5 +37,10 @@ class JournalRepository(
     suspend fun upsertFromBackup(journal: JournalEntity) = dao.upsertFromBackup(journal)
 
     /** Удаляет журнал (его записи уносит FK CASCADE). Фото сносит [ru.papasheets.domain.DeleteJournalInteractor]. */
-    suspend fun delete(journalId: String) = dao.deleteById(journalId)
+    suspend fun delete(journalId: String) = dao.deleteTable(journalId)
+
+    suspend fun rename(journalId: String, title: String) {
+        require(title.isNotBlank())
+        dao.rename(journalId, title.trim())
+    }
 }

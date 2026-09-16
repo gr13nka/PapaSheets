@@ -11,8 +11,8 @@ import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.exportkit.backup.BuiltInFields
 
 /**
- * Правила, которые обязан держать [FieldRepository], а не экран полей: что можно удалить и каким
- * получается новое поле.
+ * Правила, которые обязан держать [FieldRepository], а не экран настройки группы: что можно удалить
+ * и каким получается новое или отредактированное поле.
  *
  * Проверяются на подставном DAO, а не на настоящем Room: правила — это решения репозитория, и
  * настоящий SQLite добавил бы к тесту только время старта эмулятора.
@@ -21,6 +21,9 @@ class FieldRepositoryTest {
 
     private class FakeDao(initial: List<FieldDefEntity> = emptyList()) : FieldDefDao {
         val rows = initial.toMutableList()
+        override fun observeForJournal(journalId: String) = flowOf(rows.filter { it.journalId == journalId }.sortedBy { it.orderIndex })
+        override suspend fun getForJournal(journalId: String) = rows.filter { it.journalId == journalId }.sortedBy { it.orderIndex }
+        override suspend fun deleteForJournal(journalId: String) { rows.removeAll { it.journalId == journalId } }
         var valueCounts: Map<String, Int> = emptyMap()
 
         override fun observeAll(): Flow<List<FieldDefEntity>> = flowOf(rows.sortedBy { it.orderIndex })
@@ -53,7 +56,7 @@ class FieldRepositoryTest {
         maxLines = 1,
         showAtCompactLod = false,
         createdAt = 0,
-    )
+     journalId = "j1",)
 
     private fun draft(label: String) = FieldDraft(
         title = label,
@@ -70,9 +73,11 @@ class FieldRepositoryTest {
         val dao = FakeDao(listOf(field("a", orderIndex = 0), field("b", orderIndex = 1)))
         val repository = FieldRepository(dao)
 
-        runBlocking { repository.create(draft("Объём")) }
+        val id = runBlocking { repository.create("j1", draft("Объём")) }
 
-        assertEquals(2, dao.rows.single { it.label == "Объём" }.orderIndex)
+        val created = dao.rows.single { it.label == "Объём" }
+        assertEquals(id, created.id)
+        assertEquals(2, created.orderIndex)
     }
 
     /** Новое поле — всегда своё: встроенность назначает не вызывающий, а сид и миграция. */
@@ -81,7 +86,7 @@ class FieldRepositoryTest {
         val dao = FakeDao()
         val repository = FieldRepository(dao)
 
-        runBlocking { repository.create(draft("Объём")) }
+        runBlocking { repository.create("j1", draft("Объём")) }
 
         assertTrue(dao.rows.none { it.isBuiltIn })
     }
@@ -96,9 +101,9 @@ class FieldRepositoryTest {
         val repository = FieldRepository(dao)
 
         runBlocking {
-            repository.create(draft("Объём"))
-            repository.create(draft("Объём"))
-            repository.create(draft("Объём"))
+            repository.create("j1", draft("Объём"))
+            repository.create("j1", draft("Объём"))
+            repository.create("j1", draft("Объём"))
         }
 
         assertEquals(3, dao.rows.map { it.id }.toSet().size)
@@ -109,7 +114,7 @@ class FieldRepositoryTest {
         val dao = FakeDao(listOf(field("f-volume")))
         val repository = FieldRepository(dao)
 
-        val outcome = runBlocking { repository.delete(dao.rows.single()) }
+        val outcome = runBlocking { repository.delete("f-volume") }
 
         assertEquals(FieldDeleteOutcome.Deleted, outcome)
         assertTrue(dao.rows.isEmpty())
@@ -121,7 +126,7 @@ class FieldRepositoryTest {
         val dao = FakeDao(listOf(field("f-volume"))).apply { valueCounts = mapOf("f-volume" to 42) }
         val repository = FieldRepository(dao)
 
-        val outcome = runBlocking { repository.delete(dao.rows.single()) }
+        val outcome = runBlocking { repository.delete("f-volume") }
 
         assertEquals(FieldDeleteOutcome.InUse(42), outcome)
         assertEquals(1, dao.rows.size)
@@ -129,14 +134,14 @@ class FieldRepositoryTest {
 
     /** Встроенное поле не удаляется даже пустым: сид и бэкап всё равно вернули бы его обратно. */
     @Test
-    fun `a built-in field is refused even with no values`() {
+    fun `an unused legacy starter field can be deleted`() {
         val dao = FakeDao(listOf(field(BuiltInFields.LOCATION_ID, title = "Локация", isBuiltIn = true)))
         val repository = FieldRepository(dao)
 
-        val outcome = runBlocking { repository.delete(dao.rows.single()) }
+        val outcome = runBlocking { repository.delete(BuiltInFields.LOCATION_ID) }
 
-        assertEquals(FieldDeleteOutcome.BuiltIn, outcome)
-        assertEquals(1, dao.rows.size)
+        assertEquals(FieldDeleteOutcome.Deleted, outcome)
+        assertTrue(dao.rows.isEmpty())
     }
 
     @Test
@@ -144,22 +149,49 @@ class FieldRepositoryTest {
         val dao = FakeDao(listOf(field("a", orderIndex = 0), field("b", orderIndex = 1), field("c", orderIndex = 2)))
         val repository = FieldRepository(dao)
 
-        runBlocking { repository.reorder(listOf(dao.rows[2], dao.rows[0], dao.rows[1])) }
+        runBlocking { repository.reorder(listOf("c", "a", "b")) }
 
         assertEquals(listOf("c", "a", "b"), dao.getAllSortedIds())
     }
 
-    /** `id` и место в порядке колонок — не то, чем распоряжается экран полей: правка их не трогает. */
+    /** Неизвестный id (поле удалено параллельно) молча пропускается, а не валит весь reorder. */
     @Test
-    fun `update changes labels but never identity or order`() {
+    fun `reorder skips ids that no longer exist`() {
+        val dao = FakeDao(listOf(field("a", orderIndex = 0), field("b", orderIndex = 1)))
+        val repository = FieldRepository(dao)
+
+        runBlocking { repository.reorder(listOf("b", "gone", "a")) }
+
+        assertEquals(listOf("b", "a"), dao.getAllSortedIds())
+    }
+
+    /** `id` и место в порядке колонок — не то, чем распоряжается экран настройки группы: правка их не трогает. */
+    @Test
+    fun `edit changes one property and keeps the rest`() {
         val dao = FakeDao(listOf(field("f-volume", orderIndex = 3)))
         val repository = FieldRepository(dao)
 
-        runBlocking { repository.update(dao.rows.single(), draft("Объём бетона")) }
+        runBlocking { repository.edit("f-volume") { it.copy(label = "Объём бетона") } }
 
-        assertEquals("f-volume", dao.rows.single().id)
-        assertEquals(3, dao.rows.single().orderIndex)
-        assertEquals("Объём бетона", dao.rows.single().label)
+        val row = dao.rows.single()
+        assertEquals("f-volume", row.id)
+        assertEquals(3, row.orderIndex)
+        assertEquals("Объём бетона", row.label)
+        // Ничего, кроме label, правка не просила менять — title/ширина/строки остаются как были.
+        assertEquals("f-volume", row.title)
+        assertEquals(100, row.columnWidthDp)
+        assertEquals(1, row.maxLines)
+    }
+
+    @Test
+    fun `edit on a missing id does nothing`() {
+        val dao = FakeDao(listOf(field("a")))
+        val repository = FieldRepository(dao)
+
+        runBlocking { repository.edit("missing") { it.copy(label = "x") } }
+
+        assertEquals(1, dao.rows.size)
+        assertEquals("a", dao.rows.single().label)
     }
 
     private fun FakeDao.getAllSortedIds(): List<String> = rows.sortedBy { it.orderIndex }.map { it.id }

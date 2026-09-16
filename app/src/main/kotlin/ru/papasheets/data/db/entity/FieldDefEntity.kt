@@ -1,6 +1,8 @@
 package ru.papasheets.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -14,7 +16,11 @@ import androidx.room.PrimaryKey
  * `type` в схеме намеренно нет: всё содержимое стройжурнала — текст. «Объём» здесь пишут как
  * «12 м²», и числовой тип только мешал бы вводу, ничего не давая взамен.
  */
-@Entity(tableName = "field_defs")
+@Entity(
+    tableName = "field_defs",
+    foreignKeys = [ForeignKey(entity = JournalEntity::class, parentColumns = ["id"], childColumns = ["journalId"], onDelete = ForeignKey.RESTRICT)],
+    indices = [Index("journalId")],
+)
 data class FieldDefEntity(
     @PrimaryKey val id: String,
     /** Подпись подколонки в матрице: «Л», «ВИД РАБОТ», «Объём». */
@@ -37,4 +43,5 @@ data class FieldDefEntity(
     val maxLines: Int,
     val showAtCompactLod: Boolean,
     val createdAt: Long,
+    val journalId: String,
 )

@@ -91,20 +91,26 @@ private fun dispatchHit(
     val panX = geometry.clampPanX(state.panX, viewportW, zoom)
     val panY = geometry.clampPanY(state.panY, viewportH, zoom)
     val hit = geometry.hitTest(offset.x, offset.y, panX, panY, zoom)
+    if (!longPress) when (hit) {
+        is MatrixHit.GroupHeader -> model.contractors.getOrNull(hit.group)?.let { callbacks.onGroupHeaderTap(it.id) }
+        is MatrixHit.FieldHeader -> model.fields.getOrNull(hit.fieldIndex)?.let { callbacks.onFieldHeaderTap(it.id) }
+        else -> Unit
+    }
     if (hit !is MatrixHit.Body) return
+    val target = MatrixCellTarget(hit.fieldIndex?.let { model.fields.getOrNull(it)?.id }, hit.photoSlot.takeIf { hit.onPhoto })
     val row = model.rows.getOrNull(hit.row) ?: return
     val contractor = model.contractors.getOrNull(hit.group) ?: return
     val cell = row.cells.getOrNull(hit.group)
     if (cell == null) {
-        if (!longPress) callbacks.onEmptySlotTap(row.dateEpochDay, contractor.id)
+        if (!longPress) callbacks.onEmptySlotTargetTap(row.dateEpochDay, contractor.id, target)
         return
     }
     when {
         longPress -> callbacks.onCellLongPress(cell.recordId)
         // Слот из хит-теста — половина Ф-подколонки; зажимаем по реальному числу фото, чтобы тап по
         // пустой правой половине записи с одним фото открыл это единственное фото, а не слот 1.
-        hit.onPhoto && cell.thumbKeys.isNotEmpty() ->
-            callbacks.onPhotoTap(cell.recordId, hit.photoSlot.coerceAtMost(cell.thumbKeys.size - 1))
-        else -> callbacks.onCellTap(cell.recordId)
+        hit.onPhoto && hit.photoSlot < cell.thumbKeys.size ->
+            callbacks.onPhotoTap(cell.recordId, hit.photoSlot)
+        else -> callbacks.onCellTargetTap(cell.recordId, target)
     }
 }

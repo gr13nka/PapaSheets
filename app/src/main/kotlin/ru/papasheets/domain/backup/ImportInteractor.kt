@@ -6,7 +6,6 @@ import java.io.File
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import ru.papasheets.data.DefaultSeed
 import ru.papasheets.data.db.TransactionRunner
 import ru.papasheets.data.repo.ContractorRepository
 import ru.papasheets.data.repo.FieldPresetRepository
@@ -53,6 +52,14 @@ class ImportInteractor(
         }
 
         transactionRunner.run {
+            val oldGroups = contractorRepository.getAll().associateBy { it.id }
+            val oldFields = fieldRepository.getAll().associateBy { it.id }
+            val oldRecords = recordRepository.getAll().associateBy { it.id }
+            val data = contents.data
+            val invalidOwnership = data.contractors.any { oldGroups[it.id]?.journalId?.let { owner -> owner != it.journalId } == true } ||
+                data.fieldDefs.any { oldFields[it.id]?.journalId?.let { owner -> owner != it.journalId } == true } ||
+                data.records.any { oldRecords[it.id]?.journalId?.let { owner -> owner != it.journalId } == true }
+            if (invalidOwnership) throw ru.papasheets.exportkit.backup.BackupFormatException(ru.papasheets.exportkit.backup.BackupFormatReason.CorruptData)
             val existingJournalIds = journalRepository.getAll().mapTo(HashSet()) { it.id }
             val existingPresetIds = fieldPresetRepository.getAll().mapTo(HashSet()) { it.id }
             val existingFieldIds = fieldRepository.getAll().mapTo(HashSet()) { it.id }
@@ -60,21 +67,6 @@ class ImportInteractor(
             val existingPhotoIds = photoStore.getAllMeta().mapTo(HashSet()) { it.id }
             val existingRecordUpdatedAt = recordRepository.getAll().associate { it.id to it.updatedAt }
 
-            // Заводская заглушка DefaultSeed заведена со случайными UUID, которые никогда не совпадут
-            // с UUID из бэкапа, поэтому не снесённая — она задвоила бы тех же пятерых подрядчиков под
-            // новыми id рядом с настоящими. Сносим, но только пока это ровно она: пул, в котором
-            // прораб успел что-то поменять, принадлежит уже ему, и стирать его нельзя, даже если ни
-            // одной записи он ещё не завёл (проверку ведёт DefaultSeed.isUntouchedSeed). Пустота
-            // журналов и записей остаётся в условии не ради «девственности» устройства, а потому что
-            // record_values ссылается на подрядчиков с ON DELETE RESTRICT.
-            // На определения полей это не распространяется: их id — константы (BuiltInFields), так что
-            // встроенное поле из бэкапа совпадёт со здешним по id и просто заменит его, без задвоения.
-            val existingContractors = contractorRepository.getAll()
-            if (existingJournalIds.isEmpty() && existingRecordUpdatedAt.isEmpty() &&
-                contents.data.contractors.isNotEmpty() && DefaultSeed.isUntouchedSeed(existingContractors)
-            ) {
-                contractorRepository.deleteAll()
-            }
             val existingContractorIds = contractorRepository.getAll().mapTo(HashSet()) { it.id }
 
             val journalStats = contents.data.journals.fold(MergeStats()) { acc, journal ->
@@ -90,7 +82,7 @@ class ImportInteractor(
             // До записей и их значений: record_values ссылается на field_defs по внешнему ключу.
             val fieldStats = contents.data.fieldDefs.fold(MergeStats()) { acc, field ->
                 val action = MergeRules.forReplaceable(field.id in existingFieldIds)
-                fieldRepository.upsertFromBackup(field.toEntity())
+                if (!field.fallbackDefinition || field.id !in existingFieldIds) fieldRepository.upsertFromBackup(field.toEntity())
                 acc + action
             }
             // Пресеты — после определений полей: field_presets ссылается на field_defs по внешнему ключу.

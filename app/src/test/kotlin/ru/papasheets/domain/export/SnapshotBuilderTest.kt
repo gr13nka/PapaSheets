@@ -16,7 +16,7 @@ class SnapshotBuilderTest {
     private val day2 = LocalDate.of(2026, 7, 18).toEpochDay()
 
     private fun contractor(id: String, order: Int, archived: Boolean = false) =
-        ContractorEntity(id = id, name = "Подрядчик $id", shortName = id, colorIndex = order, orderIndex = order, isArchived = archived, createdAt = 0)
+        ContractorEntity(id = id, name = "Подрядчик $id", shortName = id, colorIndex = order, orderIndex = order, isArchived = archived, createdAt = 0, journalId = "j1")
 
     private fun record(
         id: String,

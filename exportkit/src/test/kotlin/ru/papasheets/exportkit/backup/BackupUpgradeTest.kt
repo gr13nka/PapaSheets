@@ -19,6 +19,7 @@ import org.junit.Test
  * снимок того, что записала версия приложения с форматом 1, и разъехаться с ним молча нельзя.
  */
 class BackupUpgradeTest {
+    private fun scoped(id: String) = LegacyTableStructure.id("field", "j1", id)
 
     /** Снимок data.json из .psbackup формата 1. Менять его нельзя — такие файлы уже существуют. */
     private val v1DataJson = """
@@ -84,8 +85,9 @@ class BackupUpgradeTest {
      * устройстве и так есть всегда (сид или миграция), поэтому значениям есть на что сослаться.
      */
     @Test
-    fun `upgrade brings no field defs from an archive that never had them`() {
-        assertTrue(readV1().data.fieldDefs.isEmpty())
+    fun `missing legacy definitions are scoped fallbacks that cannot overwrite customization`() {
+        assertEquals(2, readV1().data.fieldDefs.size)
+        assertTrue(readV1().data.fieldDefs.all { it.fallbackDefinition && it.journalId == "j1" })
     }
 
     @Test
@@ -94,10 +96,10 @@ class BackupUpgradeTest {
 
         assertEquals(
             listOf(
-                BackupRecordValue("r1", BuiltInFields.LOCATION_ID, "1-01"),
-                BackupRecordValue("r1", BuiltInFields.WORK_ID, "Штукатурка потолка"),
+                BackupRecordValue("r1", scoped(BuiltInFields.LOCATION_ID), "1-01"),
+                BackupRecordValue("r1", scoped(BuiltInFields.WORK_ID), "Штукатурка потолка"),
                 // r2: пустая локация строки не породила, вид работ перенесён обрезанным
-                BackupRecordValue("r2", BuiltInFields.WORK_ID, "Стяжка пола"),
+                BackupRecordValue("r2", scoped(BuiltInFields.WORK_ID), "Стяжка пола"),
             ),
             values,
         )
@@ -127,11 +129,11 @@ class BackupUpgradeTest {
         ) { _, _, _ -> }
 
         // Манифест объявил v2 — значит колонки записей разворачивать не нужно, они уже развёрнуты.
-        assertTrue(contents.data.fieldDefs.isEmpty())
+        assertTrue(contents.data.fieldDefs.all { it.fallbackDefinition && it.journalId == "j1" })
         assertTrue(contents.data.recordValues.isEmpty())
         // А вот шаг v2 → v3 применяется: пресеты v2 ещё не знали своего поля.
         assertEquals(
-            listOf(BackupFieldPreset("l1", BuiltInFields.LOCATION_ID, "1-01", 0)),
+            listOf(BackupFieldPreset(LegacyTableStructure.id("preset", "j1", "l1"), scoped(BuiltInFields.LOCATION_ID), "1-01", 0)),
             contents.data.fieldPresets,
         )
     }
@@ -149,7 +151,7 @@ class BackupUpgradeTest {
         val data = readV1().data
 
         assertEquals(
-            listOf(BackupFieldPreset("l1", BuiltInFields.LOCATION_ID, "1-01", 0)),
+            listOf(BackupFieldPreset(LegacyTableStructure.id("preset", "j1", "l1"), scoped(BuiltInFields.LOCATION_ID), "1-01", 0)),
             data.fieldPresets,
         )
         // Форма ≤ v2 после апгрейда пуста: второго места, где лежат пресеты, остаться не должно.
@@ -158,7 +160,7 @@ class BackupUpgradeTest {
         // развёрнуты в значения под константными id встроенных полей.
         assertEquals(3, data.recordValues.size)
         assertEquals(
-            setOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID),
+            setOf(scoped(BuiltInFields.LOCATION_ID), scoped(BuiltInFields.WORK_ID)),
             data.recordValues.map { it.fieldId }.toSet(),
         )
     }
@@ -193,7 +195,7 @@ class BackupUpgradeTest {
         ) { _, _, _ -> }
 
         val field = contents.data.fieldDefs.single()
-        assertEquals(BuiltInFields.LOCATION_ID, field.id)
+        assertEquals(LegacyTableStructure.id("field", contents.data.journals.single().id, BuiltInFields.LOCATION_ID), field.id)
         // Настройки поля из файла доезжают нетронутыми — ради них бэкап и хранит определения.
         assertEquals("Локации мои", field.title)
         assertEquals(72, field.columnWidthDp)
@@ -216,7 +218,7 @@ class BackupUpgradeTest {
 
         assertTrue(contents.data.fieldValueColors.isEmpty())
         // Разбор не свалился на полпути: остальное содержимое файла на месте.
-        assertEquals(BuiltInFields.LOCATION_ID, contents.data.fieldDefs.single().id)
+        assertEquals(LegacyTableStructure.id("field", contents.data.journals.single().id, BuiltInFields.LOCATION_ID), contents.data.fieldDefs.single().id)
     }
 
     @Test

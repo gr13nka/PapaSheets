@@ -17,14 +17,16 @@ import ru.papasheets.ui.journal.JournalScreen
 import ru.papasheets.ui.journals.JournalListScreen
 import ru.papasheets.ui.lightbox.LightboxScreen
 import ru.papasheets.ui.settings.ContractorsScreen
-import ru.papasheets.ui.settings.FieldsScreen
+import ru.papasheets.ui.settings.GroupSettingsScreen
 import ru.papasheets.ui.settings.SettingsScreen
+import ru.papasheets.ui.settings.TableSettingsScreen
 
 private const val ARG_JOURNAL_ID = "journalId"
 private const val ROUTE_JOURNALS = "journals"
 private const val ROUTE_JOURNAL = "journal/{$ARG_JOURNAL_ID}"
-private const val ROUTE_SETTINGS_CONTRACTORS = "settings/contractors"
-private const val ROUTE_SETTINGS_FIELDS = "settings/fields"
+private const val ROUTE_SETTINGS_CONTRACTORS = "settings/{journalId}/contractors?groupId={groupId}"
+private const val ROUTE_SETTINGS_FIELDS = "settings/{journalId}/fields?fieldId={fieldId}"
+private const val ROUTE_SETTINGS_TABLE = "settings/{journalId}/table"
 private const val ROUTE_SETTINGS = "settings"
 
 /** Debug-маршрут: плоский список записей того же журнала. Кнопки на него из UI нет — только по URL. */
@@ -58,19 +60,28 @@ fun AppNav() {
         composable(ROUTE_JOURNALS) {
             JournalListScreen(
                 onOpenJournal = { journalId -> navController.navigate("journal/$journalId") },
-                onOpenContractors = { navController.navigate(ROUTE_SETTINGS_CONTRACTORS) },
-                onOpenFields = { navController.navigate(ROUTE_SETTINGS_FIELDS) },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
             )
         }
         composable(ROUTE_SETTINGS) {
             SettingsScreen(onBack = { navController.popBackStack() })
         }
-        composable(ROUTE_SETTINGS_CONTRACTORS) {
-            ContractorsScreen(onBack = { navController.popBackStack() })
+        composable(ROUTE_SETTINGS_CONTRACTORS, arguments = listOf(navArgument("groupId") { nullable = true; defaultValue = null })) { entry ->
+            val journalId = requireNotNull(entry.arguments?.getString(ARG_JOURNAL_ID))
+            ContractorsScreen(journalId, entry.arguments?.getString("groupId"), onBack = { navController.popBackStack() })
         }
-        composable(ROUTE_SETTINGS_FIELDS) {
-            FieldsScreen(onBack = { navController.popBackStack() })
+        composable(ROUTE_SETTINGS_FIELDS, arguments = listOf(navArgument("fieldId") { nullable = true; defaultValue = null })) { entry ->
+            val journalId = requireNotNull(entry.arguments?.getString(ARG_JOURNAL_ID))
+            GroupSettingsScreen(journalId, entry.arguments?.getString("fieldId"), onBack = { navController.popBackStack() })
+        }
+        composable(ROUTE_SETTINGS_TABLE) { entry ->
+            val journalId = requireNotNull(entry.arguments?.getString(ARG_JOURNAL_ID))
+            TableSettingsScreen(
+                journalId = journalId,
+                onBack = { navController.popBackStack() },
+                onOpenColumnGroups = { navController.navigate("settings/$journalId/contractors") },
+                onOpenGroupSettings = { navController.navigate("settings/$journalId/fields") },
+            )
         }
         composable(
             route = ROUTE_JOURNAL,
@@ -81,8 +92,9 @@ fun AppNav() {
                 journalId = journalId,
                 onBack = { navController.popBackStack() },
                 onOpenLightbox = { recordId, slot -> navController.navigate("lightbox/$recordId/$slot") },
-                onOpenContractors = { navController.navigate(ROUTE_SETTINGS_CONTRACTORS) },
-                onOpenFields = { navController.navigate(ROUTE_SETTINGS_FIELDS) },
+                onOpenTableSettings = { navController.navigate("settings/$journalId/table") },
+                onEditColumn = { fieldId -> navController.navigate("settings/$journalId/fields?fieldId=$fieldId") },
+                onEditGroup = { groupId -> navController.navigate("settings/$journalId/contractors?groupId=$groupId") },
             )
         }
         composable(

@@ -4,6 +4,7 @@ import java.time.LocalDate
 import java.util.UUID
 import java.util.Locale
 import ru.papasheets.data.db.entity.ContractorEntity
+import ru.papasheets.domain.ColumnWidth
 import ru.papasheets.data.db.entity.FieldDefEntity
 import ru.papasheets.data.db.entity.JournalEntity
 import ru.papasheets.exportkit.xlsx.read.ParsedSheet
@@ -20,6 +21,7 @@ import ru.papasheets.exportkit.xlsx.read.PhotoRef
  * взялось. Всё, что связано с исходным файлом, живёт в [XlsxImportPreview] рядом, но отдельно.
  */
 internal class XlsxImportPlan(
+    val journalId: String,
     val year: Int,
     val month: Int,
     /** true, если журнал за этот месяц уже заведён и записи добавятся в него, а не в новый. */
@@ -77,10 +79,13 @@ internal object XlsxImportPlanner {
         existingFields: List<FieldDefEntity>,
         existingJournals: List<JournalEntity>,
         now: Long,
+        destinationJournalId: String? = null,
     ): XlsxImportPlan {
         val month = resolveMonth(sheet)
-        val contractors = ContractorMatcher(existingContractors, sheet.contractors, now)
-        val fields = FieldMatcher(existingFields, sheet.fieldTitles, now)
+        val journalId = destinationJournalId ?: UUID.randomUUID().toString()
+        require(destinationJournalId == null || existingJournals.any { it.id == destinationJournalId })
+        val contractors = ContractorMatcher(existingContractors.filter { it.journalId == journalId }, sheet.contractors, now, journalId)
+        val fields = FieldMatcher(existingFields.filter { it.journalId == journalId }, sheet.fieldTitles, now, journalId)
 
         val records = ArrayList<PlannedRecord>()
         for (day in sheet.days) {
@@ -103,9 +108,10 @@ internal object XlsxImportPlanner {
         }
 
         return XlsxImportPlan(
+            journalId = journalId,
             year = month.year,
             month = month.monthValue,
-            journalExists = existingJournals.any { it.year == month.year && it.month == month.monthValue },
+            journalExists = destinationJournalId != null,
             newContractors = contractors.newEntities,
             newFields = fields.newEntities,
             records = records,
@@ -144,7 +150,7 @@ internal object XlsxImportPlanner {
  * Группы без имени (в файле с вырезанной таблицей строк такими будут все) не сопоставляются и не
  * создаются: подрядчик без имени в журнале бесполезен, а 28 безымянных строк — тем более.
  */
-private class ContractorMatcher(existing: List<ContractorEntity>, names: List<String>, now: Long) {
+private class ContractorMatcher(existing: List<ContractorEntity>, names: List<String>, now: Long, journalId: String) {
     private val idByIndex = HashMap<Int, String>()
     val newEntities = ArrayList<ContractorEntity>()
     var matchedCount = 0
@@ -183,6 +189,7 @@ private class ContractorMatcher(existing: List<ContractorEntity>, names: List<St
                 colorIndex = nextColor++,
                 orderIndex = nextOrder++,
                 createdAt = now,
+                journalId = journalId,
             )
             newEntities += entity
             createdByName[key] = entity.id
@@ -202,7 +209,7 @@ private class ContractorMatcher(existing: List<ContractorEntity>, names: List<St
  * «ВИД РАБОТ» ([ru.papasheets.exportkit.backup.BuiltInFields]) заведены в базе с этими же
  * заголовками, поэтому ложатся на себя сами; заводить рядом их дубликаты было бы нечем потом слить.
  */
-private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>, now: Long) {
+private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>, now: Long, journalId: String) {
     private val idByColumn = HashMap<Int, String>()
     val newEntities = ArrayList<FieldDefEntity>()
     var matchedCount = 0
@@ -238,6 +245,7 @@ private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>,
                 maxLines = 0,
                 showAtCompactLod = false,
                 createdAt = now,
+                journalId = journalId,
             )
             newEntities += entity
             idByColumn[index] = entity.id
@@ -257,6 +265,6 @@ private class FieldMatcher(existing: List<FieldDefEntity>, titles: List<String>,
     }
 
     private companion object {
-        const val DEFAULT_WIDTH_DP = 120
+        val DEFAULT_WIDTH_DP = ColumnWidth.DEFAULT.dp
     }
 }

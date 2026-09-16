@@ -285,6 +285,8 @@ class MigrationTest {
         assertEquals(1L, db.queryLong("SELECT COUNT(*) FROM field_value_colors"))
         assertEquals(7L, db.queryLong("SELECT colorIndex FROM field_value_colors"))
 
+        // Значения записей защищают используемое поле от удаления; сначала освобождаем его.
+        db.execSQL("DELETE FROM record_values WHERE fieldId = ?", arrayOf(BuiltInFields.WORK_ID))
         // Цвета — часть определения поля и уходят вместе с ним (ON DELETE CASCADE).
         db.execSQL("DELETE FROM field_defs WHERE id = ?", arrayOf(BuiltInFields.WORK_ID))
         assertEquals(0L, db.queryLong("SELECT COUNT(*) FROM field_value_colors"))
@@ -307,22 +309,22 @@ class MigrationTest {
         assertEquals(5L, db.queryLong("SELECT COUNT(*) FROM records"))
         assertEquals(
             setOf(
-                Triple("r-full", BuiltInFields.LOCATION_ID, "К1"),
-                Triple("r-full", BuiltInFields.WORK_ID, "Штукатурка"),
-                Triple("r-no-location", BuiltInFields.WORK_ID, "Плитка"),
-                Triple("r-blank-location", BuiltInFields.WORK_ID, "Плинтус"),
-                Triple("r-padded", BuiltInFields.LOCATION_ID, "К2"),
-                Triple("r-padded", BuiltInFields.WORK_ID, "Стяжка"),
+                Triple("r-full", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.LOCATION_ID), "К1"),
+                Triple("r-full", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Штукатурка"),
+                Triple("r-no-location", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Плитка"),
+                Triple("r-blank-location", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Плинтус"),
+                Triple("r-padded", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.LOCATION_ID), "К2"),
+                Triple("r-padded", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Стяжка"),
             ),
             db.queryValueTriples(),
         )
         // Пресет, заведённый ещё в v1, доезжает до текущей версии и обретает поле-владельца.
-        assertEquals(listOf(Triple("p-1", BuiltInFields.LOCATION_ID, "К1")), db.queryPresets())
+        assertEquals(listOf(Triple(ru.papasheets.exportkit.backup.LegacyTableStructure.id("preset", "j1", "p-1"), ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.LOCATION_ID), "К1")), db.queryPresets())
         // И последний шаг тоже отработал, а не потерялся за более ранними: машинного ключа у поля
         // больше нет, а сами поля, заведённые ещё миграцией 1 → 2, на месте.
         assertTrue("key" !in db.columnsOf("field_defs"))
         assertEquals(
-            listOf(BuiltInFields.LOCATION_ID, BuiltInFields.WORK_ID),
+            listOf(ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.LOCATION_ID), ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID)),
             db.queryStrings("SELECT id FROM field_defs ORDER BY orderIndex"),
         )
         assertNoOrphanValues(db)
@@ -361,12 +363,12 @@ class MigrationTest {
             // MigrationTestHelper это не докажет: у него своя настройка соединения.
             assertEquals(
                 setOf(
-                    Triple("r-full", BuiltInFields.LOCATION_ID, "К1"),
-                    Triple("r-full", BuiltInFields.WORK_ID, "Штукатурка"),
-                    Triple("r-no-location", BuiltInFields.WORK_ID, "Плитка"),
-                    Triple("r-blank-location", BuiltInFields.WORK_ID, "Плинтус"),
-                    Triple("r-padded", BuiltInFields.LOCATION_ID, "К2"),
-                    Triple("r-padded", BuiltInFields.WORK_ID, "Стяжка"),
+                    Triple("r-full", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.LOCATION_ID), "К1"),
+                    Triple("r-full", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Штукатурка"),
+                    Triple("r-no-location", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Плитка"),
+                    Triple("r-blank-location", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Плинтус"),
+                    Triple("r-padded", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.LOCATION_ID), "К2"),
+                    Triple("r-padded", ru.papasheets.exportkit.backup.LegacyTableStructure.id("field", "j1", BuiltInFields.WORK_ID), "Стяжка"),
                 ),
                 opened.queryValueTriples(),
             )

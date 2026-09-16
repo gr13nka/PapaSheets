@@ -61,8 +61,12 @@ class ExportFolder(context: Context) {
      * и экспорт короче предыдущего оставил бы хвост старого ZIP — получился бы битый xlsx, который
      * Excel открыл бы с ошибкой.
      */
-    fun replace(fileName: String, mimeType: String): OutputStream {
+    @Synchronized
+    fun replace(journalId: String, suggestedName: String, mimeType: String): OutputStream {
         val dir = tree() ?: throw ExportFolderException("Папка для экспорта не выбрана")
+        val binding = "target.${dir.uri}.$journalId.$mimeType"
+        val fileName = prefs.getString(binding, null) ?: ExportFileNames.available(suggestedName,
+            dir.listFiles().mapNotNull { it.name }.toSet()).also { prefs.edit().putString(binding, it).commit() }
         archiveExisting(dir, fileName, mimeType)
         val target = dir.findFile(fileName) ?: dir.createFile(mimeType, fileName)
             ?: throw ExportFolderException("Не удалось создать файл «$fileName» в выбранной папке")

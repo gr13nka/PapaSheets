@@ -162,25 +162,25 @@ class JournalViewModel(
     val query: StateFlow<JournalQuery> = _query.asStateFlow()
 
     /** Подрядчики для панели фильтра — все, включая архивных: их записи в старом журнале никуда не делись. */
-    val contractors: StateFlow<List<ContractorEntity>> = contractorRepository.observeAll()
+    val contractors: StateFlow<List<ContractorEntity>> = contractorRepository.observeForJournal(journalId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Активные поля — строки панели фильтра. */
-    val fields: StateFlow<List<FieldDefEntity>> = fieldRepository.observeActive()
+    val fields: StateFlow<List<FieldDefEntity>> = fieldRepository.observeActive(journalId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val presentation = combine(_query, _displayStrings) { query, strings -> query to strings }
+    private val presentation = combine(_query, _displayStrings, journalRepository.observeById(journalId)) { query, strings, journal -> Triple(query, strings, journal) }
 
     // null до первой готовой раскладки — экран показывает загрузку.
     val content: StateFlow<JournalContent?> = combine(
         recordRepository.observeByJournal(journalId),
-        contractorRepository.observeAll(),
-        fieldRepository.observeActive(),
-        valueColorRepository.observeAll(),
+        contractorRepository.observeForJournal(journalId),
+        fieldRepository.observeActive(journalId),
+        valueColorRepository.observeForJournal(journalId),
         presentation,
     ) { records, contractors, fields, valueColors, presentation ->
         withContext(Dispatchers.Default) {
-            val (query, strings) = presentation
+            val (query, strings, table) = presentation
             val filtered = applyFilter(records, query.filter)
             val contractorsById = contractors.associateBy { it.id }
             JournalContent(
@@ -189,7 +189,7 @@ class JournalViewModel(
                     contractors,
                     fields,
                     valueColors,
-                    query.sort.matrixDatesDesc,
+                    calendarMonth = if (query.filter.isEmpty) table?.let { java.time.YearMonth.of(it.year, it.month) } else null,
                     dateLabel = { JournalDates.shortMonth(it, strings.shortMonths) },
                 ),
                 columns = listOf(
@@ -220,15 +220,6 @@ class JournalViewModel(
 
     fun setViewMode(mode: ViewMode) = _query.update { it.copy(viewMode = mode) }
 
-    /**
-     * Тумблер ↑↓ матрицы. Он переставляет именно даты, поэтому заодно возвращает ключ сортировки к
-     * [SortKey.Date]: иначе после сортировки списка по локации кнопка в матрице первым нажатием
-     * ничего бы не изменила (см. [RecordSort.matrixDatesDesc]).
-     */
-    fun toggleDateOrder() = _query.update {
-        it.copy(sort = RecordSort(SortKey.Date, desc = !it.sort.matrixDatesDesc))
-    }
-
     /** Тап по шапке столбца списка: чужой столбец — сортировка по нему, свой — разворот направления. */
     fun sortBy(key: SortKey) = _query.update {
         it.copy(sort = if (it.sort.key == key) it.sort.copy(desc = !it.sort.desc) else RecordSort(key, desc = false))
@@ -252,7 +243,7 @@ class JournalViewModel(
 
     fun refreshFilterOptions() {
         viewModelScope.launch {
-            _filterOptions.value = fieldRepository.observeActive().first()
+            _filterOptions.value = fieldRepository.observeActive(journalId).first()
                 .associate { it.id to valueSuggester.usedValues(it.id) }
         }
     }

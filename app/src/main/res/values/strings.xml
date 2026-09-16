@@ -16,20 +16,15 @@
     <string name="day_list_add_record">Add record</string>
     <string name="day_list_empty">No records yet</string>
 
-    <string name="matrix_zoom_overview">Month</string>
-    <string name="matrix_zoom_detail">1:1</string>
-    <string name="matrix_sort_desc">↓ dates</string>
-    <string name="matrix_sort_asc">↑ dates</string>
     <string name="journal_view_matrix">Matrix</string>
     <string name="journal_view_list">List</string>
     <string name="journal_column_date">Date</string>
-    <string name="journal_column_contractor">Contractor</string>
+    <string name="journal_column_contractor">Group</string>
     <string name="journal_filter">Filter</string>
     <string name="journal_filter_active">Filter (%d)</string>
     <string name="journal_filter_clear">Clear</string>
     <string name="journal_filter_search">Search text</string>
     <string name="journal_filter_empty">No records match the filter</string>
-    <string name="matrix_menu_action">More</string>
     <string name="matrix_menu_export">Export</string>
 
     <string name="export_dialog_title">Export journal</string>
@@ -49,13 +44,17 @@
     <string name="settings_language_system">System default</string>
     <string name="settings_language_english">English</string>
     <string name="settings_language_russian">Русский</string>
-    <string name="settings_contractors">Contractors</string>
-    <string name="settings_contractors_hint">Main table columns: add, rename, and reorder</string>
-    <string name="settings_fields">Record fields</string>
-    <string name="settings_fields_hint">Subcolumns for each contractor: Location, Work type, and custom fields</string>
+    <string name="settings_section_data">Data</string>
+    <string name="settings_section_diagnostics">Diagnostics</string>
+
+    <string name="table_settings_title">Table settings</string>
+    <string name="table_settings_shared_note">Only this table is changed</string>
+    <string name="table_settings_column_groups">Column groups</string>
+    <string name="table_settings_column_groups_hint">The table\'s main columns: add, rename, and reorder</string>
+    <string name="table_settings_group_fields">Columns</string>
+    <string name="table_settings_group_fields_hint">Names, order and display settings for this table’s columns</string>
 
     <string name="backup_menu_save">Save backup</string>
-    <string name="backup_menu_import">Import backup</string>
     <string name="backup_busy">Processing…</string>
     <string name="backup_saved">Backup saved</string>
     <plurals name="backup_saved_photos_skipped">
@@ -81,7 +80,7 @@
     <string name="import_result_title">Import complete</string>
     <string name="import_result_row">%1$s — added %2$d, updated %3$d, skipped %4$d</string>
     <string name="import_result_journals">Journals</string>
-    <string name="import_result_contractors">Contractors</string>
+    <string name="import_result_contractors">Groups</string>
     <string name="import_result_fields">Fields</string>
     <string name="import_result_presets">Preset values</string>
     <string name="import_result_records">Records</string>
@@ -93,11 +92,11 @@
     <string name="xlsx_preview_journal_new">A journal named “%1$s” will be created</string>
     <string name="xlsx_preview_journal_existing">Records will be added to “%1$s”</string>
     <string name="xlsx_preview_totals">Days: %1$d, records: %2$d, photos: %3$d</string>
-    <string name="xlsx_preview_contractors_matched">Contractors matched to existing ones: %1$d</string>
-    <string name="xlsx_preview_contractors_new">Contractors to create: %1$d (%2$s)</string>
+    <string name="xlsx_preview_contractors_matched">Groups matched to existing ones: %1$d</string>
+    <string name="xlsx_preview_contractors_new">Groups to create: %1$d (%2$s)</string>
     <string name="xlsx_preview_fields_matched">Columns matched to existing fields: %1$d</string>
     <string name="xlsx_preview_fields_new">Fields to create: %1$d (%2$s)</string>
-    <string name="xlsx_preview_skipped_unnamed">Skipped unnamed items: %1$d contractors, %2$d columns</string>
+    <string name="xlsx_preview_skipped_unnamed">Skipped unnamed items: %1$d groups, %2$d columns</string>
     <string name="xlsx_preview_confirm">Import</string>
     <string name="xlsx_import_done">Imported into “%1$s”: %2$s, %3$s</string>
     <plurals name="xlsx_import_done_records">
@@ -121,8 +120,8 @@
 
     <string name="record_title_create">New record</string>
     <string name="record_title_edit">Edit record</string>
-    <string name="record_contractor_label">Contractor</string>
-    <string name="record_contractor_create">+ Create a new contractor</string>
+    <string name="record_contractor_label">Group</string>
+    <string name="record_contractor_create">+ Create a new group</string>
     <string name="record_contractor_archived">%1$s (archived)</string>
     <string name="color_picker_title">Color for “%1$s”</string>
     <string name="color_picker_none">No color</string>
@@ -143,31 +142,32 @@
 
     <string name="lightbox_close">Close</string>
 
-    <string name="contractors_title">Contractors</string>
+    <string name="contractors_title">Column groups</string>
     <string name="contractors_archived_section">Archive (%d)</string>
     <string name="contractors_archive_action">Archive</string>
     <string name="contractors_unarchive_action">Restore</string>
-    <string name="contractors_rename_action">Edit</string>
-    <string name="contractors_add_title">New contractor</string>
-    <string name="contractors_edit_title">Edit contractor</string>
+    <string name="contractors_add_title">New group</string>
+    <string name="contractors_edit_title">Edit group</string>
     <string name="contractors_name_label">Name</string>
     <string name="contractors_short_name_label">Short name (up to 4 characters)</string>
-    <string name="contractors_empty">No contractors yet</string>
+    <string name="contractors_empty">No groups yet</string>
 
     <string name="fields_title">Record fields</string>
     <string name="fields_archived_section">Archive (%d)</string>
     <string name="fields_archive_action">Archive</string>
     <string name="fields_unarchive_action">Restore</string>
     <string name="fields_add_title">New field</string>
-    <string name="fields_edit_title">Edit field</string>
     <string name="fields_label_label">Name in the record form</string>
     <string name="fields_title_label">Column heading (short)</string>
-    <string name="fields_width_label">Width, dp</string>
-    <string name="fields_max_lines_label">Lines (0 for unlimited)</string>
+    <string name="fields_width_label">Width</string>
+    <string name="fields_max_lines_label">Lines per cell</string>
+    <string name="fields_lines_all">All</string>
     <string name="fields_required_label">Required</string>
+    <string name="fields_required_hint">The Save button in a record reminds you if it\'s empty</string>
     <string name="fields_suggest_label">Suggest while typing</string>
+    <string name="fields_suggest_hint">Offer values from earlier records and presets</string>
     <string name="fields_compact_label">Show in compact view</string>
-    <string name="fields_compact_hint">Columns are narrow in compact month view: only one or two are readable, and additional columns reduce the available space.</string>
+    <string name="fields_compact_hint">Keep this column\'s text visible when the table is zoomed far out</string>
     <string name="fields_presets_section">Preset values</string>
     <string name="fields_presets_disabled_hint">Suggestions are disabled, so these values will not be offered.</string>
     <string name="fields_preset_new_label">New value</string>
@@ -180,11 +180,20 @@
         <item quantity="one">%d line</item>
         <item quantity="other">%d lines</item>
     </plurals>
-    <string name="fields_summary_head">“%1$s” · %2$d dp · %3$s</string>
+    <string name="fields_summary_head">“%1$s” · %2$s · %3$s</string>
     <string name="fields_flag_required">required</string>
     <string name="fields_flag_suggest">suggestions</string>
     <string name="fields_flag_compact">compact view</string>
-    <string name="fields_no_active">All fields are archived. The journal will show only dates, contractors, and photos.</string>
+    <string name="fields_no_active">All fields are archived. The journal will show only dates, groups, and photos.</string>
+
+    <string name="column_width_narrow">Narrow</string>
+    <string name="column_width_medium">Medium</string>
+    <string name="column_width_wide">Wide</string>
+    <string name="column_width_extra_wide">Extra wide</string>
+
+    <string name="group_settings_title">Columns</string>
+    <string name="group_settings_add_field">+ Add field</string>
+    <string name="group_preview_placeholder_group">Group</string>
 
     <string-array name="month_names_nominative">
         <item>January</item><item>February</item><item>March</item><item>April</item>
@@ -210,4 +219,26 @@
         <item quantity="one">%d record</item>
         <item quantity="other">%d records</item>
     </plurals>
+    <string name="table_new">New table</string>
+    <string name="table_name">Table name</string>
+    <string name="table_structure">Structure</string>
+    <string name="table_simple">Simple table</string>
+    <string name="table_reuse">Use an existing table’s structure</string>
+    <string name="table_copy_hint">Copies columns, groups, saved choices and colors. Entries and photos stay in the original table. Changes to this table will not affect the original.</string>
+    <string name="table_default_group">General</string>
+    <string name="table_default_description">Description</string>
+    <string name="table_create">Create table</string>
+    <string name="table_create_failed">Could not create the table. Please try again.</string>
+    <string name="table_add_column">Add column</string>
+    <string name="table_add_group">Add group</string>
+    <string name="table_more_settings">More settings</string>
+    <string name="table_columns_scope">These columns repeat in every group in this table.</string>
+    <string name="table_groups_hint">Each group repeats the same columns. Use groups for different teams, locations or subjects.</string>
+    <string name="table_rename">Rename table</string>
+    <string name="table_import_destination">Import into</string>
+    <string name="table_import_new">New table</string>
+    <string name="table_import_existing">Existing table</string>
+    <string name="table_short_heading">Custom short heading</string>
+    <string name="table_group_color">Group color</string>
+    <string name="table_structure_failed">Could not save the change. Please try again.</string>
 </resources>

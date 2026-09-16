@@ -51,6 +51,7 @@ class XlsxImportPreview internal constructor(
 ) {
     /** true, если журнал за этот месяц уже есть и записи добавятся в него. */
     val journalExists: Boolean get() = plan.journalExists
+    val destinationJournalId: String? get() = plan.journalId.takeIf { plan.journalExists }
 
     val dayCount: Int get() = plan.dayCount
     val recordCount: Int get() = plan.records.size
@@ -84,4 +85,3 @@ class XlsxImportResult(
     val importedRecords: Int,
     val importedPhotos: Int,
 )
-

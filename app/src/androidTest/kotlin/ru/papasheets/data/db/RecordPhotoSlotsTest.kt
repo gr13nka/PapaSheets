@@ -31,7 +31,7 @@ class RecordPhotoSlotsTest {
         // Родители до записей — иначе внешние ключи не пройдут (в Room они включены при открытии).
         db.openHelper.writableDatabase.apply {
             execSQL("INSERT INTO journals VALUES ('j1', 2026, 7, 'Июль 2026', 0)")
-            execSQL("INSERT INTO contractors VALUES ('c1', 'Петров', 'ПТР', 0, 0, 0, 0)")
+            execSQL("INSERT INTO contractors VALUES ('c1', 'Петров', 'ПТР', 0, 0, 0, 0, 'j1')")
             for (id in listOf("p1", "p2", "p3")) {
                 execSQL("INSERT INTO photos VALUES ('$id', 100, 100, 1000, NULL, 0)")
             }

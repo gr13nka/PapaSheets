@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import ru.papasheets.data.DefaultSeed
 import ru.papasheets.data.db.dao.ContractorDao
 import ru.papasheets.data.db.dao.FieldDefDao
 import ru.papasheets.data.db.dao.FieldPresetDao
@@ -29,7 +28,7 @@ import ru.papasheets.data.db.entity.RecordValueEntity
  *
  * Поднимать её можно только вместе с новой [Migration] в [Migrations.ALL] — см. docs/evolution.md.
  */
-const val APP_DATABASE_VERSION = 7
+const val APP_DATABASE_VERSION = 8
 
 @Database(
     entities = [
@@ -60,7 +59,6 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, DB_NAME)
-                .addCallback(DefaultSeed.callback())
                 // Вся цепочка, а не только последний шаг: на устройстве может стоять сборка любой
                 // давности, и Room должен уметь довести её до текущей версии через все промежуточные.
                 .addMigrations(*Migrations.ALL)
