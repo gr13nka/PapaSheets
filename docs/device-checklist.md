@@ -243,3 +243,36 @@ EN→RU без перевода хранимых названий. Камера,
 - [ ] Импорт xlsx: новая таблица и явно выбранная существующая дают соответствующий предпросмотр.
 - [ ] Одноимённые таблицы экспортируются в разные файлы; повторный экспорт обновляет свой файл.
 - [ ] Проверить русский и английский; камера/галерея, закрытие и повторное открытие черновика.
+
+## Съёмка картинок для README (adb, 2026-09-16)
+
+Картинки в `docs/images/` сняты на физическом телефоне с демо-данными: настоящий журнал
+заказчика в публичный репозиторий не выкладывается, а на пустой таблице матрицу не покажешь.
+Порядок повторяем целиком:
+
+```bash
+node scripts/make-demo-backup.mjs <каталог-с-фото> demo.psbackup   # см. шапку скрипта
+adb push demo.psbackup /sdcard/Download/
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+# Настройки → Язык → English, затем «Импорт бэкапа или таблицы» → выбрать файл
+adb shell settings put global sysui_demo_allowed 1                 # чистая строка состояния
+adb shell am broadcast -a com.android.systemui.demo -e command enter
+adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0930
+adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
+adb shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false
+```
+
+- **Пинч через `adb` не инжектируется.** `input tap/swipe` однопальцевый, а `sendevent` на
+  неразлоченном телефоне упирается в `Permission denied` на `/dev/input/event*`. Единственный
+  рабочий путь — временный инструментальный тест, который шлёт двухпальцевый `MotionEvent`
+  через `UiAutomation.injectInputEvent` (`ACTION_DOWN` → `ACTION_POINTER_DOWN` →
+  цепочка `ACTION_MOVE` → `ACTION_POINTER_UP` → `ACTION_UP`). Хватает уже имеющегося
+  `androidx.test.runner`, uiautomator и espresso не нужны.
+- **Тест обязан сам поднимать активность.** `am instrument` перезапускает процесс приложения,
+  и без явного `startActivity` жесты уходят в лончер или на экран блокировки — на записи будет
+  что угодно, кроме приложения.
+- **Двойной тап через `adb` не срабатывает**: запуск `input` занимает 200–400 мс, это больше
+  окна двойного тапа, так что `toggleOverviewAt` таким способом не проверить.
+- Запись экрана: `adb shell screenrecord --size 1080x2392 --bit-rate 24M --time-limit 17`.
+  Начало и конец ролика обрезать — там видны лончер и предыдущее приложение с личной перепиской.
+

@@ -366,12 +366,14 @@ Details are in `docs/evolution.md`; the essence here:
    will render something — first an A/B file with ONE variable (the adb recipe is in
    `docs/device-checklist.md`), then choose the layout.
 6. **Work ends with a documentation update, not the last code commit.** At the end of every task go
-   through four files and update those the task touched:
+   through five files and update those the task touched:
    - `AGENTS.md` — if an invariant, the set of screens/formats changed, or a new rule appeared;
    - `docs/evolution.md` — if the schema, backup format or xlsx changed, or something new was learned
      about viewer behavior;
    - `docs/device-checklist.md` — if something appeared that can only be checked by hand on a phone;
-   - `docs/spec.md` — if the feature set changed.
+   - `docs/spec.md` — if the feature set changed;
+   - `docs/GUIDE.md` — if what a human reader has to know to build or use the app changed. Reference
+     detail goes here, never into `README.md`.
 
    **Fix a refuted statement, don't append next to it.** A wrong paragraph left "for history" will be
    read as truth next time — which is exactly what happened with the visibility rule. If the entry
@@ -411,6 +413,10 @@ backup copy is mandatory.
 
 ## Documents
 
+`README.md` is the landing page — short, image-led, no reference detail; depth for a human reader
+lives in `docs/GUIDE.md`, and documentation edits go there rather than into the README.
+
+- `docs/GUIDE.md` — building, installing, and how the app works, for a human reader.
 - `docs/spec.md` — the original spec and milestones M0–M8.
 - `docs/evolution.md` — rules for changing the schema, backup format and xlsx.
 - `docs/device-checklist.md` — manual on-device checks.
